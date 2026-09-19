@@ -1,0 +1,71 @@
+# Dependencies
+node_modules/
+.pnp/
+.pnp.js
+.yarn/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.tox/
+
+# Build output
+dist/
+build/
+out/
+.next/
+coverage/
+*.tsbuildinfo
+services/ai/.pytest_cache/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Flutter / Dart
+apps/mobile/.dart_tool/
+apps/mobile/build/
+apps/mobile/.flutter-plugins
+apps/mobile/.flutter-plugins-dependencies
+apps/mobile/ios/Pods/
+apps/mobile/ios/.symlinks/
+apps/mobile/android/.gradle/
+apps/mobile/android/local.properties
+
+# Environment & secrets — NEVER commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.jks
+service-account*.json
+google-services.json
+GoogleService-Info.plist
+firebase-adminsdk*.json
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+# .terraform.lock.hcl IS committed — provider sürümlerini tekrar üretilebilir kılar
+
+# Local infrastructure data
+infra/docker/.data/
+pgdata/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+
+# Claude Code local overrides
+.claude/settings.local.json
+
+# Logs
+*.log
+npm-debug.log*

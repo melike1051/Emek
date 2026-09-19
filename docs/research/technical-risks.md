@@ -1,0 +1,86 @@
+# Technical Risks & Assumptions
+
+Son güncelleme: 2026-09-20 (Faz 0). Her faz sonunda güncellenir.
+
+Etki/olasılık: Y (yüksek), O (orta), D (düşük).
+
+## 1. Dış bağımlılık riskleri
+
+| # | Risk | Etki | Olasılık | Azaltma | Faz |
+|---|---|---|---|---|---|
+| R-01 | **Identity/EKDS erişimi varsayıldığı gibi olmayabilir.** Resmî servislere erişim izin, sözleşme ve mevzuat gerektirir; hazır bir API olduğu varsayılamaz. | Y | Y | Identity Verification Adapter (ADR-0005) + mock provider ile tüm akışın sağlayıcıdan bağımsız geliştirilmesi. En az iki alternatif sağlayıcı senaryosu. `TODO(legal)`. | 3 |
+| R-02 | **Ödeme kuruluşunun şartlı ödeme/marketplace payout yetkinliği** doğrulanmadı. Yoksa şartlı ödeme modeli yeniden tasarlanır. | Y | O | Payment adapter (ADR-0009); sandbox ile geliştirme; sağlayıcı yetkinlik matrisi erken doğrulanır. | 5 |
+| R-03 | **NFC/e-ID cihaz ve platform kısıtları** (iOS NFC erişimi, kart tipi desteği, okuma başarısızlığı). | O | Y | Alternatif doğrulama yolu (sağlayıcı tabanlı KYC) her zaman açık; NFC tek yol değil. | 3, 16 |
+| R-04 | **Google Maps Route Optimization maliyeti ve kotası** yük altında sürdürülemez olabilir. | O | O | Routing abstraction + haversine/matris cache fallback; rota çağrısı yalnızca gerektiğinde. | 7 |
+| R-05 | **Mobil background location politikaları** (App Store/Play inceleme, iOS arka plan kısıtları, batarya). | Y | O | Oturum bazlı telemetri (ADR-0008); açık kullanıcı onayı ve şeffaflık; cihaz matrisi testi. | 8, 16 |
+| R-06 | **LLM sağlayıcı maliyeti/gecikmesi/kullanım şartları**. | O | O | Yapılandırılmış form fallback; kural tabanlı baseline parser; prompt/cevap cache; model soyutlaması. | 6 |
+
+## 2. Mimari ve veri riskleri
+
+| # | Risk | Etki | Olasılık | Azaltma | Faz |
+|---|---|---|---|---|---|
+| R-07 | **Eşzamanlı booking çakışması** — çifte atama. | Y | O | `EXCLUDE USING GIST` (provider + tstzrange) + Redis lock + eşzamanlılık testi (T-05). | 4 |
+| R-08 | **Webhook duplikasyonu ile çift ödeme serbest bırakma.** | Y | O | `external_event_id` UNIQUE + idempotent handler + monotonluk kontrolü + test (T-09, T-10). | 5 |
+| R-09 | **`location_events` hacim patlaması** — maliyet, sorgu yavaşlaması, KVKK aşırı saklama. | O | Y | Partition + retention + agregasyon + örnekleme frekansı ayarı (T-24). | 8 |
+| R-10 | **Modül sınırlarının erozyonu** — modular monolith'in fiilen spagettiye dönüşmesi. | O | O | Modüller arası doğrudan repository/entity erişimi lint ile yasak; cross-domain yan etki event ile. | 2+ |
+| R-11 | **Migration geri alınabilirliği** — üretimde ileri-geri uyumsuz migration. | Y | O | Her migration down testi; expand/contract yaklaşımı; veri taşıyan migration'lar ayrı adım. | 1+ |
+| R-12 | **Identity hash anahtarı kaybı veya değişimi** — tekillik kontrolü sessizce kırılır. Ham girdi saklanmadığı için hash'ler yeniden hesaplanamaz, dolayısıyla **rotasyon teknik olarak mümkün değildir**. | Y | D | KMS'te non-exportable anahtar, otomatik rotasyon kapalı, `hash_key_version` teşhis için; zorunlu değişimde tek yol re-verification migration (ADR-0004 §5, Faz 12 prosedürü); erişim ayrımı + KMS yedekliliği. | 3, 12 |
+| R-25 | **Sağlayıcı kapsamlı subject id ile tekillik atlatma** — aynı kişi farklı KYC sağlayıcısıyla ikinci hesap açar. | Y | O | Birincil tekillik `identity_hash` üzerinde, sağlayıcıdan bağımsız unique index; hash üretemeyen sağlayıcı tekillik akışında kullanılamaz (T-01b, T-01c). | 3 |
+| R-26 | **Sahte/replay telemetri** — mock-location ile check-in, geofence ve kanıt zinciri kandırılır. | Y | O | Sunucu zamanı yetkili + skew reddi, oturum bazlı monoton sıra numarası, App Check + mock-location sinyali, çok sinyalli değerlendirme (T-33); "tamper-evident" dili (ADR-0008 §7-8). | 8 |
+| R-27 | **`EXCLUDE` predikatı olmadan iptal edilen slotun kalıcı bloklanması.** | O | Y | Constraint predikatı iptal durumlarını dışlar; T-05b ile doğrulanır. | 4 |
+| R-28 | **Kendi kendine booking/review ile metrik manipülasyonu** (tek User/iki profil modelinin yan etkisi). | O | O | `CHECK (customer_id <> provider_id)`, `CHECK (reviewer_id <> reviewee_id)` (T-05c, T-05d). | 4, 5 |
+| R-29 | **Ödeme yetkilendirmesinin hizmet gününden önce sona ermesi.** | Y | O | `authorization_expires_at` + re-authorization akışı + `PAYMENT_AUTHORIZATION_EXPIRED` (T-34). | 5 |
+| R-30 | **Event'ten para hareketi tetiklemek** — at-least-once redelivery çift yetkilendirme üretir. | Y | O | PSP çağrıları senkron + outbound idempotency key; ödeme tetikleyici consumer yok (T-38). | 5, 9 |
+| R-31 | **Audit izinin değiştirilebilir kalması** — rol ayrımının geç yapılması. | Y | O | Rol ayrımı Faz 2'ye alındı + hash zinciri + retention-locked export (ADR-0013, T-35, T-36). | 2, 12 |
+| R-32 | **Idempotency kaydının yalnızca Redis'te olması** — flush sonrası çift ödeme/çift geçiş. | Y | O | `idempotency_keys` tablosu DB'de, yan etkiyle aynı transaction'da; Redis hızlı yol (T-07c). | 2, 4 |
+| R-33 | **Outbox'ın Faz 9'a bırakılması** — Faz 3/5/8 event garantisi olmadan yayınlar. | Y | Y | Outbox + publisher + `processed_events` Faz 2'ye alındı (ADR-0010 §2, T-39). | 2 |
+| R-13 | **Firestore'un sızarak transactional kullanılması.** | Y | D | ADR-0003; Firestore kullanımı ADR olmadan eklenmez; review kontrolü. | tüm |
+| R-14 | **`bookings.provider_id` NOT NULL tasarımı** `REQUESTED` durumunda tutarsız. | O | Y | Faz 4'te ADR ile netleştir: nullable + duruma bağlı CHECK, ya da booking yalnızca eşleşme sonrası. | 4 |
+
+## 3. AI / Ar-Ge riskleri
+
+| # | Risk | Etki | Olasılık | Azaltma | Faz |
+|---|---|---|---|---|---|
+| R-15 | **Türkçe serbest metin çeşitliliği** — NLP F1 hedefinin altında kalması. | O | O | Slot bazlı ölçüm, düşük confidence'ta netleştirme, form fallback, dataset genişletme. | 6 |
+| R-16 | **Optimization çalışma süresi** aday sayısı arttıkça patlar. | O | O | Zaman limiti + fallback (T-16); aday havuzu ön filtreleme; benchmark harness. | 7 |
+| R-17 | **Anomaly detection false positive** — gereksiz alarm güveni yıkar, false negative güvenliği riske atar. | Y | O | Rules + ML hibriti; `WARNING` kademesi; FPR/recall ölçümü; insan doğrulaması. | 8 |
+| R-18 | **Etiketli veri yokluğu** — Ar-Ge metriklerinin ölçülememesi. | O | Y | Sentetik/anonim dataset + baseline karşılaştırması + üretimde sürüm kolonları (ADR-0012). | 6-8 |
+| R-19 | **Prompt injection** — `raw_text` üzerinden iş kuralı manipülasyonu. | O | O | LLM çıktısı şema doğrulamasından geçer; karar deterministik motorda; injection testi (T-14). | 6 |
+| R-20 | **Ölçüm disiplini kaybı** — sonradan metrik seçerek iyi sonuç raporlama. | O | O | Metrik tanımı deneyden önce yazılır; deney kayıtları versiyonlanır. | 6+ |
+
+## 4. Operasyon / ekip riskleri
+
+| # | Risk | Etki | Olasılık | Azaltma | Faz |
+|---|---|---|---|---|---|
+| R-21 | **Yerel Python 3.9 ile hedef 3.12 uyuşmazlığı.** | O | Y | `uv` ile pinlenmiş toolchain; CI ve Docker aynı sürüm. | 1 |
+| R-22 | **Kapsam genişlemesi** — frontend'in erken başlaması, gereksiz teknoloji eklenmesi. | Y | O | ADR-0011 + anti-hedef listesi + faz kapıları. | tüm |
+| R-23 | **Tek kişilik bilgi yoğunluğu / bus factor.** | O | O | ADR + doküman disiplini; her feature için purpose/architecture/failure/testing dokümanı. | tüm |
+| R-24 | **GCP maliyet sürprizi** (Cloud Run, BigQuery, routing API). | O | O | Bütçe alarmı, kota limiti, maliyet ölçümü; Terraform'da limitler tanımlı. | 13 |
+
+## 5. Bağlayıcı varsayımlar
+
+Bu varsayımlar **doğrulanana kadar varsayım olarak işaretlenir**; kodda `TODO(legal)` /
+`TODO(verify)` ile işaretlenir.
+
+| # | Varsayım | Doğrulama yolu | Durum |
+|---|---|---|---|
+| A-01 | Yetkili bir identity/KYC sağlayıcısı, benzersiz subject referansı döndüren API sunar. | Sağlayıcı teknik dokümanı + sözleşme | ❓ doğrulanmadı |
+| A-02 | Ödeme kuruluşu şartlı ödeme (hold → conditional release) ve alt üye işyeri payout destekler. | Sağlayıcı yetkinlik matrisi + sözleşme | ❓ doğrulanmadı |
+| A-03 | Ham TCKN yerine referans/HMAC hash kullanımı KVKK açısından savunulabilir minimizasyondur (yükümlülüğü ortadan kaldırmaz). | Hukuk görüşü | ❓ doğrulanmadı |
+| A-04 | Konum verisi için 30 gün ham retention kabul edilebilir. | Hukuk görüşü + politika | ❓ doğrulanmadı |
+| A-05 | Hizmet oturumu bazlı arka plan konum kullanımı App Store/Play politikalarına uygundur. | Platform politika incelemesi | ❓ doğrulanmadı |
+| A-06 | Cloud SQL PostgreSQL sürümü hedeflenen PostGIS sürümünü destekler. | GCP dokümanı + Faz 1 testi | ❓ doğrulanmadı |
+| A-07 | TÜBİTAK 1812 çağrı koşulları ve raporlama gereksinimleri güncel varsayıldığı gibidir. | Güncel resmî çağrı metni | ❓ doğrulanmadı |
+| A-08 | Ekip Flutter ve NestJS'i aynı dönemde sürdürebilir kapasitede (Faz 15-16). | Kaynak planı | ❓ doğrulanmadı |
+
+## 6. Faz 0 sonunda kalan açık konular
+
+1. R-14 (`bookings.provider_id`) tasarım kararı Faz 4'te ADR ile kapatılacak.
+2. `payments.booking_id UNIQUE` kısıtının kısmi iade/çoklu intent senaryosunda yeterliliği
+   Faz 5'te değerlendirilecek.
+3. Review görünürlük politikası (double-blind pencere) Faz 5/10'da tanımlanacak.
+4. A-01 ve A-02 doğrulanmadan gerçek entegrasyon kodu yazılmayacak; mock/sandbox ile ilerlenecek.
+5. **Kullanıcı kararı bekliyor:** Faz 10'da salt-okunur, sade bir iç ops görünümü üretilsin mi?
+   Blueprint §17/§26 demo anlatısını admin ekranı üzerine kuruyor; tüm arayüzü Faz 15'e bırakmak
+   hibe takvimi altında raporlama riski taşıyor (ADR-0011 "Bilinen raporlama riski").
+   Onay gelmedikçe plan değişmez.
