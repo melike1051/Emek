@@ -6,12 +6,12 @@ doğrulanmalıdır**. Doğrulama gerektiren noktalar `TODO(legal)` ile işaretli
 
 ## 1. Veri sınıflandırması
 
-| Sınıf | Örnek | Kural |
-|---|---|---|
-| **S3 — Özel nitelikli / yüksek hassasiyet** | biyometrik veri, adli sicil bilgisi, sağlık bilgisi | Varsayılan: **toplanmaz**. Zorunlu hale gelirse ayrı ADR + `TODO(legal)` + ayrı erişim kontrolü + kısa retention + her erişimin loglanması. |
-| **S2 — Kimlik ve finansal referans** | T.C. kimlik numarası, kimlik belgesi görüntüsü, ödeme referansı | Ham TCKN ve belge görüntüsü **core sistemde saklanmaz**. Yalnızca `provider_subject_id` veya KMS anahtarlı HMAC `identity_hash` + doğrulama sonucu tutulur. Kart verisi hiçbir koşulda sisteme girmez. |
-| **S1 — Kişisel veri** | ad, telefon, e-posta, adres, konum olayları, before/after fotoğraf, review metni | En az yetki, şifreli aktarım, retention, erişim logu. Loglara yazılmaz/maskelenir. |
-| **S0 — Operasyonel/türetilmiş** | booking durumu, skor bileşenleri, metrikler, event sayaçları | Serbestçe işlenebilir; analitikte kimlik bilgisi minimize edilir. |
+| Sınıf                                       | Örnek                                                                            | Kural                                                                                                                                                                                                  |
+| ------------------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **S3 — Özel nitelikli / yüksek hassasiyet** | biyometrik veri, adli sicil bilgisi, sağlık bilgisi                              | Varsayılan: **toplanmaz**. Zorunlu hale gelirse ayrı ADR + `TODO(legal)` + ayrı erişim kontrolü + kısa retention + her erişimin loglanması.                                                            |
+| **S2 — Kimlik ve finansal referans**        | T.C. kimlik numarası, kimlik belgesi görüntüsü, ödeme referansı                  | Ham TCKN ve belge görüntüsü **core sistemde saklanmaz**. Yalnızca `provider_subject_id` veya KMS anahtarlı HMAC `identity_hash` + doğrulama sonucu tutulur. Kart verisi hiçbir koşulda sisteme girmez. |
+| **S1 — Kişisel veri**                       | ad, telefon, e-posta, adres, konum olayları, before/after fotoğraf, review metni | En az yetki, şifreli aktarım, retention, erişim logu. Loglara yazılmaz/maskelenir.                                                                                                                     |
+| **S0 — Operasyonel/türetilmiş**             | booking durumu, skor bileşenleri, metrikler, event sayaçları                     | Serbestçe işlenebilir; analitikte kimlik bilgisi minimize edilir.                                                                                                                                      |
 
 ## 2. Kimlik verisi ilkeleri
 
@@ -72,6 +72,7 @@ Kayıt: `actor_user_id`, `action`, `entity_type`, `entity_id`, `old_value`, `new
 `created_at`, `prev_hash`, `hash`.
 
 Bütünlük mekanizması (ADR-0013, **Faz 2'de kurulur**):
+
 - Uygulama DB rolünün `audit_logs` üzerinde yalnızca INSERT + SELECT yetkisi vardır; UPDATE/DELETE yok.
 - Satırlar hash zinciriyle bağlanır; zincir periyodik doğrulanır, kopukluk alarm üretir.
   Bu, ayrıcalıklı bir rolün geçmişi yeniden yazmasını engellemez ama **tespit edilebilir** kılar.

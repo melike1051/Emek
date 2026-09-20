@@ -5,6 +5,7 @@ performance review → docs → git diff review → PHASE COMPLETE`.
 Faz tamamlanınca otomatik olarak sonrakine geçilmez.
 
 **Genel exit kriterleri (her faz için geçerli):**
+
 - Fazın tüm testleri yeşil; yeni kod için test yazılmış (testsiz feature tamamlanmış sayılmaz).
 - Faz sonu tam code review yapıldı; bulunan sorunlar aynı faz içinde kapatıldı.
 - Migration'lar ileri ve geri çalışıyor.
@@ -24,7 +25,7 @@ Ar-Ge metrikleri, bu faz planı.
 
 ---
 
-## Faz 1 — Foundation
+## Faz 1 — Foundation ✅
 
 **Kapsam:** npm workspaces monorepo + uv Python toolchain; NestJS skeleton (config, logging,
 validation, error filter, health); FastAPI skeleton (health, settings, schema validation);
@@ -32,15 +33,51 @@ PostgreSQL 16 + PostGIS ve Redis için Docker Compose; migration altyapısı + i
 (extensions, enum'lar, `users`, `user_roles`); environment/config şeması (zod/pydantic ile
 doğrulanan, eksik değişkende **boot'ta fail**); temel CI (lint → typecheck → unit → build).
 
-**Exit kriterleri:**
-- `docker compose up -d` ile Postgres+PostGIS+Redis (+ Pub/Sub emulator) ayağa kalkıyor.
-- `GET /api/v1/health` ve AI servisi `/health` DB/Redis bağımlılık durumunu raporluyor.
-- İlk migration `up` ve `down` yönünde temiz çalışıyor; PostGIS extension doğrulandı.
-- Config şeması eksik/hatalı env ile servisi başlatmıyor (test edildi).
-- CI PR'da zorunlu ve yeşil; `.env` commit'lenemiyor.
-- Python sürümü 3.12'ye pinlendi (yerel 3.9 kullanılmıyor).
+**Exit kriterleri (durum):**
 
-**Riskler:** yerel Python sürüm farkı; PostGIS image seçimi (Cloud SQL sürümüyle uyum).
+- ✅ `npm run infra:up` ile Postgres+PostGIS + Redis ayağa kalkıyor. Pub/Sub emulator opsiyonel
+  profile'a alındı (`npm run infra:up:events`): imaj ~1.5GB ve Faz 1'de hiçbir kod Pub/Sub
+  kullanmıyor — outbox ile Faz 2'de devreye girer.
+- ✅ `GET /api/v1/health` Postgres, PostGIS ve Redis durumunu ayrı ayrı raporluyor; bağımlılık
+  düştüğünde 503 + `checks` gövdesi. `GET /api/v1/health/live` bağımlılık kontrolü yapmaz
+  (geçici DB arızasında container yeniden başlatılmamalı).
+- ⚠️ **Kapsam düzeltmesi:** AI servisi `/health` DB/Redis raporlamıyor. Faz 1'de AI servisi
+  veritabanı kullanmıyor; yalnızca health check için `asyncpg` eklemek "tüketicisi olmayan
+  dependency" olurdu. AI readiness yapılandırma + `parser_version` raporlar; DB kontrolü
+  Faz 6-7'de candidate retrieval ile birlikte eklenecek.
+- ✅ İlk migration `up`/`down` yönünde çalışıyor; PostGIS extension ve enum sırası testle doğrulandı.
+- ✅ Config şeması eksik/hatalı env ile servisi başlatmıyor; mock sağlayıcı + production
+  kombinasyonu reddediliyor (ADR-0005/0009 kuralı config katmanında test edildi).
+- ✅ CI workflow'u lint → format → typecheck → unit → migration up/down/up → integration → build
+  (+ AI servisi için ruff/mypy/pytest + container build) adımlarını içeriyor. `.env` `.gitignore`'da.
+- ✅ Python 3.12'ye pinlendi (`.python-version`, Dockerfile, CI); yerel 3.9 kullanılmıyor.
+- ✅ `npm audit`: 0 açık (multer DoS açığı `overrides` ile kapatıldı — ADR-0015).
+
+**Bu fazda alınan ek kararlar:** ADR-0014 (ham SQL migration), ADR-0015 (NestJS 11/CJS,
+TypeScript 6, uv, sürüm pinleme).
+
+**Faz 1 code review bulguları ve çözümleri** (bağımsız review agent'ı; blueprint, ADR'ler ve
+test stratejisini sıfırdan okuyarak). Hepsi aynı faz içinde kapatıldı:
+
+| Bulgu | Çözüm |
+|---|---|
+| `lazyConnect` + `enableOfflineQueue: false` ilk Redis komutunu her zaman reddediyor → health boot'tan sonra 503 döner | `enableOfflineQueue: true` + `commandTimeout`/`maxRetriesPerRequest` sınırları; `lazyConnect` kaldırıldı. Regresyon testi: `health-dependencies.integration.spec.ts` |
+| Integration testleri geliştirme veritabanını sıfırlıyor, veri temizliği yok | Ayrı `emek_test` veritabanı + `_test` son eki kontrolü (aksi halde koşucu başlamaz), `afterEach` TRUNCATE, `maxWorkers: 1` config'e taşındı |
+| Bootstrap yapılandırması testlerde kopyalanmış → üretimdeki davranış test edilmiyor | `configureApp()` ayrıştırıldı; main ve integration testleri aynı kurulumu kullanıyor |
+| `listen()` başarısız olursa açık pool/Redis ile süreç ayakta kalıyor | `app.close()` + `process.exit(1)` |
+| Global filter HTTP dışı bağlamda (Faz 9 Pub/Sub) Express response arayacak | `host.getType() !== 'http'` guard'ı + test |
+| `BusinessException` sabit mesaj politikasını atlayabiliyor | Mesaj varsayılan olarak `CLIENT_MESSAGES[code]`; özel metin açık `clientMessage` ile |
+| pino `redact` joker karakteri tek seviye eşliyor → derin PII maskelenmiyor | Anahtar adına göre derin maskeleme (`redact.ts`) + iç içe/`err` testleri |
+| İstemci `x-request-id` göndererek audit korelasyonunu bulandırabiliyor | `requestId` her zaman sunucuda üretilir; istemci değeri `clientTraceId` olarak yalnızca bilgi amaçlı taşınır |
+| Telefon normalize edilmiyor → aynı kişi birden fazla hesap açabilir | `users_phone_e164` CHECK + 5 biçim için test |
+| `DELETED` kullanıcı iletişim bilgisini serbest bırakıyor mu (tanımsız) | Karar yazıldı ve test edildi: tekillik `DELETED`'ı da kapsar |
+| Paylaşılan `set_updated_at()` ilk tablonun migration'ında → sonraki rollback'leri kırar | Kendi migration'ına alındı + sabit `search_path` |
+| Faz 3'e kadar kullanılmayan doğrulama enum'ları Faz 1'de oluşturuluyor | Kaldırıldı; `identity_records` ile gelecek (test bunu doğruluyor) |
+| `.dockerignore` yok → host `node_modules` ve `.env` imaja giriyor | `.dockerignore` eklendi |
+| CI'da `permissions` bloğu yok | `permissions: contents: read` |
+| Health endpoint'i kimlik doğrulamasız ve her çağrı 3 bağlantı alıyor | 1 saniyelik önbellek + eşzamanlı çağrıların tek turu paylaşması (+ test) |
+| Tautolojik testler (`latencyMs >= 0`, postgis mock'u postgres'ten ayrışmıyor) | Silindi/yeniden yazıldı; PostGIS eksikliği ayrı ayırt edilebilir senaryo oldu |
+| Aşırı mühendislik: 15 geçişli `AppConfigService`, tek dosya için `packages/config` workspace'i | Config doğrudan tiplenmiş `env` nesnesini sunar; `packages/config` kaldırıldı |
 
 ---
 
@@ -54,6 +91,7 @@ doğrulanan, eksik değişkende **boot'ta fail**); temel CI (lint → typecheck 
 temeli.
 
 **Bu fazda kurulan ortak altyapı** (sonraki fazlar bunlara bağımlı, bu yüzden geriye bırakılamaz):
+
 - `audit_logs` + **rol ayrımı** (uygulama rolüne UPDATE/DELETE yok) + hash zinciri (ADR-0013 §6-7).
 - **Transactional outbox** tablosu + publisher + `processed_events` tablosu (ADR-0010 §2).
   Faz 3'ün `IdentityVerified`, Faz 5'in `PaymentAuthorized` ve Faz 8'in `SafetyAlertRaised`

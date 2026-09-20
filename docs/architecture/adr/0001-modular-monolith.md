@@ -20,6 +20,7 @@ anomaly detection (`services/ai`).
 Kubernetes ve service mesh kapsam dışıdır. Compute: Cloud Run.
 
 Yeni bir servis çıkarmak için şu üçünden en az biri kanıtlanmalıdır:
+
 1. Farklı runtime/dil zorunluluğu (ör. OR-Tools → Python).
 2. Ölçüm ile gösterilmiş bağımsız ölçekleme ihtiyacı (CPU/bellek profili core'dan ayrışıyor).
 3. Farklı availability/izolasyon sınıfı (ör. panic flow'un core deploy'undan etkilenmemesi).
@@ -37,6 +38,7 @@ Yeni bir servis çıkarmak için şu üçünden en az biri kanıtlanmalıdır:
 **Olumlu:** tek transaction sınırı, tek CI hattı, düşük operasyonel yük, hızlı iterasyon.
 
 **Olumsuz / yönetilecek:** modül sınırlarının erozyon riski. Karşı önlemler:
+
 - Modüller arası erişim yalnızca modülün public service arayüzünden; başka modülün repository'sine
   veya entity'sine doğrudan erişim yasak (lint kuralı ile zorlanacak — Faz 2).
 - Cross-domain yan etkiler senkron çağrı yerine domain event ile (Faz 9).

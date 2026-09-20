@@ -21,12 +21,12 @@ Bu ancak üretim verisi sürüm bilgisi taşıyorsa mümkündür — sonradan ek
    (`packages/config` veya DB tablosu) olarak tutulur; değişiklik yeni sürüm numarası üretir.
    Blueprint'teki örnek ağırlıklar başlangıç değeridir, sabit gerçek değildir.
 3. **Her Ar-Ge ekseninde baseline zorunludur.** Ölçüm "proposed vs baseline" olarak yapılır:
-   | Eksen | Baseline | Proposed |
-   |---|---|---|
-   | NLP | kural tabanlı/regex parser | LLM/model tabanlı structured extraction |
-   | Matching | basit filtre + mesafe sıralaması | constraints + çok kriterli scoring |
-   | Optimization | greedy/first-available atama | OR-Tools çok kriterli assignment |
-   | Safety | yalnız eşik kuralları | rules + ML anomaly hibriti |
+   | Eksen        | Baseline                         | Proposed                                |
+   | ------------ | -------------------------------- | --------------------------------------- |
+   | NLP          | kural tabanlı/regex parser       | LLM/model tabanlı structured extraction |
+   | Matching     | basit filtre + mesafe sıralaması | constraints + çok kriterli scoring      |
+   | Optimization | greedy/first-available atama     | OR-Tools çok kriterli assignment        |
+   | Safety       | yalnız eşik kuralları            | rules + ML anomaly hibriti              |
 4. **Evaluation dataset ve deney sonuçları repoda versiyonlanır** (`docs/research/experiments/`).
    Gerçek kişisel veri içeren dataset repoya konmaz; sentetik/anonimleştirilmiş örnek + şema konur.
 5. **Metrik tanımı deneyden önce yazılır** (`docs/research/research-metrics.md`). Sonradan metrik

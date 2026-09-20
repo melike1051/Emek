@@ -1,0 +1,36 @@
+# Emek AI servisi (Python + FastAPI) — Cloud Run için stateless container.
+# Build context: repository kökü.
+#   docker build -f infra/docker/Dockerfile.ai -t emek-ai .
+#
+# Python sürümü burada pinlenir; yerel makinenin sistem Python'u kullanılmaz (risk R-21).
+
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS build
+WORKDIR /app
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PROJECT_ENVIRONMENT=/app/.venv
+
+# Bağımlılıklar kaynak koddan önce kurulur: kod değişimi dependency katmanını geçersiz kılmaz.
+COPY services/ai/pyproject.toml services/ai/uv.lock* ./
+RUN uv sync --no-dev --no-install-project
+
+COPY services/ai/app ./app
+RUN uv sync --no-dev
+
+FROM python:3.12-slim-bookworm AS runtime
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    AI_ENVIRONMENT=production
+WORKDIR /app
+
+RUN groupadd --system emek && useradd --system --gid emek --no-create-home emek
+
+COPY --from=build --chown=emek:emek /app/.venv /app/.venv
+COPY --from=build --chown=emek:emek /app/app /app/app
+
+USER emek
+
+EXPOSE 8000
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

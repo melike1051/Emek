@@ -37,6 +37,7 @@ Adapter implementasyonları: `MockIdentityProvider` (Faz 3, deterministik, test 
 ardından gerçek sağlayıcı(lar). Domain katmanı yalnızca port'u bilir.
 
 Ek kurallar:
+
 - Adapter'dan çıkan ham kimlik alanları (isim, TCKN, doğum tarihi, belge görüntüsü) core domain'e
   **geçirilmez**; adapter sınırında normalize edilip atılır. Core yalnızca referans + seviye + sonuç görür.
 - `identity_hash` (ADR-0004) **adapter sınırının içinde** üretilir — ham kimlik verisini gören tek

@@ -47,7 +47,7 @@ tutmak yüksek risklidir.
    mock adapter production'da devre dışıdır ve seçilirse servis başlamaz.
 9. `SAFETY_HOLD` veya açık `disputes` kaydı varken release **yapılamaz** (ADR-0006 guard'ı).
 10. Settlement/payout mutabakatı için sağlayıcı raporu ile `payments` tablosu arasında düzenli
-   reconciliation işi (Faz 11) — fark varsa alarm.
+    reconciliation işi (Faz 11) — fark varsa alarm.
 
 ## Gerekçe
 

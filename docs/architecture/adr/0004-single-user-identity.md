@@ -23,7 +23,7 @@ sağlayıcı olabilmeli — ama iki ayrı hesapla değil.
      doğrulanırsa çakışma üretmez. Sağlayıcı değiştirerek ikinci hesap açma yolunu yalnızca
      `identity_hash` kapatır.
    - `UNIQUE (user_id)` — bir kullanıcının tek doğrulanmış kimlik kaydı olur.
-   Uygulama kontrolü ilk savunma, DB constraint son savunmadır; yarış koşulunda tek koruma DB'dir.
+     Uygulama kontrolü ilk savunma, DB constraint son savunmadır; yarış koşulunda tek koruma DB'dir.
 3. **`identity_hash` zorunludur.** `IDENTITY_VERIFIED` ve üzeri seviye, hash üretilmeden verilmez.
    Ulusal kimlik numarasından türetilmiş deterministik bir referans üretemeyen bir sağlayıcı,
    tekillik kontrolü gerektiren akışlarda (kayıt, provider onayı, recovery) **tek başına
@@ -43,7 +43,7 @@ sağlayıcı olabilmeli — ama iki ayrı hesapla değil.
      prosedürü Faz 12'de yazılır; "anahtarı döndürüp devam etmek" bir seçenek değildir.
    - Anahtar kaybı tekillik kontrolünü kırar (risk R-12): erişim ayrımı ve KMS yedekliliği kritik yoldadır.
 6. **Verification seviyeleri:** `UNVERIFIED → PHONE_VERIFIED → IDENTITY_VERIFIED →
-   PROVIDER_VERIFIED → FULLY_VERIFIED`. Müşteri için `IDENTITY_VERIFIED` yeterli olabilir;
+PROVIDER_VERIFIED → FULLY_VERIFIED`. Müşteri için `IDENTITY_VERIFIED` yeterli olabilir;
    sağlayıcı için ek belge/yetkinlik/safety onboarding gerekir.
 7. **Account recovery, mükerrer hesap engelinin zorunlu karşılığıdır.** Aynı kimlik referansı
    bulunduğunda yeni hesap açılmaz; mevcut User'a ek doğrulama ile dönülür. Recovery akışı

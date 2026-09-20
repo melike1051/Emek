@@ -1,0 +1,26 @@
+# Host'a ait derlenmiş bağımlılıklar imaja girmemeli: macOS node_modules,
+# container'daki Linux node_modules'ü ezerse imaj bozulur (yerelde fark edilmez).
+node_modules
+**/node_modules
+services/ai/.venv
+
+# Secret ve yerel yapılandırma asla build layer'ına girmez
+.env
+.env.*
+!.env.example
+
+.git
+.github
+dist
+**/dist
+# Incremental derleme durumu: host'tan gelirse tsc "değişiklik yok" der ve
+# imaj içinde hiç çıktı üretmez (dist boş kalır, container başlamaz).
+*.tsbuildinfo
+**/*.tsbuildinfo
+coverage
+**/coverage
+*.log
+.DS_Store
+docs
+apps/mobile/build
+apps/mobile/.dart_tool

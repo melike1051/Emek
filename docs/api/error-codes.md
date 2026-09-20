@@ -19,36 +19,45 @@ Yanıt formatı:
 `message` kullanıcıya gösterilebilir, güvenli metindir. `details` yalnızca istemcinin ihtiyaç
 duyduğu yapısal bilgiyi taşır (ör. hangi alan geçersiz) — iç sistem detayı taşımaz.
 
-| Kod | HTTP | Anlam | Faz |
-|---|---|---|---|
-| `VALIDATION_FAILED` | 400 | İstek şeması/alan doğrulaması başarısız | 2 |
-| `UNAUTHENTICATED` | 401 | Geçerli token yok veya süresi dolmuş | 2 |
-| `FORBIDDEN` | 403 | Rol veya ownership yetkisi yok | 2 |
-| `NOT_FOUND` | 404 | Kaynak yok veya erişilemez (varlık sızdırılmaz) | 2 |
-| `RATE_LIMITED` | 429 | Oran sınırı aşıldı | 2 |
-| `APP_INTEGRITY_FAILED` | 403 | App Check doğrulaması başarısız | 12 |
-| `VERIFICATION_REQUIRED` | 403 | İşlem için gereken doğrulama seviyesi yok | 3 |
-| `IDENTITY_ALREADY_REGISTERED` | 409 | Bu kimlik referansı başka bir hesaba bağlı → recovery akışı | 3 |
-| `VERIFICATION_SESSION_EXPIRED` | 409 | Doğrulama oturumu süresi doldu | 3 |
-| `VERIFICATION_FAILED` | 422 | Sağlayıcı doğrulamayı reddetti | 3 |
-| `RECOVERY_NOT_ALLOWED` | 403 | Recovery ön koşulları sağlanmadı | 3 |
-| `PROVIDER_NOT_AVAILABLE` | 409 | Sağlayıcı istenen aralıkta müsait değil | 4 |
-| `BOOKING_CONFLICT` | 409 | Çakışan rezervasyon var | 4 |
-| `INVALID_STATE_TRANSITION` | 409 | Bu durumdan hedef duruma geçiş tanımlı değil | 4 |
-| `BOOKING_NOT_MODIFIABLE` | 409 | Booking mevcut durumunda değiştirilemez | 4 |
-| `SELF_BOOKING_NOT_ALLOWED` | 422 | Aynı kullanıcı kendi hizmetini rezerve edemez | 4 |
-| `PAYMENT_FAILED` | 422 | Ödeme yetkilendirme/çekim başarısız | 5 |
-| `PAYMENT_AUTHORIZATION_EXPIRED` | 409 | Yetkilendirme süresi doldu, yenilenmeli | 5 |
-| `PAYMENT_ALREADY_RELEASED` | 409 | Ödeme zaten serbest bırakıldı | 5 |
-| `RELEASE_BLOCKED` | 409 | Açık dispute veya `SAFETY_HOLD` nedeniyle release bloklandı | 5 |
-| `DISPUTE_ALREADY_OPEN` | 409 | Bu booking için açık dispute var | 5 |
-| `DOCUMENT_UPLOAD_FAILED` | 422 | Dosya doğrulama/bütünlük hatası | 5 |
-| `REQUEST_NOT_UNDERSTOOD` | 422 | Talep yapılandırılamadı, netleştirme gerekiyor | 6 |
-| `NO_CANDIDATE_FOUND` | 422 | Hard constraint'leri geçen aday yok | 7 |
-| `SAFETY_SESSION_NOT_ACTIVE` | 409 | Aktif hizmet oturumu yok; telemetri kabul edilmez | 8 |
-| `TELEMETRY_REJECTED` | 422 | Zaman sapması, sıra numarası veya bütünlük kontrolü başarısız | 8 |
-| `SERVICE_DEGRADED` | 503 | Bağımlı servis erişilemez; kısmi/fallback sonuç mümkün | 6, 7 |
-| `IDEMPOTENCY_KEY_REUSED` | 409 | Aynı idempotency key farklı içerikle kullanıldı | 4 |
+**Mesaj asla exception içeriğinden türetilmez.** Domain hataları (`BusinessException`) kendi
+istemci mesajını açıkça verir; diğer tüm hatalarda mesaj sabit listeden gelir
+(`services/api/src/common/errors/error-codes.ts` → `CLIENT_MESSAGES`). Böylece framework metinleri
+("Cannot GET /api/v1/x"), SQL hataları ve stack trace'ler sözleşmeye sızmaz.
+
+Uygulama durumu: altyapı seviyesindeki kodlar Faz 1'de tanımlıdır (aşağıdaki tabloda Faz 1/2
+işaretli olanlar); domain kodları kendi fazında, ilgili modülle birlikte eklenir.
+
+| Kod                             | HTTP | Anlam                                                         | Faz  |
+| ------------------------------- | ---- | ------------------------------------------------------------- | ---- |
+| `VALIDATION_FAILED`             | 400  | İstek şeması/alan doğrulaması başarısız                       | 1 ✅ |
+| `UNAUTHENTICATED`               | 401  | Geçerli token yok veya süresi dolmuş                          | 1 ✅ |
+| `FORBIDDEN`                     | 403  | Rol veya ownership yetkisi yok                                | 1 ✅ |
+| `NOT_FOUND`                     | 404  | Kaynak yok veya erişilemez (varlık sızdırılmaz)               | 1 ✅ |
+| `RATE_LIMITED`                  | 429  | Oran sınırı aşıldı                                            | 1 ✅ |
+| `APP_INTEGRITY_FAILED`          | 403  | App Check doğrulaması başarısız                               | 12   |
+| `VERIFICATION_REQUIRED`         | 403  | İşlem için gereken doğrulama seviyesi yok                     | 3    |
+| `IDENTITY_ALREADY_REGISTERED`   | 409  | Bu kimlik referansı başka bir hesaba bağlı → recovery akışı   | 3    |
+| `VERIFICATION_SESSION_EXPIRED`  | 409  | Doğrulama oturumu süresi doldu                                | 3    |
+| `VERIFICATION_FAILED`           | 422  | Sağlayıcı doğrulamayı reddetti                                | 3    |
+| `RECOVERY_NOT_ALLOWED`          | 403  | Recovery ön koşulları sağlanmadı                              | 3    |
+| `PROVIDER_NOT_AVAILABLE`        | 409  | Sağlayıcı istenen aralıkta müsait değil                       | 4    |
+| `BOOKING_CONFLICT`              | 409  | Çakışan rezervasyon var                                       | 4    |
+| `INVALID_STATE_TRANSITION`      | 409  | Bu durumdan hedef duruma geçiş tanımlı değil                  | 4    |
+| `BOOKING_NOT_MODIFIABLE`        | 409  | Booking mevcut durumunda değiştirilemez                       | 4    |
+| `SELF_BOOKING_NOT_ALLOWED`      | 422  | Aynı kullanıcı kendi hizmetini rezerve edemez                 | 4    |
+| `PAYMENT_FAILED`                | 422  | Ödeme yetkilendirme/çekim başarısız                           | 5    |
+| `PAYMENT_AUTHORIZATION_EXPIRED` | 409  | Yetkilendirme süresi doldu, yenilenmeli                       | 5    |
+| `PAYMENT_ALREADY_RELEASED`      | 409  | Ödeme zaten serbest bırakıldı                                 | 5    |
+| `RELEASE_BLOCKED`               | 409  | Açık dispute veya `SAFETY_HOLD` nedeniyle release bloklandı   | 5    |
+| `DISPUTE_ALREADY_OPEN`          | 409  | Bu booking için açık dispute var                              | 5    |
+| `DOCUMENT_UPLOAD_FAILED`        | 422  | Dosya doğrulama/bütünlük hatası                               | 5    |
+| `REQUEST_NOT_UNDERSTOOD`        | 422  | Talep yapılandırılamadı, netleştirme gerekiyor                | 6    |
+| `NO_CANDIDATE_FOUND`            | 422  | Hard constraint'leri geçen aday yok                           | 7    |
+| `SAFETY_SESSION_NOT_ACTIVE`     | 409  | Aktif hizmet oturumu yok; telemetri kabul edilmez             | 8    |
+| `TELEMETRY_REJECTED`            | 422  | Zaman sapması, sıra numarası veya bütünlük kontrolü başarısız | 8    |
+| `SERVICE_DEGRADED`              | 503  | Bağımlı servis erişilemez; kısmi/fallback sonuç mümkün        | 1 ✅ |
+| `INTERNAL_ERROR`                | 500  | Beklenmeyen hata; iç detay sızdırılmaz                        | 1 ✅ |
+| `IDEMPOTENCY_KEY_REUSED`        | 409  | Aynı idempotency key farklı içerikle kullanıldı               | 4    |
 
 ## Kurallar
 

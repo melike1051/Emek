@@ -46,6 +46,7 @@ görünümü (tek sayfa, tasarım yatırımı yok, yalnızca mevcut admin API'si
 Bu bir "public frontend" değildir ve ADR-0011'in özünü — API contract'ların frontend tarafından
 şekillendirilmemesi — bozmaz. Kullanıcı onay verirse bu ADR `Amended` olarak güncellenir.
 Onay gelmediği sürece plan değişmez: Faz 15'ten önce arayüz geliştirilmez.
+
 - Frontend fazına girildiğinde contract'lar dondurulmuş ve test edilmiş olur; entegrasyon süresi kısalır.
 
 ## Alternatifler

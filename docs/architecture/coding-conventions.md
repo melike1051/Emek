@@ -21,6 +21,7 @@
 doğrudan erişemez. Yalnızca public service arayüzü veya domain event kullanılır.
 
 **Tipler**
+
 - `strict: true`. `any` yasak; kaçınılmazsa `unknown` + narrowing.
 - Dış dünyadan gelen hiçbir veri tipine güvenilmez: request body, webhook, AI servis yanıtı,
   event payload — hepsi runtime şema doğrulamasından (class-validator / zod) geçer.
@@ -29,12 +30,14 @@ doğrudan erişemez. Yalnızca public service arayüzü veya domain event kullan
 - Zaman `TIMESTAMPTZ`; uygulama içinde UTC, sunumda kullanıcı zaman dilimi. Naive datetime yok.
 
 **İsimlendirme**
+
 - Dosya: `kebab-case.ts` (`booking-state.service.ts`). Class: `PascalCase`. Değişken/fonksiyon: `camelCase`.
 - Enum değerleri ve state adları: `SCREAMING_SNAKE_CASE` (DB ile aynı).
 - DTO: `CreateBookingRequestDto`, `BookingResponseDto`. Event: `BookingCreated` (PascalCase, geçmiş zaman).
 - Boolean: `isActive`, `hasVerifiedIdentity`, `canRelease`.
 
 **Hata yönetimi**
+
 - Kullanıcıya dönen her iş hatası bir **business error kodu** taşır:
   `IDENTITY_ALREADY_REGISTERED`, `PROVIDER_NOT_AVAILABLE`, `BOOKING_CONFLICT`, `INVALID_STATE_TRANSITION`,
   `PAYMENT_FAILED`, `SAFETY_SESSION_NOT_ACTIVE`, `DISPUTE_ALREADY_OPEN`, `VERIFICATION_REQUIRED`,
@@ -44,6 +47,7 @@ doğrudan erişemez. Yalnızca public service arayüzü veya domain event kullan
   422 iş kuralı, 429 rate limit, 5xx beklenmeyen.
 
 **Veritabanı**
+
 - Şema değişikliği yalnızca versiyonlu migration ile; elle DDL yok. Her migration geri alınabilir.
 - Invariant'lar DB'de de zorlanır: NOT NULL, CHECK, UNIQUE (gerektiğinde partial), EXCLUDE, FK.
   Uygulama kontrolü ilk, DB constraint son savunmadır.
@@ -83,6 +87,7 @@ doğrudan erişemez. Yalnızca public service arayüzü veya domain event kullan
 ## 6. Test
 
 Kural ve zorunlu senaryolar: `docs/testing/test-strategy.md`. Özet:
+
 - Test feature ile birlikte yazılır. Testsiz feature tamamlanmış sayılmaz.
 - Test geçsin diye test silinmez/zayıflatılmaz; başarısız test bir bulgudur.
 - Integration testler gerçek Postgres ve Redis'e karşı çalışır (mock DB ile değil).

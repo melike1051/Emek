@@ -1,0 +1,145 @@
+# Faz 1 CI: lint → typecheck → unit → integration → build.
+# Security scan (SAST/dependency), image push ve deploy adımları Faz 12-13'te eklenir.
+#
+# Not: GitHub workflow'ları .github/workflows altında olmak zorundadır (platform kısıtı);
+# infra/github-actions ise paylaşılan composite action ve yardımcı script'ler içindir.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Varsayılan token yetkisi en aza indirilir: CI yalnızca kodu okur.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22'
+  PYTHON_VERSION: '3.12'
+
+jobs:
+  core-api:
+    name: Core API (NestJS)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: emek
+          POSTGRES_PASSWORD: emek_ci
+          POSTGRES_DB: emek
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U emek -d emek"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgres://emek:emek_ci@localhost:5432/emek
+      # Integration testleri ayrı veritabanında çalışır ve şemasını sıfırlar.
+      DATABASE_URL_TEST: postgres://emek:emek_ci@localhost:5432/emek_test
+      REDIS_URL: redis://localhost:6379
+      IDENTITY_PROVIDER: mock
+      PAYMENT_PROVIDER: mock
+      LOG_LEVEL: error
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Create test database
+        env:
+          PGPASSWORD: emek_ci
+        run: psql -h localhost -U emek -d postgres -c 'CREATE DATABASE emek_test OWNER emek'
+
+      - name: Migrations (up/down/up)
+        working-directory: services/api
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL_TEST }}
+        run: |
+          npx node-pg-migrate up
+          npx node-pg-migrate down 0
+          npx node-pg-migrate up
+
+      - name: Integration tests
+        working-directory: services/api
+        run: npx jest --config jest.integration.config.js
+
+      - name: Build
+        run: npm run build
+
+  ai-service:
+    name: AI service (FastAPI)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/ai
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen --all-groups
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Format check
+        run: uv run ruff format --check .
+
+      - name: Typecheck
+        run: uv run mypy app
+
+      - name: Tests
+        run: uv run pytest
+
+  containers:
+    name: Container images build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build core API image
+        run: docker build -f infra/docker/Dockerfile.api -t emek-api:ci .
+
+      - name: Build AI service image
+        run: docker build -f infra/docker/Dockerfile.ai -t emek-ai:ci .

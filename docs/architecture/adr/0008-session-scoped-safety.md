@@ -28,7 +28,7 @@ Aynı zamanda güvenlik kararını tamamen ML'e bırakmak kabul edilemez gecikme
    - ML servisi, matching servisi veya herhangi bir dış servis erişilemez olsa bile **çalışır**
      (bağımlılığı yalnızca DB + event publish; publish başarısız olursa outbox ile garanti edilir),
    - booking `SAFETY_HOLD`'a alınır ve settlement bloklanır.
-   Panic akışının p95 gecikmesi ölçülür ve SLO'ya bağlanır.
+     Panic akışının p95 gecikmesi ölçülür ve SLO'ya bağlanır.
 4. **Risk seviyeleri:** `NORMAL`, `WARNING`, `HIGH_RISK`, `EMERGENCY`. Seviye yükselten her olay
    `safety_events`'e kaynağıyla (`RULE` | `ML` | `USER`) ve `risk_score` ile yazılır.
 5. **Veri minimizasyonu ve retention:** yüksek frekanslı `location_events` kısa retention (varsayılan

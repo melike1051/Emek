@@ -25,6 +25,7 @@ raw_text
 ```
 
 Kurallar:
+
 1. LLM/NLP **yalnızca** structured extraction yapar: `service_type`, `duration_minutes`, `date`,
    `time_window`, `location`, `requirements`, `preferences`.
 2. NLP çıktısı **şema doğrulamasından** geçer (Pydantic). Şemaya uymayan çıktı reddedilir;
