@@ -1,8 +1,10 @@
 import { MiddlewareConsumer, Module, type NestModule } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { AddressesModule } from './addresses/addresses.module';
 import { AuthGuard } from './auth/auth.guard';
 import { AuthModule } from './auth/auth.module';
 import { RolesGuard } from './auth/roles.guard';
+import { BookingsModule } from './bookings/bookings.module';
 import { CatalogModule } from './catalog/catalog.module';
 import { AuditModule } from './common/audit/audit.module';
 import { RedisModule } from './common/cache/redis.module';
@@ -38,6 +40,8 @@ import { UsersModule } from './users/users.module';
     ProvidersModule,
     IdentityModule,
     CatalogModule,
+    AddressesModule,
+    BookingsModule,
   ],
   providers: [
     // Guard sırası önemlidir: oran sınırı → kimlik → rol.

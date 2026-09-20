@@ -196,21 +196,50 @@ mock sağlayıcının test kancası yalnızca config guard'ıyla korunuyor (T-04
 
 ---
 
-## Faz 4 — Provider & Booking
+## Faz 4 — Provider & Booking ✅
 
 **Kapsam:** `addresses` + PostGIS `location`; `provider_service_areas` (MULTIPOLYGON + GIST);
 `availability`, `availability_exceptions` (recurrence); `booking_requests`; `bookings` +
 `booking_status_history`; merkezî state machine (ADR-0006); çakışma engeli
-(`EXCLUDE USING GIST` — **iptal durumlarını dışlayan predikatla** — + Redis lock);
+(`EXCLUDE USING GIST` — **iptal durumlarını dışlayan predikatla**; Redis lock gereksiz
+çıktı, bkz. ADR-0006 uygulama notu);
 DB invariant'ları (`customer_id <> provider_id`, zaman/fiyat CHECK'leri, duruma bağlı `provider_id`);
 booking API'leri (create/confirm/cancel/check-in/check-out/complete).
 **R-14 kararı bu fazda ADR ile kapanır** (`provider_id` nullable + duruma bağlı zorunluluk).
 
-**Exit:** geçersiz state geçişi reddediliyor (T-06); eşzamanlı çakışan booking tek kayıt üretiyor
-(T-05); iptal edilen slot yeniden rezerve edilebiliyor (T-05b); kendi kendine booking reddediliyor
-(T-05c); Redis yokken booking doğruluğu korunuyor (T-05e); idempotent tekrar çağrı yan etki
-üretmiyor (T-07, T-07b); PostGIS sorguları indeks kullanıyor (`EXPLAIN` ile doğrulandı);
-tüm geçişler history'de.
+**Exit kriterleri (durum):**
+
+- ✅ Geçersiz state geçişi reddediliyor ve geçmişe yazılmıyor (T-06); transition map 20+ birim
+  testiyle korunuyor (adım atlama, geri dönüş, terminal durumdan çıkış, SUPPORT'un hiçbir
+  geçişi tetikleyememesi, erişilemeyen durum olmaması).
+- ✅ Eşzamanlı 4 istek tek rezervasyon üretiyor, diğerleri kodlu 409 alıyor (T-05).
+- ✅ İptal edilen slot yeniden rezerve edilebiliyor (T-05b); bitişik aralıklar çakışma saymıyor.
+- ✅ Kendi kendine rezervasyon hem serviste hem DB CHECK'inde reddediliyor (T-05c).
+- ✅ Redis boşken doğruluk korunuyor (T-05e) — **çünkü lock hiç yok**: çakışmanın tek kaynağı
+  EXCLUDE constraint'i (ADR-0006 uygulama notu).
+- ✅ Aynı geçişin tekrarı yan etki üretmiyor (T-07); tarafı olmayan kullanıcı rezervasyonun
+  varlığını bile göremiyor (404).
+- ✅ PostGIS konumu lat/lon'dan türetiliyor ve coğrafi sorgu GIST indeksini kullanıyor
+  (`EXPLAIN` testte doğrulandı).
+- ✅ Tüm geçişler `booking_status_history`'de; tablo append-only.
+- ✅ 110 unit + 161 integration test; lint/typecheck/format/build temiz.
+
+**R-14 kapandı:** `provider_id` nullable + duruma bağlı CHECK (ADR-0006 uygulama notu).
+
+**Faz 4 code review bulguları ve çözümleri** (bağımsız review agent'ı):
+
+| Bulgu                                                                                                                | Çözüm                                                                                                                                              |
+| -------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Fiyat tamamen istemciden geliyordu** → keyfî düşük tutarla komisyon/GMV manipülasyonu                              | `services` tablosuna fiyatlandırma eklendi; fiyat sunucuda hesaplanıyor, DTO'dan `priceMinor` kaldırıldı. Fiyatsız hizmet **aktif olamaz** (CHECK) |
+| `ADMIN` sahiplik kapısından geçemiyordu → operatör geçişleri (Faz 8 güvenlik askısı, dispute) hiç tetiklenemezdi     | Admin taraf olmadan yükleyebiliyor; audit'li. Admin olmayan üçüncü kişi hâlâ 404                                                                   |
+| `CHECKED_IN` sonrası güvenlik dışı aksaklıkta rezervasyon sıkışıyordu                                                | `CHECKED_IN`/`IN_PROGRESS`/`CHECKED_OUT` → `CANCELLED` operatöre açıldı; taraflar hâlâ iptal edemez                                                |
+| Müsaitlik kontrolü transaction dışındaydı (TOCTOU): pencere aradan silinebilirdi                                     | Kontrol transaction içine alındı, pencere `FOR SHARE` ile kilitleniyor                                                                             |
+| `bookings_not_self` dışındaki CHECK ihlalleri 500 üretiyordu; `scheduledEnd > scheduledStart` DTO'da doğrulanmıyordu | Servis seviyesinde zaman doğrulaması + genel CHECK → 400 çevirisi                                                                                  |
+| T-05e testi adında "Redis erişilemez" diyordu ama flushdb yapıyordu ve zaten lock yoktu                              | Test adı ve ADR gerçeği yansıtacak şekilde düzeltildi                                                                                              |
+
+Reviewer'ın doğruladıkları: EXCLUDE constraint tasarımı yarışa dayanıklı ve eşzamanlılık testi
+tautolojik değil; `bookingIn()` gerçek geçiş yolunu kullanıyor; 404-yerine-403 tutarlı;
+`FOR UPDATE` kapsamı doğru ve deadlock riski yok; RRULE'un yokluğu Faz 7'yi engellemiyor.
 
 ---
 

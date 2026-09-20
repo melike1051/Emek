@@ -56,6 +56,11 @@ describe('OpenAPI contract (integration)', () => {
         '/api/v1/skills',
         '/api/v1/verification/session',
         '/api/v1/verification/status',
+        '/api/v1/addresses',
+        '/api/v1/bookings',
+        '/api/v1/bookings/{id}',
+        '/api/v1/bookings/{id}/history',
+        '/api/v1/providers/me/availability',
       ]),
     );
   });
@@ -63,8 +68,8 @@ describe('OpenAPI contract (integration)', () => {
   it('sözleşme henüz uygulanmamış endpoint içermez', () => {
     const paths = Object.keys(generated.paths ?? {});
 
-    // Ödeme, booking ve safety sonraki fazlara ait: sözleşmede erken görünmemeli
+    // Ödeme ve safety sonraki fazlara ait: sözleşmede erken görünmemeli
     // (istemciler var olmayan endpoint'e göre geliştirilmesin).
-    expect(paths.filter((path) => /bookings|payments|safety/.test(path))).toEqual([]);
+    expect(paths.filter((path) => /payments|safety/.test(path))).toEqual([]);
   });
 });

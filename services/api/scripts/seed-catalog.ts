@@ -15,7 +15,14 @@ interface CategorySeed {
   slug: string;
   name: string;
   description: string;
-  services: { slug: string; name: string; durationMinutes: number; pricing: 'FIXED' | 'HOURLY' }[];
+  services: {
+    slug: string;
+    name: string;
+    durationMinutes: number;
+    pricing: 'FIXED' | 'HOURLY';
+    /** FIXED için taban fiyat, HOURLY için saatlik ücret — kuruş cinsinden. */
+    priceMinor: number;
+  }[];
 }
 
 const CATEGORIES: CategorySeed[] = [
@@ -29,18 +36,21 @@ const CATEGORIES: CategorySeed[] = [
         name: 'Standart Temizlik',
         durationMinutes: 180,
         pricing: 'HOURLY',
+        priceMinor: 25000,
       },
       {
         slug: 'detayli-temizlik',
         name: 'Detaylı Temizlik',
         durationMinutes: 300,
         pricing: 'HOURLY',
+        priceMinor: 32000,
       },
       {
         slug: 'tasinma-temizligi',
         name: 'Taşınma Temizliği',
         durationMinutes: 480,
         pricing: 'FIXED',
+        priceMinor: 280000,
       },
     ],
   },
@@ -49,9 +59,27 @@ const CATEGORIES: CategorySeed[] = [
     name: 'Bakım Hizmetleri',
     description: 'Yaşlı, hasta ve çocuk bakımı',
     services: [
-      { slug: 'yasli-bakimi', name: 'Yaşlı Bakımı', durationMinutes: 240, pricing: 'HOURLY' },
-      { slug: 'cocuk-bakimi', name: 'Çocuk Bakımı', durationMinutes: 240, pricing: 'HOURLY' },
-      { slug: 'hasta-refakati', name: 'Hasta Refakati', durationMinutes: 360, pricing: 'HOURLY' },
+      {
+        slug: 'yasli-bakimi',
+        name: 'Yaşlı Bakımı',
+        durationMinutes: 240,
+        pricing: 'HOURLY',
+        priceMinor: 28000,
+      },
+      {
+        slug: 'cocuk-bakimi',
+        name: 'Çocuk Bakımı',
+        durationMinutes: 240,
+        pricing: 'HOURLY',
+        priceMinor: 26000,
+      },
+      {
+        slug: 'hasta-refakati',
+        name: 'Hasta Refakati',
+        durationMinutes: 360,
+        pricing: 'HOURLY',
+        priceMinor: 30000,
+      },
     ],
   },
   {
@@ -64,12 +92,14 @@ const CATEGORIES: CategorySeed[] = [
         name: 'Günlük Yemek Hazırlığı',
         durationMinutes: 180,
         pricing: 'HOURLY',
+        priceMinor: 24000,
       },
       {
         slug: 'haftalik-mealprep',
         name: 'Haftalık Yemek Hazırlığı',
         durationMinutes: 300,
         pricing: 'FIXED',
+        priceMinor: 150000,
       },
     ],
   },
@@ -105,15 +135,32 @@ export async function seedCatalog(pool: Pool): Promise<void> {
     }
 
     for (const service of category.services) {
+      // Fiyat modeline göre doğru kolona yazılır: `services_pricing_consistent` CHECK'i
+      // FIXED için taban fiyat, HOURLY için saatlik ücret bekler.
       await pool.query(
-        `INSERT INTO services (category_id, slug, name, default_duration_minutes, pricing_model)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO services (category_id, slug, name, default_duration_minutes, pricing_model,
+                               base_price_minor, hourly_rate_minor)
+         VALUES ($1, $2, $3, $4, $5::pricing_model,
+                 CASE WHEN $5 = 'FIXED' THEN $6::bigint END,
+                 CASE WHEN $5 = 'HOURLY' THEN $6::bigint END)
          ON CONFLICT (slug) DO UPDATE
            SET name = EXCLUDED.name,
                category_id = EXCLUDED.category_id,
                default_duration_minutes = EXCLUDED.default_duration_minutes,
-               pricing_model = EXCLUDED.pricing_model`,
-        [categoryId, service.slug, service.name, service.durationMinutes, service.pricing],
+               pricing_model = EXCLUDED.pricing_model,
+               base_price_minor = EXCLUDED.base_price_minor,
+               hourly_rate_minor = EXCLUDED.hourly_rate_minor,
+               -- Seed, katalogun kanonik hâlidir: fiyatlandırma migration'ı sırasında
+               -- pasife alınmış (fiyatsız) hizmetler fiyatlarıyla birlikte geri açılır.
+               active = TRUE`,
+        [
+          categoryId,
+          service.slug,
+          service.name,
+          service.durationMinutes,
+          service.pricing,
+          service.priceMinor,
+        ],
       );
     }
   }

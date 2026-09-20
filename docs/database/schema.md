@@ -176,6 +176,57 @@ Kısıt artık `status = 'DELETED' OR phone IS NOT NULL OR email IS NOT NULL`. I
 hesaplar için korunur; kurtarma sonrası kapatılan kabuk hesap iletişim bilgilerini serbest
 bırakabilir (kullanıcı bunları kanonik hesabında kullanabilmeli).
 
+## Faz 4 tabloları — konum, müsaitlik ve rezervasyon
+
+### Coğrafi veri (PostGIS)
+
+| Tablo                    | Kritik nokta                                                                                                                                                                                                                                                                                                                      |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `addresses`              | `location` **türetilmiş** kolondur (`ST_MakePoint(longitude, latitude)`): lat/lon ile geometri ayrı yazılırsa zamanla ayrışır ve "haritada başka, sorguda başka" hatası sessizce oluşur. GIST indeksli; `EXPLAIN` testi indeksin kullanıldığını doğruluyor. Adres **silinmez, arşivlenir** — geçmiş rezervasyonlar referans verir |
+| `provider_service_areas` | `MULTIPOLYGON`: sağlayıcı birbirine değmeyen bölgelerde çalışabilir. `CHECK (ST_IsValid(...))` — geçersiz geometri sorguları sessizce yanlış sonuç verdirir                                                                                                                                                                       |
+
+### Müsaitlik
+
+`availability` üzerinde `EXCLUDE USING GIST (provider_id WITH =, slot WITH &&)`: üst üste binen
+iki pencere "hangisi geçerli" belirsizliği üretirdi. `availability_exceptions` **binebilir**
+(iki farklı nedenle aynı gün kapatılabilir), bu yüzden orada EXCLUDE yok.
+
+Tekrarlayan kural (RRULE) motoru **bilinçli olarak yok**: matching (Faz 7) gerçek ihtiyacı
+netleştirmeden tekrarlama motoru yazmak kullanılmayan karmaşıklık olurdu. Genişletme gerekirse
+uygulama katmanında yapılır, tablo değişmez.
+
+### Rezervasyon
+
+| Invariant                          | Nasıl                                                                                                             | Neden                                                                                                |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `bookings_no_overlap`              | `EXCLUDE USING GIST (provider_id WITH =, slot WITH &&) WHERE (status <> 'CANCELLED' AND provider_id IS NOT NULL)` | Çakışmanın tek doğruluk kaynağı. Predikat olmasa iptal edilen randevu slotu kalıcı bloklardı (T-05b) |
+| `bookings_not_self`                | `customer_id <> provider_id`                                                                                      | Tek User/iki profil modeli kendi kendine rezervasyona izin verirdi (GMV/review manipülasyonu)        |
+| `bookings_provider_required`       | `status = 'REQUESTED' OR provider_id IS NOT NULL`                                                                 | R-14 kararı: talep anında sağlayıcı yok, sonrasında zorunlu                                          |
+| `bookings_cancellation_consistent` | `(status = 'CANCELLED') = (cancelled_at IS NOT NULL)`                                                             | Durum ve zaman damgası ayrışamaz                                                                     |
+| `slot`                             | `tstzrange(start, end, '[)')` türetilmiş                                                                          | Bitişik randevular (biri bitince diğeri başlar) çakışma saymaz                                       |
+| Para                               | `price_minor BIGINT` + `CHECK >= 0`                                                                               | Float ile para hesabı yasak; API'de string olarak taşınır                                            |
+
+`booking_status_history` append-only trigger ile korunur (ADR-0006 §4). İlk kayıt booking
+oluşturulurken yazılır; `CHECK (from_status IS NOT NULL OR to_status = 'REQUESTED')`.
+
+`btree_gist` extension'ı gerekir: PostgreSQL'in varsayılan GIST operatör sınıfları UUID
+eşitliğini desteklemez ve `provider_id WITH =` bu olmadan çalışmaz.
+
+### Hizmet fiyatlandırması (Faz 4 review düzeltmesi)
+
+Fiyat **istemciden alınmaz**: rezervasyon fiyatı katalogdan sunucuda hesaplanır. Aksi halde
+müşteri (veya anlaşmalı müşteri-sağlayıcı çifti) keyfî düşük bir tutar kaydedip komisyon ve
+GMV metriklerini manipüle edebilirdi.
+
+| Invariant                        | Kural                                                                                                                                       |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `services_pricing_consistent`    | `base_price_minor` yalnızca `FIXED`, `hourly_rate_minor` yalnızca `HOURLY` modelinde dolu olabilir                                          |
+| `services_active_requires_price` | `NOT active OR (modeline uygun fiyat dolu)` — fiyatsız hizmet var olabilir (taslak) ama **aktif olamaz**; aktif hizmet rezervasyona açıktır |
+| `services_price_non_negative`    | Negatif fiyat yok                                                                                                                           |
+
+Tek parçalı bir CHECK, mevcut fiyatsız satırlar nedeniyle migration'ı kırardı; bu yüzden
+invariant iki parçaya ayrıldı ve fiyatsız satırlar migration'da pasife alındı.
+
 ## Sonraki fazlarda gelecek yapılar
 
 Bunlar Faz 1'de **bilinçli olarak yok**; ilgili domain ile birlikte gelir:

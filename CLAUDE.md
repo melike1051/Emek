@@ -154,10 +154,10 @@ Bu yapıyı değiştirmek gerekirse önce `docs/architecture/adr/` altında ADR 
 | --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
 | 0   | Repository & architecture audit, ADR, konvansiyonlar, test stratejisi, faz planı                                                                                | ✅ tamamlandı |
 | 1   | Foundation: monorepo, NestJS, FastAPI, Postgres+PostGIS, Redis, Docker, CI, migration, health                                                                   | ✅ tamamlandı |
-| 2   | Core backend: auth, users, roles, RBAC, profiller, service catalog, skills, error handling + **audit (rol ayrımı/hash zinciri), outbox, idempotency altyapısı** | sırada        |
-| 3   | Identity: adapter, identity_records, unique identity, recovery, verification levels                                                                             |               |
-| 4   | Provider & Booking: availability, PostGIS service areas, booking state machine                                                                                  |               |
-| 5   | Payment & Digital Proof: adapter, webhook idempotency, documents, disputes                                                                                      |               |
+| 2   | Core backend: auth, users, roles, RBAC, profiller, service catalog, skills, error handling + **audit (rol ayrımı/hash zinciri), outbox, idempotency altyapısı** | ✅ tamamlandı |
+| 3   | Identity: adapter, identity_records, unique identity, recovery, verification levels                                                                             | ✅ tamamlandı |
+| 4   | Provider & Booking: availability, PostGIS service areas, booking state machine                                                                                  | ✅ tamamlandı |
+| 5   | Payment & Digital Proof: adapter, webhook idempotency, documents, disputes                                                                                      | sırada        |
 | 6   | Python AI/NLP: structured extraction, versiyonlama, evaluation dataset                                                                                          |               |
 | 7   | Matching & Optimization: retrieval, constraints, scoring, OR-Tools, explainability, benchmark                                                                   |               |
 | 8   | Safety: sessions, geofence, telemetry, rules + anomaly, panic flow                                                                                              |               |

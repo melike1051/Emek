@@ -7,6 +7,11 @@ export const EventType = {
   USER_REGISTERED: 'UserRegistered',
   PROVIDER_PROFILE_SUBMITTED: 'ProviderProfileSubmitted',
   IDENTITY_VERIFIED: 'IdentityVerified',
+  BOOKING_CREATED: 'BookingCreated',
+  BOOKING_CONFIRMED: 'BookingConfirmed',
+  BOOKING_CANCELLED: 'BookingCancelled',
+  SERVICE_STARTED: 'ServiceStarted',
+  SERVICE_COMPLETED: 'ServiceCompleted',
 } as const;
 
 export type EventTypeValue = (typeof EventType)[keyof typeof EventType];

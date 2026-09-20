@@ -9,6 +9,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { CurrentUser, Roles, type AuthenticatedUser } from '../auth/auth.decorators';
 import { BusinessException } from '../common/errors/business.exception';
@@ -20,11 +21,20 @@ import {
   ProviderSkillResponseDto,
   UpdateProviderProfileDto,
 } from './dto/provider.dto';
+import { AvailabilityService } from './availability.service';
+import {
+  AddAvailabilityDto,
+  AvailabilityQueryDto,
+  AvailabilityResponseDto,
+} from './dto/availability.dto';
 import { ProvidersService } from './providers.service';
 
 @Controller('providers')
 export class ProvidersController {
-  constructor(private readonly providers: ProvidersService) {}
+  constructor(
+    private readonly providers: ProvidersService,
+    private readonly availability: AvailabilityService,
+  ) {}
 
   /**
    * Profil oluşturma `PROVIDER` rolü **gerektirmez**: rol tam bu işlemle verilir.
@@ -76,6 +86,40 @@ export class ProvidersController {
   ): Promise<ProviderSkillResponseDto[]> {
     const skills = await this.providers.addSkill(user.id, dto);
     return skills.map(ProviderSkillResponseDto.from);
+  }
+
+  @Get('me/availability')
+  @Roles('PROVIDER')
+  async listAvailability(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: AvailabilityQueryDto,
+  ): Promise<AvailabilityResponseDto[]> {
+    const windows = await this.availability.list(user.id, { from: query.from, to: query.to });
+    return windows.map(AvailabilityResponseDto.from);
+  }
+
+  @Post('me/availability')
+  @Roles('PROVIDER')
+  @HttpCode(HttpStatus.CREATED)
+  async addAvailability(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: AddAvailabilityDto,
+  ): Promise<AvailabilityResponseDto> {
+    const window = await this.availability.add(user.id, {
+      startsAt: dto.startsAt,
+      endsAt: dto.endsAt,
+    });
+    return AvailabilityResponseDto.from(window);
+  }
+
+  @Delete('me/availability/:availabilityId')
+  @Roles('PROVIDER')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async removeAvailability(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('availabilityId', ParseUUIDPipe) availabilityId: string,
+  ): Promise<void> {
+    await this.availability.remove(user.id, availabilityId);
   }
 
   @Delete('me/skills/:skillId')

@@ -108,7 +108,10 @@ export async function resetDomainTables(pool: Pool): Promise<void> {
   // audit_logs bilinçli olarak FK taşımaz (append-only + KVKK silme), bu yüzden
   // users güvenle temizlenebilir; audit satırları tarihsel kayıt olarak kalır.
   await pool.query(`
-    TRUNCATE TABLE provider_skills, provider_profiles, customer_profiles,
+    TRUNCATE TABLE booking_status_history, bookings, booking_requests,
+                   availability, availability_exceptions, provider_service_areas, addresses,
+                   account_recovery_requests, verification_attempts, identity_records,
+                   provider_skills, provider_profiles, customer_profiles,
                    auth_subjects, user_roles, users, outbox, idempotency_keys, processed_events
     RESTART IDENTITY CASCADE;
   `);

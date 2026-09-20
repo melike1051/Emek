@@ -61,6 +61,63 @@ History aynı transaction'da yazılmazsa audit izi güvenilmez olur.
   slota yeni booking (T-05b), kendi kendine booking reddi (T-05c), idempotent tekrar çağrı (T-07),
   SAFETY_HOLD'da settlement bloğu (T-11).
 
+## Uygulama notu (Faz 4) — R-14 kararı
+
+**`bookings.provider_id` nullable'dır ve zorunluluğu duruma bağlıdır.**
+
+Blueprint'teki taslak DDL `provider_id NOT NULL` diyordu; bu, `REQUESTED` durumuyla
+çelişiyordu (talep oluştuğunda sağlayıcı henüz seçilmemiştir — eşleştirme Faz 7'de
+yapılacak). Üç seçenek değerlendirildi:
+
+1. Booking'i yalnızca eşleşme sonrası oluşturmak → talebin kendi yaşam döngüsü
+   (`booking_requests`) ile booking'in yaşam döngüsü karışır; `REQUESTED` durumu anlamsızlaşır.
+2. Sağlayıcıyı "atanmamış" temsil eden bir sentinel satır → yabancı anahtar semantiğini bozar.
+3. **Seçilen:** `provider_id` nullable + `CHECK (status = 'REQUESTED' OR provider_id IS NOT NULL)`.
+   Böylece "sağlayıcısız booking" yalnızca tek bir durumda mümkündür ve bu veritabanında
+   zorlanır. `EXCLUDE` constraint'i de `provider_id IS NOT NULL` koşuluyla çalışır.
+
+**Diğer uygulama detayları:**
+
+- **Redis distributed lock uygulanmadı.** ADR bunu "optimizasyon" olarak tanımlıyordu;
+  uygulamada da gerçekten gereksiz çıktı: çakışmayı `EXCLUDE` constraint'i tek başına,
+  tüm eşzamanlılık senaryolarında engelliyor. Lock eklemek doğruluğa bir şey katmaz ama
+  yeni bir arıza modu (Redis yokken ne yapılacağı) getirirdi. Bu yüzden T-05e "Redis
+  erişilemezken doğruluk korunur" testi, lock'ın yokluğunu değil constraint'in yeterliliğini
+  doğrular. Lock, ölçüm gerçek bir çakışma maliyeti gösterirse eklenir.
+- Çakışma engeli `EXCLUDE USING GIST (provider_id WITH =, slot WITH &&) WHERE (status <> 'CANCELLED' ...)`.
+  `btree_gist` extension'ı gerekir (UUID eşitliği GIST içinde desteklenmez).
+  `slot` kolonu `tstzrange(start, end, '[)')` olarak **türetilmiştir**: uçlarla aralık
+  birbirinden ayrışamaz ve bitişik randevular (biri bitince diğeri başlar) çakışma saymaz.
+- `booking_status_history` append-only trigger'ı ile korunur; ilk kayıt (`REQUESTED`)
+  booking oluşturulurken yazılır.
+- Aktör, global rolden değil **bu rezervasyondaki konumdan** türetilir: aynı kişi hem müşteri
+  hem sağlayıcı olabilir (ADR-0004), bu yüzden "PROVIDER rolüm var" bir rezervasyonda
+  sağlayıcı olmak anlamına gelmez.
+- Taraf olmayan kullanıcıya rezervasyonun **varlığı** bildirilmez (403 değil 404).
+- Hizmet günü geçişleri tek endpoint (`POST /bookings/:id/transitions`) üzerinden ilerler;
+  hangi geçişin geçerli olduğunu transition map söyler. Geçiş başına endpoint yazmak,
+  kuralları HTTP katmanına yeniden dağıtmak olurdu.
+
+**Faz 4 review düzeltmeleri:**
+
+- **`ADMIN` sahiplik kapısından geçer.** Operatörün müdahale etmesi gereken geçişler
+  (güvenlik askısından çıkarma, uyuşmazlık kararı) tanımı gereği üçüncü taraf aksiyonudur;
+  sahiplik kapısı admin'i de eleseydi bu geçişler hiç tetiklenemezdi. Admin aksiyonları
+  audit'e yazılır ve taraf olmayan **admin olmayan** kullanıcı yine 404 alır.
+- **Hizmet sırasında iptal operatöre açıldı.** Güvenlik dışı bir aksaklıkta (ekipman arızası,
+  müşteri evde değil) rezervasyonun sıkışmaması gerekir: `CHECKED_IN`/`IN_PROGRESS`/`CHECKED_OUT`
+  → `CANCELLED` yalnızca `ADMIN` aktörüne açıktır. Taraflar hâlâ iptal edemez; para akışı
+  dispute/refund ile çözülür (Faz 5).
+- **Fiyat istemciden alınmaz.** Rezervasyon fiyatı katalogdan sunucuda hesaplanır: istemci
+  tutar gönderebildiği sürece müşteri (veya anlaşmalı müşteri-sağlayıcı çifti) keyfî düşük
+  bir tutar kaydedip komisyon ve GMV metriklerini manipüle edebilirdi. HOURLY hizmetlerde
+  ücret dakika bazında oranlanır (90 dakika, 2 saat ücreti ödemez).
+- **Müsaitlik kontrolü transaction içinde ve kilitli.** Kontrol transaction dışında yapılsaydı
+  sağlayıcı aradan pencereyi silebilir ve rezervasyon beyan edilmiş saatlerin dışına düşebilirdi
+  (TOCTOU). `FOR SHARE` pencereyi commit'e kadar silinmekten korur; çakışmayı EXCLUDE garanti eder.
+- **CHECK ihlalleri kodlu hataya çevrilir.** Yalnızca `bookings_not_self` çevriliyordu; diğer
+  invariant ihlalleri ham Postgres hatası olarak 500'e dönüşüyordu.
+
 ## Alternatifler
 
 - **Serbest status string (reddedildi):** geçersiz durum yazılabilir.

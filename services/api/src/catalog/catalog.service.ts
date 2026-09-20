@@ -117,6 +117,56 @@ export class CatalogService {
     };
   }
 
+  /**
+   * Rezervasyon fiyatını **sunucuda** hesaplar.
+   *
+   * İstemciden fiyat almak, müşteri (veya anlaşmalı müşteri-sağlayıcı çifti) tarafından
+   * keyfî düşük tutar kaydedilmesine ve komisyon/GMV metriklerinin manipülasyonuna
+   * açık kapı bırakırdı (Faz 4 review bulgusu).
+   *
+   * HOURLY hizmetlerde süre saat başına yukarı yuvarlanmaz: dakika bazında oranlanır ve
+   * kuruşa yuvarlanır — böylece 90 dakikalık hizmet 2 saat ücreti ödemez.
+   */
+  async priceFor(
+    serviceId: string,
+    durationMinutes: number,
+  ): Promise<{ priceMinor: string; currency: string }> {
+    const rows = await this.uow.query<{
+      pricing_model: 'FIXED' | 'HOURLY';
+      base_price_minor: string | null;
+      hourly_rate_minor: string | null;
+      currency: string;
+    }>(
+      `SELECT pricing_model, base_price_minor, hourly_rate_minor, currency
+         FROM services WHERE id = $1 AND active`,
+      [serviceId],
+    );
+
+    const row = rows[0];
+    if (row === undefined) {
+      throw new BusinessException(ErrorCode.NOT_FOUND, { clientMessage: 'Hizmet bulunamadı.' });
+    }
+
+    if (row.pricing_model === 'FIXED') {
+      if (row.base_price_minor === null) {
+        // `services_active_requires_price` bunu engeller; buraya düşmek veri bozulmasıdır.
+        throw new Error(`aktif FIXED hizmetin fiyatı yok: ${serviceId}`);
+      }
+      return { priceMinor: row.base_price_minor, currency: row.currency };
+    }
+
+    if (row.hourly_rate_minor === null) {
+      throw new Error(`aktif HOURLY hizmetin saatlik ücreti yok: ${serviceId}`);
+    }
+
+    // Tam sayı aritmetiği: para hesabında float kullanılmaz.
+    const rate = BigInt(row.hourly_rate_minor);
+    const minutes = BigInt(Math.round(durationMinutes));
+    const priceMinor = (rate * minutes + 59n) / 60n; // kuruş lehine yukarı yuvarlama
+
+    return { priceMinor: priceMinor.toString(), currency: row.currency };
+  }
+
   async listSkills(): Promise<Skill[]> {
     return this.uow.query<Skill>(`SELECT id, slug, name FROM skills ORDER BY name`);
   }
