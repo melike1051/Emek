@@ -6,6 +6,7 @@ import { getRequestContext } from '../logging/request-context';
 export const EventType = {
   USER_REGISTERED: 'UserRegistered',
   PROVIDER_PROFILE_SUBMITTED: 'ProviderProfileSubmitted',
+  IDENTITY_VERIFIED: 'IdentityVerified',
 } as const;
 
 export type EventTypeValue = (typeof EventType)[keyof typeof EventType];

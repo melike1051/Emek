@@ -59,7 +59,7 @@ Tek doğruluk kaynağı. Bir event burada tanımlanmadan yayınlanmaz; şemalar 
 | Topic/subscription topolojisi, DLQ, observability | ⏳ Faz 9                                                  |
 | Şema dosyaları (`packages/api-contracts/events/`) | ⏳ Faz 9                                                  |
 
-Yayınlanan eventler: `UserRegistered`, `ProviderProfileSubmitted` (Faz 2).
+Yayınlanan eventler: `UserRegistered`, `ProviderProfileSubmitted` (Faz 2), `IdentityVerified` (Faz 3).
 
 ## Topic ve subscription yapısı (Faz 9)
 

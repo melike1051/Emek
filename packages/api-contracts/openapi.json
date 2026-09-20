@@ -242,6 +242,73 @@
         "tags": ["Providers"]
       }
     },
+    "/api/v1/verification/session": {
+      "post": {
+        "operationId": "IdentityController_startSession",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartVerificationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": ["Identity"]
+      }
+    },
+    "/api/v1/verification/session/{id}": {
+      "get": {
+        "operationId": "IdentityController_session",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Identity"]
+      }
+    },
+    "/api/v1/verification/callback": {
+      "post": {
+        "operationId": "IdentityController_callback",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Identity"]
+      }
+    },
+    "/api/v1/verification/status": {
+      "get": {
+        "operationId": "IdentityController_status",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Identity"]
+      }
+    },
     "/api/v1/service-categories": {
       "get": {
         "operationId": "CatalogController_categories",
@@ -339,6 +406,10 @@
         "properties": {}
       },
       "AddProviderSkillDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "StartVerificationDto": {
         "type": "object",
         "properties": {}
       }

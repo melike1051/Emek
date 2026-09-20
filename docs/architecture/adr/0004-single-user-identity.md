@@ -70,6 +70,41 @@ ortadan kaldırmaz ama ihlal yüzeyini küçültür.
   kriterine "deterministik kimlik referansı üretebilme" eklenir.
 - Test zorunlu: eşzamanlı çift kayıt denemesi (T-01), sağlayıcı değiştirerek ikinci hesap denemesi (T-01b).
 
+## Uygulama notu (Faz 3)
+
+Karar uygulandı; uygulama sırasında iki nokta netleşti ve burada kayda geçirilir:
+
+1. **Oturum kimliği yaşam döngüsü.** Kurtarma, kullanıcıya aynı sağlayıcıdan **yeni** bir
+   oturum kimliği bağlamak demektir. Faz 2'deki `UNIQUE (user_id, provider)` kısıtı bunu
+   imkânsız kılıyordu; kaldırıldı ve yerine "sağlayıcı başına en fazla bir **AKTİF** kimlik"
+   kısmi unique index'i geldi. Kurtarmada eski kimlik `REVOKED` olur ve kimlik doğrulama
+   yalnızca `ACTIVE` kayıtları kabul eder. Eski kimliği aktif bırakmak, operatörlerce yeniden
+   tahsis edilen telefon numaraları nedeniyle hesap devralma yolu açardı.
+2. **Kurtarmanın sınırı.** Kabuk hesap kendi verisini (profil, kimlik kaydı) oluşturmuşsa
+   kurtarma talebi açılmaz: bu veri kapatılan hesapta asılı kalırdı. Bu durum operasyon
+   incelemesine yönlendirilir (birleştirme akışı Faz 10).
+3. **Kimlik eşleşmesi kurtarmayı TAMAMLAMAZ — yalnızca başlatır.** İlk uygulama, eşleşme
+   yüksek güvenceliyse oturum kimliğini otomatik taşıyordu. Bu bir hesap devralma yoluydu:
+
+   > Saldırgan kurtarma oturumunu **kendi hesabından** başlatır, oturum bağlantısını mağdura
+   > ulaştırır ("kimliğinizi doğrulayın"). Mağdur kendi belgesiyle gerçek ve yüksek güvenceli
+   > bir doğrulama yapar. Kimlik eşleşmesi mağduru gösterir, oturum ise saldırgana aittir →
+   > saldırganın oturum kimliği mağdurun hesabına taşınır.
+
+   Kök neden: güvence seviyesi **belgeyi sunanın** canlı ve belgenin sahibi olduğunu kanıtlar;
+   **oturumu başlatanın kim olduğunu kanıtlamaz.** ADR-0005'teki "NFC tek başına kart sahibi
+   eşitliğini kanıtlamaz" uyarısının kurtarmaya uzanan biçimidir.
+
+   Karar: kimlik eşleşmesi `account_recovery_requests` tablosunda **inceleme talebi** oluşturur.
+   Oturum kimliğinin taşınması yalnızca operatör onayıyla olur (`IdentityService.approveRecovery`,
+   Faz 10'da `ADMIN` rolüne bağlı endpoint). Onaylayan kimlik audit'e yazılır.
+   Ek korumalar: hedef hesap başına tek bekleyen talep, minimum `HIGH` güvence, kullanıcı bazlı
+   deneme sayacı ve IP oran sınırı.
+
+**Kalan risk (R-36):** operatör onayı insan kararına dayanır; operatöre karar desteği (kanıt
+paketi, mevcut hesaba bildirim, bekleme penceresi) Faz 9-10'da gelmelidir. Sağlayıcının `HIGH`
+tanımının gerçekten canlılık/yüz eşleştirme içerdiği sözleşmeyle doğrulanmalıdır (`TODO(legal)`).
+
 ## Alternatifler
 
 - **Uygulama seviyesinde tekillik (reddedildi):** yarış koşulunda yetersiz.

@@ -12,6 +12,9 @@ const productionEnv = {
   PAYMENT_PROVIDER: 'live',
   AUTH_PROVIDER: 'firebase',
   FIREBASE_PROJECT_ID: 'emek-production',
+  IDENTITY_HASH_KEY_SOURCE: 'kms',
+  IDENTITY_HASH_KEY: 'production-grade-identity-hash-key-value',
+  IDENTITY_CALLBACK_SECRET: 'production-grade-callback-secret',
 };
 
 describe('validateEnv', () => {
@@ -90,6 +93,42 @@ describe('validateEnv', () => {
     expect(() =>
       validateEnv({ ...baseEnv, ...productionEnv, FIREBASE_PROJECT_ID: 'emek-local' }),
     ).toThrow(/FIREBASE_PROJECT_ID/);
+  });
+
+  // ADR-0004 §4-5: anahtar KMS'te durur. Ortam değişkenindeki bir anahtarla
+  // production'a çıkmak, tekillik kontrolünü kâğıt üzerinde bırakırdı.
+  it('production ortamında hash anahtarı kaynağı kms olmalı', () => {
+    expect(() =>
+      validateEnv({ ...baseEnv, ...productionEnv, IDENTITY_HASH_KEY_SOURCE: 'env' }),
+    ).toThrow(/IDENTITY_HASH_KEY_SOURCE/);
+  });
+
+  it('production ortamında yerel varsayılan sırlar reddedilir', () => {
+    expect(() =>
+      validateEnv({
+        ...baseEnv,
+        ...productionEnv,
+        IDENTITY_CALLBACK_SECRET: 'local-development-callback-secret',
+      }),
+    ).toThrow(/IDENTITY_CALLBACK_SECRET/);
+
+    expect(() =>
+      validateEnv({
+        ...baseEnv,
+        ...productionEnv,
+        IDENTITY_HASH_KEY: 'local-development-identity-hash-key-000',
+      }),
+    ).toThrow(/IDENTITY_HASH_KEY/);
+  });
+
+  it('çok kısa hash anahtarı reddedilir', () => {
+    expect(() => validateEnv({ ...baseEnv, IDENTITY_HASH_KEY: 'kisa' })).toThrow(
+      /IDENTITY_HASH_KEY/,
+    );
+  });
+
+  it('hesap kurtarma için varsayılan güvence seviyesi HIGH.tır', () => {
+    expect(validateEnv({ ...baseEnv }).RECOVERY_MIN_ASSURANCE).toBe('HIGH');
   });
 
   it('development ortamında mock sağlayıcılar varsayılandır', () => {

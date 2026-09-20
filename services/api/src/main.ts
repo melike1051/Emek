@@ -10,7 +10,9 @@ async function bootstrap(): Promise<void> {
   validateEnv(process.env);
 
   // bufferLogs: framework logları, logger DI'dan gelene kadar tutulur.
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  // rawBody: identity callback imzası ham gövde üzerinden doğrulanır; JSON'u yeniden
+  // serileştirmek imzayı bozar (ADR-0005).
+  const app = await NestFactory.create(AppModule, { bufferLogs: true, rawBody: true });
   const logger = configureApp(app);
   const config = app.get(AppConfigService);
 

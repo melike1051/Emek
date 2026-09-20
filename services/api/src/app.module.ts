@@ -17,6 +17,7 @@ import { RateLimitGuard } from './common/ratelimit/rate-limit.guard';
 import { RateLimitModule } from './common/ratelimit/rate-limit.module';
 import { CustomersModule } from './customers/customers.module';
 import { HealthModule } from './health/health.module';
+import { IdentityModule } from './identity/identity.module';
 import { ProvidersModule } from './providers/providers.module';
 import { UsersModule } from './users/users.module';
 
@@ -35,6 +36,7 @@ import { UsersModule } from './users/users.module';
     UsersModule,
     CustomersModule,
     ProvidersModule,
+    IdentityModule,
     CatalogModule,
   ],
   providers: [

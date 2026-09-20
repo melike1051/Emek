@@ -128,6 +128,54 @@ PK `(provider, provider_subject)` aynı subject'in iki kullanıcıya bağlanmas�
 Katalog içeriği migration'a gömülmez; `npm run seed:catalog --workspace=@emek/api` ile yazılır
 (idempotent). Testler de aynı seed fonksiyonunu kullanır.
 
+## Faz 3 tabloları — kimlik
+
+### `identity_records` — doğrulanmış gerçek kimlik (ADR-0004)
+
+`auth_subjects` **oturum kimliğini** (Firebase `sub`), bu tablo **doğrulanmış gerçek kimliği**
+tutar. İkisi ayrı domainlerdir: kullanıcı kimliğini doğrulamadan da oturum açabilir.
+
+| Invariant                                                   | Nasıl                                                                                | Neden                                                                                                                                                         |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `uq_identity_records_hash`                                  | `UNIQUE (identity_hash) WHERE identity_hash IS NOT NULL` — **sağlayıcıdan bağımsız** | Birincil tekillik. `(provider, provider_subject_id)` tek başına yetmez: aynı kişi A sağlayıcısıyla doğrulanıp sonra B ile doğrulanırsa çakışma üretmez (R-25) |
+| `UNIQUE (verification_provider, provider_subject_id)`       | aynı sağlayıcı subject'i iki kullanıcıya bağlanamaz                                  | hesap devralma engeli                                                                                                                                         |
+| `UNIQUE (user_id)`                                          | bir kullanıcının tek kimlik kaydı                                                    | "1 insan = 1 User"                                                                                                                                            |
+| `CHECK (status <> 'VERIFIED' OR identity_hash IS NOT NULL)` | doğrulanmış kayıt hash taşımak zorunda                                               | tekillik kontrolü hash'e dayanır; hash'siz "doğrulanmış" kayıt kontrolü delerdi                                                                               |
+| `CHECK ((status = 'VERIFIED') = (verified_at IS NOT NULL))` | durum ve zaman damgası tutarlı                                                       |                                                                                                                                                               |
+
+**Saklanmayanlar:** ham T.C. kimlik numarası, isim, doğum tarihi, belge görüntüsü. Bunlar
+yalnızca adapter içinde görülür, HMAC'e çevrilir ve atılır (ADR-0005).
+`hash_key_version` teşhis içindir — rotasyon bir seçenek değildir (ADR-0004 §5).
+
+### `verification_attempts`
+
+| Invariant         | Nasıl                                                                                                    |
+| ----------------- | -------------------------------------------------------------------------------------------------------- |
+| Replay koruması   | `UNIQUE (provider, external_session_id)` + servis katmanında `PENDING` dışı oturumun yeniden işlenmemesi |
+| Durum tutarlılığı | `CHECK ((status = 'PENDING') = (completed_at IS NULL))`                                                  |
+| Süre              | `CHECK (expires_at > created_at)`; süresi dolan oturum `EXPIRED` olur                                    |
+
+Sonuç kodu sınıflandırılmıştır; sağlayıcının ham hata metni saklanmaz.
+
+### `auth_subjects` yaşam döngüsü (Faz 3 güncellemesi)
+
+Faz 2'deki `UNIQUE (user_id, provider)` kısıtı hesap kurtarmayı imkânsız kılıyordu: kurtarma,
+kullanıcıya aynı sağlayıcıdan **yeni** bir oturum kimliği bağlamak demektir. Kısıt kaldırıldı,
+yerine:
+
+- `uq_auth_subjects_active_per_provider`: sağlayıcı başına en fazla **bir AKTİF** kimlik.
+- `status` + `revoked_at` (+ tutarlılık CHECK'i): kurtarmada eski kimlik `REVOKED` olur.
+
+Eski kimliği aktif bırakmak güvenlik açığıdır: telefon numaraları operatörlerce yeniden
+tahsis edilir ve numarayı sonradan alan biri hesaba girebilirdi. Kimlik doğrulama yalnızca
+`ACTIVE` kayıtları kabul eder.
+
+### `users_contact_present` gevşetmesi
+
+Kısıt artık `status = 'DELETED' OR phone IS NOT NULL OR email IS NOT NULL`. Invariant aktif
+hesaplar için korunur; kurtarma sonrası kapatılan kabuk hesap iletişim bilgilerini serbest
+bırakabilir (kullanıcı bunları kanonik hesabında kullanabilmeli).
+
 ## Sonraki fazlarda gelecek yapılar
 
 Bunlar Faz 1'de **bilinçli olarak yok**; ilgili domain ile birlikte gelir:

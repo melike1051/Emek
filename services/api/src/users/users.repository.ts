@@ -75,7 +75,7 @@ export class UsersRepository {
     const rows = await this.run<UserRow>(
       `${SELECT_USER}
          JOIN auth_subjects s ON s.user_id = u.id
-        WHERE s.provider = $2 AND s.provider_subject = $1
+        WHERE s.provider = $2 AND s.provider_subject = $1 AND s.status = 'ACTIVE'
         GROUP BY u.id`,
       [subject, provider],
       executor,
@@ -143,6 +143,70 @@ export class UsersRepository {
       throw new Error('güncellenen kullanıcı okunamadı');
     }
     return user;
+  }
+
+  async findAuthSubject(
+    userId: string,
+    executor?: Executor,
+  ): Promise<{ provider: string; providerSubject: string } | null> {
+    const rows = await this.run<{ provider: string; provider_subject: string }>(
+      `SELECT provider, provider_subject FROM auth_subjects
+        WHERE user_id = $1 AND status = 'ACTIVE'`,
+      [userId],
+      executor,
+    );
+    const row = rows[0];
+    return row === null || row === undefined
+      ? null
+      : { provider: row.provider, providerSubject: row.provider_subject };
+  }
+
+  /**
+   * Oturum kimliğini başka bir kullanıcıya taşır (hesap kurtarma — ADR-0004 §7).
+   *
+   * Hedef kullanıcının aynı sağlayıcıdaki **eski** kimliği önce iptal edilir:
+   * kurtarmanın tanımı gereği kullanıcı ona erişimini kaybetmiştir ve telefon
+   * numaraları operatörlerce yeniden tahsis edildiği için aktif bırakmak, numarayı
+   * sonradan alan birine hesabı açık bırakmak olurdu.
+   *
+   * Taşıma tek UPDATE ile yapılır: PK `(provider, provider_subject)` olduğu için satır
+   * kimliği değişmez ve arada "hiçbir kullanıcıya bağlı olmayan subject" penceresi oluşmaz.
+   */
+  async moveAuthSubject(
+    client: PoolClient,
+    input: { provider: string; subject: string; fromUserId: string; toUserId: string },
+  ): Promise<void> {
+    await client.query(
+      `UPDATE auth_subjects
+          SET status = 'REVOKED', revoked_at = now()
+        WHERE user_id = $1 AND provider = $2 AND status = 'ACTIVE'`,
+      [input.toUserId, input.provider],
+    );
+
+    const result = await client.query(
+      `UPDATE auth_subjects
+          SET user_id = $4
+        WHERE provider = $1 AND provider_subject = $2 AND user_id = $3 AND status = 'ACTIVE'`,
+      [input.provider, input.subject, input.fromUserId, input.toUserId],
+    );
+
+    if ((result.rowCount ?? 0) === 0) {
+      throw new Error('oturum kimliği taşınamadı: aktif kayıt bulunamadı');
+    }
+  }
+
+  /**
+   * Kurtarma sonrası kalan kabuk hesabı kapatır.
+   *
+   * Kayıt silinmez: `audit_logs` bu kullanıcıya atıfta bulunur ve tarihsel iz korunur.
+   * İletişim bilgileri serbest bırakılır ki kullanıcı bunları kanonik hesabına
+   * taşıyabilsin (tekillik index'i DELETED kayıtları da kapsıyor — schema.md).
+   */
+  async markDeleted(client: PoolClient, userId: string): Promise<void> {
+    await client.query(
+      `UPDATE users SET status = 'DELETED', email = NULL, phone = NULL WHERE id = $1`,
+      [userId],
+    );
   }
 
   async touchLastLogin(client: PoolClient, userId: string): Promise<void> {

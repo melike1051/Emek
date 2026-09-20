@@ -44,6 +44,19 @@ export const envSchema = z
     AUTH_PROVIDER: z.enum(['firebase', 'mock']).default('mock'),
     FIREBASE_PROJECT_ID: z.string().min(1).default('emek-local'),
 
+    // --- Identity (ADR-0004, ADR-0005) ---
+    // Hash anahtarının kaynağı. Production'da yalnızca KMS kabul edilir; ortam
+    // değişkenindeki bir anahtar, tekillik kontrolünü kâğıt üzerinde bırakırdı.
+    IDENTITY_HASH_KEY_SOURCE: z.enum(['env', 'kms']).default('env'),
+    IDENTITY_HASH_KEY: z.string().min(32).default('local-development-identity-hash-key-000'),
+    IDENTITY_HASH_KEY_VERSION: z.string().min(1).default('v1'),
+    IDENTITY_CALLBACK_SECRET: z.string().min(16).default('local-development-callback-secret'),
+    VERIFICATION_SESSION_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(900),
+    VERIFICATION_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5),
+    VERIFICATION_ATTEMPT_WINDOW_SECONDS: z.coerce.number().int().min(60).default(3600),
+    // Hesap kurtarma bir devralma yoludur: NFC tek başına yetmez (ADR-0005).
+    RECOVERY_MIN_ASSURANCE: z.enum(['LOW', 'SUBSTANTIAL', 'HIGH']).default('HIGH'),
+
     AI_SERVICE_URL: z.string().url().default('http://localhost:8000'),
     AI_SERVICE_TIMEOUT_MS: z.coerce.number().int().min(100).max(60000).default(3000),
 
@@ -76,6 +89,30 @@ export const envSchema = z
         path: ['FIREBASE_PROJECT_ID'],
         message: 'FIREBASE_PROJECT_ID production ortamında gerçek proje kimliği olmalı',
       });
+    }
+
+    if (env.IDENTITY_HASH_KEY_SOURCE !== 'kms') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['IDENTITY_HASH_KEY_SOURCE'],
+        message:
+          'IDENTITY_HASH_KEY_SOURCE production ortamında kms olmalı (ADR-0004: anahtar KMS.te tutulur)',
+      });
+    }
+
+    // Varsayılan yerel sırlarla production'a çıkmak, imza ve hash korumalarını etkisiz kılar.
+    const localDefaults: [string, string][] = [
+      ['IDENTITY_HASH_KEY', 'local-development-identity-hash-key-000'],
+      ['IDENTITY_CALLBACK_SECRET', 'local-development-callback-secret'],
+    ];
+    for (const [key, localValue] of localDefaults) {
+      if (env[key as 'IDENTITY_HASH_KEY' | 'IDENTITY_CALLBACK_SECRET'] === localValue) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [key],
+          message: `${key} production ortamında yerel varsayılan değeri olamaz`,
+        });
+      }
     }
 
     if (env.PUBSUB_EMULATOR_HOST !== undefined) {

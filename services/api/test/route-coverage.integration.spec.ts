@@ -36,6 +36,9 @@ const INTENTIONALLY_PUBLIC = new Set([
   'GET /api/v1/services',
   'GET /api/v1/services/:id',
   'GET /api/v1/skills',
+  // Sağlayıcı çağırır; Emek oturumu yoktur. Kimlik doğrulama yerine imza geçerlidir
+  // ve imza adapter içinde doğrulanır (ADR-0005).
+  'POST /api/v1/verification/callback',
 ]);
 
 const METHOD_NAMES: Record<number, string> = {

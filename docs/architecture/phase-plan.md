@@ -140,7 +140,7 @@ temeli.
 
 ---
 
-## Faz 3 — Identity
+## Faz 3 — Identity ✅
 
 **Kapsam:** `identity_records`, `verification_attempts` + constraint'ler (ADR-0004: `identity_hash`
 üzerinde sağlayıcıdan bağımsız partial unique index dahil); `IdentityVerificationProvider` port +
@@ -150,11 +150,49 @@ temeli.
 rotasyon kapalı); unique identity enforcement; account recovery akışı; verification level geçişleri;
 audit.
 
-**Exit:** eşzamanlı çift kimlik kaydı denemesi DB constraint'iyle engellendi (T-01);
-farklı sağlayıcıyla ikinci hesap denemesi engellendi (T-01b); hash üretemeyen sağlayıcı
-`IDENTITY_VERIFIED` veremiyor (T-01c); recovery akışı ek doğrulama ve rate limit ile korunuyor (T-02);
-mock provider production config'inde seçilirse servis başlamıyor (T-04); ham kimlik alanı hiçbir
-tabloda ve logda yok; callback replay reddi test edildi.
+**Exit kriterleri (durum):**
+
+- ✅ Tekillik **sağlayıcıdan bağımsız** `identity_hash` üzerinde, veritabanında zorlanıyor;
+  eşzamanlı doğrulama tek kimlik kaydı üretiyor (T-01), farklı sağlayıcıyla ikinci hesap
+  açılamıyor (T-01b).
+- ✅ Deterministik hash üretemeyen sağlayıcı doğrulanmış seviye veremiyor (T-01c, `capabilities()`).
+- ✅ Recovery: kimlik eşleşmesi kurtarmayı **tamamlamaz**, inceleme talebi açar; oturum kimliğini
+  taşımak operatör onayına bağlıdır (T-02). `HIGH` güvence zorunlu, hedef hesap başına tek
+  bekleyen talep, kullanıcı bazlı deneme sayacı + IP oran sınırı, her adım audit'li. Kabuk
+  hesabın kendi verisi varsa talep açılmıyor. Onayda eski oturum kimliği **iptal ediliyor**
+  (geri dönüştürülen telefon numarası riski).
+- ✅ Sağlayıcı erişilemezken hiçbir kayıt oluşmuyor; akış yeniden denenebilir (T-03).
+- ✅ Mock sağlayıcı production config'inde reddediliyor (T-04, config testi).
+- ✅ Ham kimlik verisi hiçbir sütunda, audit'te, event'te veya API yanıtında yok
+  (veri minimizasyonu testi tüm tabloları tarıyor). `identity_hash` API yanıtlarında dönmüyor.
+- ✅ Callback: imza adapter içinde doğrulanıyor, ham gövde üzerinden; imzasız/yanlış imzalı/
+  gövdesi değiştirilmiş çağrılar reddediliyor, replay ikinci yan etki üretmiyor.
+- ✅ 95 unit + 129 integration test; lint/typecheck/format/build temiz.
+
+**Bu fazda alınan tasarım kararları (ADR güncellemeleri):**
+
+- `auth_subjects` yaşam döngüsü: kurtarmada eski oturum kimliği `REVOKED` olur. Aktif bırakmak,
+  operatörlerce yeniden tahsis edilen telefon numaraları nedeniyle hesap devralma yolu açardı.
+- `users_contact_present` yalnızca aktif hesaplar için zorunlu: kapatılan kabuk hesap iletişim
+  bilgilerini serbest bırakmalı.
+- Reddetme sonuçları transaction'da **commit edilir**, hata sonra fırlatılır: aksi halde rollback
+  reddetme audit'ini ve `verification_attempts` kaydını da silerdi.
+
+**Faz 3 code review bulgusu (kritik) ve çözümü:**
+
+Bağımsız güvenlik review'u, otomatik hesap kurtarmada bir **devralma yolu** buldu: saldırgan
+kurtarma oturumunu kendi hesabından başlatır, bağlantıyı mağdura ulaştırır; mağdur kendi
+belgesiyle gerçek ve yüksek güvenceli bir doğrulama yapar. Güvence seviyesi belgeyi sunanı
+doğrular ama **oturumu başlatanı doğrulamaz** — sonuçta saldırganın oturum kimliği mağdurun
+hesabına taşınırdı.
+
+Çözüm: otomatik devir kaldırıldı. Kimlik eşleşmesi artık `account_recovery_requests` kaydı
+açar; taşıma yalnızca operatör onayıyla (`approveRecovery`, Faz 10 admin endpoint'i) yapılır ve
+onaylayan audit'e yazılır. Devralma senaryosu doğrudan test edildi.
+
+Aynı review'da işaretlenen diğer noktalar: `markDeleted` tam silme değildir (Faz 12 retention —
+R-38), KMS anahtarı bağlanana kadar production'da doğrulama akışı çalışamaz (bilinçli, R-39),
+mock sağlayıcının test kancası yalnızca config guard'ıyla korunuyor (T-04).
 
 ---
 

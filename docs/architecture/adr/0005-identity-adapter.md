@@ -63,6 +63,21 @@ dış bağımlılık riskini izole eder.
 - Sağlayıcı yetenek farkları `capabilities()` üzerinden yönetilir; kod dallanması domain'e sızmaz.
 - Biyometrik/liveness devreye girerse KVKK özel nitelikli veri kuralları uygulanır — `TODO(legal)`.
 
+## Uygulama notu (Faz 3)
+
+- Port uygulandı: `IdentityVerificationProvider` (+ `capabilities()`), `MockIdentityProvider`.
+  Domain katmanı yalnızca portu bilir; `IDENTITY_PROVIDER=mock` production'da reddedilir.
+- **Ham kimlik verisi adapter içinde kalır:** mock adapter `nationalId`'yi alır, KMS anahtarlı
+  HMAC'e çevirir ve atar. `VerificationResult` yalnızca referans + hash + güvence seviyesi
+  taşır. Bir integration testi tüm tabloları, audit'i ve event'leri tarayarak ham değerin
+  hiçbir yerde olmadığını doğrular.
+- **Callback imzası adapter'ın içindedir** ve **ham gövde** üzerinden doğrulanır (JSON'u yeniden
+  serileştirmek imzayı bozar; bu yüzden Nest `rawBody: true` ile kurulur). İmzasız, yanlış
+  imzalı ve gövdesi değiştirilmiş çağrılar aynı hata koduyla reddedilir — hangi kontrolün
+  başarısız olduğu sızdırılmaz.
+- **Hash anahtarı kaynağı da porttur:** yerelde ortam değişkeni, production'da KMS. KMS adapter'ı
+  Faz 13'te bağlanacak ve o ana kadar açıkça hata verir; sessizce zayıf anahtara düşmez (R-39).
+
 ## Alternatifler
 
 - **Doğrudan EKDS entegrasyonu (reddedildi):** erişim garanti değil, tek noktaya bağımlılık.

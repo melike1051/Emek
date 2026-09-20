@@ -19,7 +19,7 @@ export const PREFIX = `/${API_PREFIX}`;
 export async function createTestApp(): Promise<INestApplication> {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
 
-  const app = moduleRef.createNestApplication({ logger: false });
+  const app = moduleRef.createNestApplication({ logger: false, rawBody: true });
   configureApp(app);
   await app.init();
   return app;

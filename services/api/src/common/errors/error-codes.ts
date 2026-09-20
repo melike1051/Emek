@@ -19,6 +19,11 @@ export const ErrorCode = {
   IDEMPOTENCY_IN_PROGRESS: 'IDEMPOTENCY_IN_PROGRESS',
   VERIFICATION_REQUIRED: 'VERIFICATION_REQUIRED',
   AUTH_CONTACT_REQUIRED: 'AUTH_CONTACT_REQUIRED',
+  IDENTITY_ALREADY_REGISTERED: 'IDENTITY_ALREADY_REGISTERED',
+  VERIFICATION_FAILED: 'VERIFICATION_FAILED',
+  VERIFICATION_SESSION_EXPIRED: 'VERIFICATION_SESSION_EXPIRED',
+  RECOVERY_NOT_ALLOWED: 'RECOVERY_NOT_ALLOWED',
+  RECOVERY_REQUEST_NOT_PENDING: 'RECOVERY_REQUEST_NOT_PENDING',
   PROFILE_ALREADY_EXISTS: 'PROFILE_ALREADY_EXISTS',
   PROFILE_NOT_FOUND: 'PROFILE_NOT_FOUND',
   SKILL_ALREADY_ADDED: 'SKILL_ALREADY_ADDED',
@@ -39,6 +44,11 @@ export const ERROR_STATUS: Record<ErrorCodeValue, HttpStatus> = {
   [ErrorCode.IDEMPOTENCY_IN_PROGRESS]: HttpStatus.CONFLICT,
   [ErrorCode.VERIFICATION_REQUIRED]: HttpStatus.FORBIDDEN,
   [ErrorCode.AUTH_CONTACT_REQUIRED]: HttpStatus.BAD_REQUEST,
+  [ErrorCode.IDENTITY_ALREADY_REGISTERED]: HttpStatus.CONFLICT,
+  [ErrorCode.VERIFICATION_FAILED]: HttpStatus.UNPROCESSABLE_ENTITY,
+  [ErrorCode.VERIFICATION_SESSION_EXPIRED]: HttpStatus.CONFLICT,
+  [ErrorCode.RECOVERY_NOT_ALLOWED]: HttpStatus.FORBIDDEN,
+  [ErrorCode.RECOVERY_REQUEST_NOT_PENDING]: HttpStatus.CONFLICT,
   [ErrorCode.PROFILE_ALREADY_EXISTS]: HttpStatus.CONFLICT,
   [ErrorCode.PROFILE_NOT_FOUND]: HttpStatus.NOT_FOUND,
   [ErrorCode.SKILL_ALREADY_ADDED]: HttpStatus.CONFLICT,
@@ -63,6 +73,14 @@ export const CLIENT_MESSAGES: Record<ErrorCodeValue, string> = {
   [ErrorCode.VERIFICATION_REQUIRED]: 'Bu işlem için hesabınızın doğrulanması gerekiyor.',
   [ErrorCode.AUTH_CONTACT_REQUIRED]:
     'Hesap oluşturmak için e-posta veya telefon bilgisi gerekiyor.',
+  [ErrorCode.IDENTITY_ALREADY_REGISTERED]:
+    'Bu kimlik başka bir hesapta doğrulanmış. Hesabınıza erişmek için kurtarma akışını kullanın.',
+  [ErrorCode.VERIFICATION_FAILED]: 'Kimlik doğrulama tamamlanamadı.',
+  [ErrorCode.VERIFICATION_SESSION_EXPIRED]:
+    'Doğrulama oturumunun süresi doldu, lütfen yeniden başlatın.',
+  [ErrorCode.RECOVERY_NOT_ALLOWED]:
+    'Hesap kurtarma talebiniz otomatik olarak tamamlanamıyor, inceleme gerekiyor.',
+  [ErrorCode.RECOVERY_REQUEST_NOT_PENDING]: 'Bu kurtarma talebi zaten karara bağlanmış.',
   [ErrorCode.PROFILE_ALREADY_EXISTS]: 'Bu profil zaten oluşturulmuş.',
   [ErrorCode.PROFILE_NOT_FOUND]: 'Profil bulunamadı.',
   [ErrorCode.SKILL_ALREADY_ADDED]: 'Bu yetkinlik profilinizde zaten var.',

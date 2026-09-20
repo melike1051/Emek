@@ -83,14 +83,33 @@ describe('initial migration', () => {
     expect(types.rows.map((row) => row.typname)).toEqual(['app_role', 'user_status']);
   });
 
-  it('henüz kullanılmayan doğrulama enum.larını oluşturmaz (Faz 3 ile gelir)', async () => {
+  // Faz 1'de bilinçli olarak yoktu; Faz 3'te onları kullanan ilk tabloyla birlikte geldi.
+  it('doğrulama enum.ları kimlik tablolarıyla birlikte gelir (Faz 3)', async () => {
     const count = await scalar<string>(
       pool,
       `SELECT count(*)::text FROM pg_type
        WHERE typname IN ('verification_status','verification_level')`,
     );
 
-    expect(count).toBe('0');
+    expect(count).toBe('2');
+  });
+
+  // Sıra ADR-0004 ile aynı olmalı: seviye karşılaştırmaları buna dayanır.
+  it('verification_level değerleri ADR-0004 sırasındadır', async () => {
+    const labels = await pool.query<{ enumlabel: string }>(
+      `SELECT enumlabel FROM pg_enum e
+       JOIN pg_type t ON t.oid = e.enumtypid
+       WHERE t.typname = 'verification_level'
+       ORDER BY e.enumsortorder`,
+    );
+
+    expect(labels.rows.map((row) => row.enumlabel)).toEqual([
+      'UNVERIFIED',
+      'PHONE_VERIFIED',
+      'IDENTITY_VERIFIED',
+      'PROVIDER_VERIFIED',
+      'FULLY_VERIFIED',
+    ]);
   });
 
   it('app_role değerleri RBAC rolleriyle aynıdır', async () => {
