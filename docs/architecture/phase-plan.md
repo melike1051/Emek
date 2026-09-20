@@ -243,22 +243,63 @@ tautolojik değil; `bookingIn()` gerçek geçiş yolunu kullanıyor; 404-yerine-
 
 ---
 
-## Faz 5 — Payment & Digital Proof
+## Faz 5 — Payment & Digital Proof ✅
 
-**Kapsam:** `PaymentProvider` port + sandbox adapter (outbound idempotency key ile); `payments`
-(+ `authorization_expires_at`), `payment_events`; ödeme state machine (booking aggregate root,
-payment projeksiyon — ADR-0009); re-authorization akışı; imzalı + idempotent webhook handler;
-`disputes`; `documents` + Cloud Storage signed URL upload/download; before/after kanıt akışı ve
-`sha256` bütünlük kaydı; booking evidence ilişkisi; `reviews` CHECK invariant'ları.
-`payments.booking_id UNIQUE` yeterliliği değerlendirilir; `payment_intents` ayrımı gerekirse ADR yazılır.
+**Kapsam:** `PaymentProvider` port + mock/sandbox adapter (giden idempotency anahtarıyla);
+`payments` (+ `authorization_expires_at`), `payment_events`, `payment_commands`; ödeme state
+machine (booking aggregate root, payment projeksiyon — ADR-0009, ADR-0017); re-authorization
+akışı; imzalı + idempotent webhook handler; `disputes`; `documents` + storage portu ve kısa
+ömürlü signed URL; before/after kanıt akışı ve `sha256` bütünlük kaydı; `reviews` invariant'ları.
 
-**Exit:** duplicate webhook ikinci kez yan etki üretmiyor (T-09); out-of-order event reddi (T-10);
-dispute/SAFETY_HOLD varken release bloklanıyor (T-11); yetkilendirme süresi dolmuşken release
-denemesi doğru hata veriyor ve re-authorization çalışıyor (T-34); event'ten para hareketi
-tetiklenmiyor (T-38); storage nesneleri private, yalnızca kısa ömürlü signed URL ile erişilebiliyor
-(T-12); kart verisi hiçbir yerde tutulmuyor.
+**Exit kriterleri (durum):**
 
----
+- ✅ Duplicate webhook ikinci kez yan etki üretmiyor, yine 200 dönüyor (T-09); olay
+  `UNIQUE (provider, external_event_id)` ile bir kez kaydediliyor.
+- ✅ Out-of-order event reddediliyor, durum geriye çekilmiyor ve red audit'leniyor (T-10).
+- ✅ Açık uyuşmazlık **ve** `SAFETY_HOLD` varken release bloklanıyor, gerekçe audit'e
+  yazılıyor ve sağlayıcıya hiç çağrı gitmiyor (T-11).
+- ✅ Yetkilendirme süresi dolmuşken release **denenmiyor**; re-authorization süreyi uzatıyor
+  ve çift yetkilendirme oluşmuyor (T-34). Süresi dolan yetkilendirmeler zamanlanmış işle
+  `AUTHORIZATION_EXPIRED` oluyor.
+- ✅ Event'ten para hareketi tetiklenmiyor (T-38): webhook hiçbir giden komut üretmiyor;
+  ikinci yetkilendirme denemesi `payment_commands` UNIQUE'inde duruyor.
+- ✅ Storage nesneleri private; yalnızca kısa ömürlü imzalı URL ile erişilebiliyor; imzasız,
+  kurcalanmış ve süresi dolmuş URL reddediliyor (T-12). Her erişim audit'li.
+- ✅ Kart verisi hiçbir kolonda tutulmuyor — şema seviyesinde test ediliyor.
+- ✅ Para serbest bırakılmadan rezervasyon `SETTLED` olamıyor; hizmet tamamlanınca para
+  otomatik çıkmıyor (uyuşmazlık penceresi korunuyor).
+- ✅ Uyuşmazlığı taraflar açıyor, yalnızca operatör karara bağlıyor; değerlendirme yalnızca
+  tamamlanmış hizmette ve bir kez yazılabiliyor.
+- ✅ 126 unit + 227 integration test; lint/typecheck/format/build temiz.
+
+**`payments.booking_id UNIQUE` kararı verildi** (ADR-0017): düz UNIQUE yerine kısmi unique
+index — rezervasyon başına bir **canlı** ödeme, ama başarısız deneme yeni denemeyi
+engellemiyor. Ayrı `payment_intents` tablosu yazılmadı; gerekçe ADR-0017 §1.
+
+**Faz 5 code review bulguları ve çözümleri** (bağımsız review agent'ı):
+
+| Bulgu                                                                                                                                                                                                                                                                    | Önem     | Çözüm                                                                                                                                                                                                                                                                                  |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Belirsiz sağlayıcı hatasından sonra capture/refund retry'ı YENİ idempotency anahtarı üretiyordu** (`countCommands+1`). Sağlayıcıya ulaşmış ama yanıtı kaybolmuş bir çağrı ikinci kez gönderilirse para iki kez hareket ederdi                                          | CRITICAL | Retry **aynı komut satırını ve anahtarı** yeniden kullanıyor. Kiralama süresi (60 sn) dolmamış `PENDING` satır "hâlâ uçuşta" sayılıp reddediliyor; yeni anahtar yalnızca sağlayıcının **kesin** reddinden sonra üretiliyor. Belirsiz hatada komut `FAILED` değil `PENDING` bırakılıyor |
+| **Ödeme bir kez `DISPUTED` olunca kalıcı kilitleniyordu:** `DISPUTED`'dan tek çıkış `REFUNDED`'dı. Sağlayıcı lehine karar verilmiş uyuşmazlıkta veya güvenlik yanlış alarmında, hizmeti tamamlamış sağlayıcının parası ne serbest bırakılabiliyor ne iade edilebiliyordu | CRITICAL | `payments.frozen_from_status` eklendi (migration + CHECK). Uyuşmazlık kararı ve `SAFETY_HOLD → IN_PROGRESS` geçişi ödemeyi **dondurulduğu duruma** döndürüyor; başka açık uyuşmazlık varsa çözülmüyor                                                                                  |
+| Testler bu iki yolu hiç egzersiz etmiyordu; `setUnavailable(true)` hiçbir testte kullanılmıyordu. Bir test yorumunda "ödeme sonsuza kadar bloklu kalmaz" iddia ediliyor ama yalnızca booking durumuna bakılıyordu                                                        | HIGH     | 6 yeni test: capture/refund timeout + retry anahtarı, kesin red sonrası yeni anahtar, uyuşmazlık çözümü sonrası gerçek release, güvenlik yanlış alarmı sonrası tam akış, ikinci açık uyuşmazlıkta çözülmeme                                                                            |
+| Yükleme boyut sınırı yalnızca mock'ta uygulanıyordu; gerçek GCS imzalı PUT'ta `x-max-bytes` başlığı bir şey uygulamaz — sınır sessizce buharlaşırdı                                                                                                                      | HIGH     | `confirmUpload` sunucu tarafında boyutu doğruluyor; mock'a sınır uygulamayan `forcePut` eklendi ki test gerçeği ölçsün. Bucket seviyesi politika R-41 olarak Faz 13'e bağlandı                                                                                                         |
+| Guard ile capture arasında TOCTOU penceresi belgelenmemişti                                                                                                                                                                                                              | MEDIUM   | ADR-0017 §8'de kabul, gerekçe ve telafi yolu (iade) yazıldı; R-43 olarak risk kütüğüne eklendi                                                                                                                                                                                         |
+| İade tutarı istemciden JS `number` olarak alınıyordu (sistemin geri kalanı BIGINT→string)                                                                                                                                                                                | MEDIUM   | `amountMinor`/`refundAmountMinor` string'e çevrildi, regex ile doğrulanıyor                                                                                                                                                                                                            |
+
+Reviewer'ın doğruladıkları: webhook idempotency ve para hareketi ayrımı (webhook hiçbir
+giden çağrı üretmiyor), AUTHORIZE akışının sabit anahtarı, şema invariant'larının DB'de
+zorlanması, dispute/review yetkilendirmesi ve veri ifşası (yazar/karar veren dışarı
+verilmiyor), doküman hash değişmezliği ve Faz 4 invariant'larının bozulmamış olması.
+
+**Geliştirme sırasında bulunan hatalar:**
+
+| Hata                                                                           | Kök neden                                                                                                                                           | Çözüm                                                                             |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Yetkilendirme sessizce yapılmıyordu (`payments_authorization_complete` ihlali) | `createIntent` ve `authorize` **aynı** idempotency anahtarını paylaşıyordu; sağlayıcı sözleşmesi gereği ikinci çağrıya birincinin sonucunu döndürdü | Her işlemin kendi anahtarı: `CREATE_INTENT` ve `AUTHORIZE` ayrıldı (ADR-0017 §4)  |
+| Release bloklandığında gerekçe audit'e yazılmıyordu                            | Exception transaction **içinde** fırlatılıyordu; rollback audit kaydını da götürüyordu (Faz 3'teki hatanın aynısı)                                  | Blok kararı transaction'dan dönülüyor, commit ediliyor, hata dışarıda üretiliyor  |
+| İkinci ödeme denemesi "geçersiz durum" hatası veriyordu                        | Yetkilendirme sonrası rezervasyon `SCHEDULED` olduğu için durum kontrolü önce tetikleniyordu                                                        | Canlı ödeme kontrolü durum kontrolünden öne alındı; istemci gerçek sebebi görüyor |
+| Uyuşmazlık varken release "geçersiz durum" diyordu                             | Dondurma ödemeyi `DISPUTED` yapıyor, geçerlilik kontrolü blok kontrolünden önce çalışıyordu                                                         | Blok kontrolleri geçerlilik kontrolünden öne alındı                               |
 
 ## Faz 6 — Python AI / NLP
 

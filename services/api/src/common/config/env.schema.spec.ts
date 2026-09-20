@@ -15,6 +15,9 @@ const productionEnv = {
   IDENTITY_HASH_KEY_SOURCE: 'kms',
   IDENTITY_HASH_KEY: 'production-grade-identity-hash-key-value',
   IDENTITY_CALLBACK_SECRET: 'production-grade-callback-secret',
+  PAYMENT_WEBHOOK_SECRET: 'production-grade-payment-webhook-secret',
+  STORAGE_PROVIDER: 'gcs',
+  STORAGE_SIGNING_SECRET: 'production-grade-storage-signing-secret',
 };
 
 describe('validateEnv', () => {
@@ -64,6 +67,36 @@ describe('validateEnv', () => {
     expect(() => validateEnv({ ...baseEnv, ...productionEnv, PAYMENT_PROVIDER: 'mock' })).toThrow(
       /PAYMENT_PROVIDER/,
     );
+  });
+
+  // ADR-0009 §7: webhook imzası bu sırla doğrulanır. Yerel varsayılanla production'a
+  // çıkmak, imzayı herkesin üretebildiği bir formaliteye çevirirdi.
+  it('production ortamında yerel ödeme webhook sırrı reddedilir', () => {
+    expect(() =>
+      validateEnv({
+        ...baseEnv,
+        ...productionEnv,
+        PAYMENT_WEBHOOK_SECRET: 'local-development-payment-secret',
+      }),
+    ).toThrow(/PAYMENT_WEBHOOK_SECRET/);
+  });
+
+  // Bellekteki kanıt deposu süreç yeniden başladığında silinir; "dijital ispat"
+  // iddiası bununla taşınamaz.
+  it('production ortamında mock storage reddedilir', () => {
+    expect(() => validateEnv({ ...baseEnv, ...productionEnv, STORAGE_PROVIDER: 'mock' })).toThrow(
+      /STORAGE_PROVIDER/,
+    );
+  });
+
+  it('production ortamında yerel storage imza sırrı reddedilir', () => {
+    expect(() =>
+      validateEnv({
+        ...baseEnv,
+        ...productionEnv,
+        STORAGE_SIGNING_SECRET: 'local-development-storage-secret',
+      }),
+    ).toThrow(/STORAGE_SIGNING_SECRET/);
   });
 
   it('production ortamında Pub/Sub emulator tanımlı olamaz', () => {

@@ -39,6 +39,9 @@ const INTENTIONALLY_PUBLIC = new Set([
   // Sağlayıcı çağırır; Emek oturumu yoktur. Kimlik doğrulama yerine imza geçerlidir
   // ve imza adapter içinde doğrulanır (ADR-0005).
   'POST /api/v1/verification/callback',
+  // Ödeme sağlayıcısı çağırır; Emek oturumu yoktur. Kimlik doğrulama yerine **imza**
+  // geçerlidir ve imza adapter içinde doğrulanır (ADR-0009 §7). İmzasız çağrı 401 alır.
+  'POST /api/v1/payments/webhook',
 ]);
 
 const METHOD_NAMES: Record<number, string> = {

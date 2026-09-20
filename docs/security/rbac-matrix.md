@@ -28,20 +28,31 @@ ve testlenir.
 
 ## Faz 2 endpoint matrisi
 
-| Endpoint                                                           | Kimlik                                      | Rol                        | Sahiplik            | Not                                         |
-| ------------------------------------------------------------------ | ------------------------------------------- | -------------------------- | ------------------- | ------------------------------------------- |
-| `GET /health`, `GET /health/live`                                  | ❌ açık                                     | —                          | —                   | orchestrator çağırır                        |
-| `POST /auth/session`                                               | token doğrulanır, Emek kullanıcısı gerekmez | —                          | —                   | oran sınırı: 20/dk                          |
-| `GET /users/me`                                                    | ✅                                          | —                          | kendi kaydı         |                                             |
-| `PATCH /users/me`                                                  | ✅                                          | —                          | kendi kaydı         | e-posta/telefon E.164 doğrulanır            |
-| `GET /users/me/roles`                                              | ✅                                          | —                          | kendi rolleri       |                                             |
-| `POST /customers/profile`                                          | ✅                                          | `CUSTOMER`                 | kendi profili       |                                             |
-| `GET`/`PATCH /customers/me`                                        | ✅                                          | `CUSTOMER`                 | kendi profili       |                                             |
-| `POST /providers/profile`                                          | ✅                                          | — (rol bu işlemle verilir) | kendi profili       | `DRAFT` durumunda başlar                    |
-| `GET`/`PATCH /providers/me`                                        | ✅                                          | `PROVIDER`                 | kendi profili       |                                             |
-| `GET`/`POST /providers/me/skills`                                  | ✅                                          | `PROVIDER`                 | kendi yetkinlikleri |                                             |
-| `DELETE /providers/me/skills/:skillId`                             | ✅                                          | `PROVIDER`                 | kendi yetkinliği    | yol parametresi sahibi belirtmez            |
-| `GET /service-categories`, `/services`, `/services/:id`, `/skills` | ❌ açık                                     | —                          | —                   | referans veri, PII yok; oran sınırı: 120/dk |
+| Endpoint                                                           | Kimlik                                      | Rol                        | Sahiplik                          | Not                                                 |
+| ------------------------------------------------------------------ | ------------------------------------------- | -------------------------- | --------------------------------- | --------------------------------------------------- |
+| `GET /health`, `GET /health/live`                                  | ❌ açık                                     | —                          | —                                 | orchestrator çağırır                                |
+| `POST /auth/session`                                               | token doğrulanır, Emek kullanıcısı gerekmez | —                          | —                                 | oran sınırı: 20/dk                                  |
+| `GET /users/me`                                                    | ✅                                          | —                          | kendi kaydı                       |                                                     |
+| `PATCH /users/me`                                                  | ✅                                          | —                          | kendi kaydı                       | e-posta/telefon E.164 doğrulanır                    |
+| `GET /users/me/roles`                                              | ✅                                          | —                          | kendi rolleri                     |                                                     |
+| `POST /customers/profile`                                          | ✅                                          | `CUSTOMER`                 | kendi profili                     |                                                     |
+| `GET`/`PATCH /customers/me`                                        | ✅                                          | `CUSTOMER`                 | kendi profili                     |                                                     |
+| `POST /providers/profile`                                          | ✅                                          | — (rol bu işlemle verilir) | kendi profili                     | `DRAFT` durumunda başlar                            |
+| `GET`/`PATCH /providers/me`                                        | ✅                                          | `PROVIDER`                 | kendi profili                     |                                                     |
+| `GET`/`POST /providers/me/skills`                                  | ✅                                          | `PROVIDER`                 | kendi yetkinlikleri               |                                                     |
+| `DELETE /providers/me/skills/:skillId`                             | ✅                                          | `PROVIDER`                 | kendi yetkinliği                  | yol parametresi sahibi belirtmez                    |
+| `GET /service-categories`, `/services`, `/services/:id`, `/skills` | ❌ açık                                     | —                          | —                                 | referans veri, PII yok; oran sınırı: 120/dk         |
+| `POST /bookings/:id/payment`                                       | ✅                                          | —                          | **yalnızca müşteri**              | tutar rezervasyondan; istemci tutar göndermez       |
+| `GET /bookings/:id/payment`                                        | ✅                                          | —                          | rezervasyonun tarafı              | sağlayıcı referansı yanıtta yoktur                  |
+| `POST /payments/:id/release`, `/refund`, `/reauthorize`            | ✅                                          | `ADMIN`                    | —                                 | taraflar parayı kendileri hareket ettiremez         |
+| `POST /payments/webhook`                                           | ❌ açık — **imza doğrulanır**               | —                          | —                                 | ADR-0009 §7; imzasız çağrı 401, oran sınırı: 300/dk |
+| `POST`/`GET /bookings/:id/disputes`                                | ✅                                          | —                          | rezervasyonun tarafı              | açmak taraflara açıktır                             |
+| `POST /disputes/:id/resolve`                                       | ✅                                          | `ADMIN`                    | —                                 | taraf kendi lehine karar veremez                    |
+| `POST /documents`, `/documents/:id/confirm`                        | ✅                                          | —                          | rezervasyonun tarafı              | dosya API'den geçmez; imzalı URL                    |
+| `GET /documents/:id/download-url`                                  | ✅                                          | —                          | taraf veya sahibi (`ADMIN` dâhil) | kısa ömürlü imzalı URL; her erişim audit'li         |
+| `GET /bookings/:id/documents`                                      | ✅                                          | —                          | rezervasyonun tarafı              |                                                     |
+| `POST /bookings/:id/review`                                        | ✅                                          | —                          | rezervasyonun tarafı              | yalnızca `COMPLETED`/`SETTLED`; bir kez             |
+| `GET /users/:id/reviews`                                           | ✅                                          | —                          | —                                 | yazar kimliği yanıtta yoktur                        |
 
 ## Veri erişim katmanı
 
@@ -51,10 +62,10 @@ verisini döndüremez (ADR-0013 §3).
 
 ## Sonraki fazlarda genişleyecek
 
-| Faz | Eklenecek                                                                           |
-| --- | ----------------------------------------------------------------------------------- |
-| 3   | verification endpoint'leri; `VERIFICATION_REQUIRED` ile seviye bazlı yetki          |
-| 4   | booking sahipliği (müşteri ↔ sağlayıcı iki taraflı erişim), state machine yetkileri |
-| 5   | ödeme ve dispute aksiyonları; `SUPPORT` kısıtlarının testi                          |
-| 10  | admin/ops endpoint'leri; hassas veri erişimi için ayrı ve loglanan yetki            |
-| 12  | App Check zorunluluğu, oran sınırı genişletme, abuse senaryoları                    |
+| Faz | Eklenecek                                                                                         |
+| --- | ------------------------------------------------------------------------------------------------- |
+| 3   | verification endpoint'leri; `VERIFICATION_REQUIRED` ile seviye bazlı yetki                        |
+| 4   | booking sahipliği (müşteri ↔ sağlayıcı iki taraflı erişim), state machine yetkileri               |
+| 5   | ✅ ödeme ve dispute aksiyonları eklendi; `SUPPORT` kısıtları Faz 10 admin API'siyle test edilecek |
+| 10  | admin/ops endpoint'leri; hassas veri erişimi için ayrı ve loglanan yetki                          |
+| 12  | App Check zorunluluğu, oran sınırı genişletme, abuse senaryoları                                  |

@@ -15,14 +15,27 @@ bağlı olabilir.
 
 ## Migration dosyaları
 
-| Migration                           | İçerik                                                                             | Faz |
-| ----------------------------------- | ---------------------------------------------------------------------------------- | --- |
-| `…120000_shared-updated-at-trigger` | Paylaşılan `set_updated_at()` fonksiyonu                                           | 1   |
-| `…120100_init-extensions-and-users` | Extension'lar, `user_status`/`app_role`, `users`, `user_roles`                     | 1   |
-| `…130000_audit-logs`                | `audit_logs` + hash zinciri + değişmezlik trigger'ları + `audit_chain_broken_at()` | 2   |
-| `…130100_outbox-and-idempotency`    | `outbox`, `processed_events`, `idempotency_keys`                                   | 2   |
-| `…130200_profiles-and-catalog`      | `customer_profiles`, `provider_profiles`, katalog ve yetkinlik tabloları           | 2   |
-| `…130300_auth-subjects`             | `auth_subjects` (sağlayıcı subject → user eşlemesi)                                | 2   |
+| Migration                             | İçerik                                                                                | Faz |
+| ------------------------------------- | ------------------------------------------------------------------------------------- | --- |
+| `…120000_shared-updated-at-trigger`   | Paylaşılan `set_updated_at()` fonksiyonu                                              | 1   |
+| `…120100_init-extensions-and-users`   | Extension'lar, `user_status`/`app_role`, `users`, `user_roles`                        | 1   |
+| `…130000_audit-logs`                  | `audit_logs` + hash zinciri + değişmezlik trigger'ları + `audit_chain_broken_at()`    | 2   |
+| `…130100_outbox-and-idempotency`      | `outbox`, `processed_events`, `idempotency_keys`                                      | 2   |
+| `…130200_profiles-and-catalog`        | `customer_profiles`, `provider_profiles`, katalog ve yetkinlik tabloları              | 2   |
+| `…130300_auth-subjects`               | `auth_subjects` (sağlayıcı subject → user eşlemesi)                                   | 2   |
+| `…140000_identity`                    | `identity_records`, `verification_attempts`, sağlayıcıdan bağımsız tekil kimlik       | 3   |
+| `…140100_deleted-user-contact`        | `users_contact_present` gevşetmesi (silinen kullanıcı)                                | 3   |
+| `…140200_auth-subject-lifecycle`      | `auth_subjects` ACTIVE/REVOKED yaşam döngüsü + kısmi unique                           | 3   |
+| `…140300_account-recovery-requests`   | `account_recovery_requests` (operatör onaylı kurtarma)                                | 3   |
+| `…150000_addresses-and-service-areas` | `addresses`, `provider_service_areas` (PostGIS + GIST)                                | 4   |
+| `…150100_availability`                | `availability`, `availability_exceptions` (EXCLUDE ile örtüşme yasağı)                | 4   |
+| `…150200_bookings`                    | `booking_status`, `booking_requests`, `bookings` (+EXCLUDE), `booking_status_history` | 4   |
+| `…150300_service-pricing`             | `services` fiyatlandırma kolonları + tutarlılık CHECK'leri                            | 4   |
+| `…160000_payments`                    | `payments`, `payment_events`, `payment_commands`                                      | 5   |
+| `…160100_disputes`                    | `disputes` (+ açık uyuşmazlık kısmi unique)                                           | 5   |
+| `…160200_documents`                   | `documents` (+ bütünlük trigger'ı)                                                    | 5   |
+| `…160300_reviews`                     | `reviews` (+ çift oy ve kendine puan engeli)                                          | 5   |
+| `…160400_payment-freeze-origin`       | `payments.frozen_from_status` (review bulgusu C2)                                     | 5   |
 
 `set_updated_at()` kendi migration'ındadır: birden çok tablo ona bağlanacak ve fonksiyon ilk
 kullanan tablonun migration'ına gömülürse o migration'ın `down` yönü sonraki tabloların
@@ -226,6 +239,65 @@ GMV metriklerini manipüle edebilirdi.
 
 Tek parçalı bir CHECK, mevcut fiyatsız satırlar nedeniyle migration'ı kırardı; bu yüzden
 invariant iki parçaya ayrıldı ve fiyatsız satırlar migration'da pasife alındı.
+
+## Faz 5 tabloları — ödeme, uyuşmazlık, dijital ispat
+
+### `payments` — ödemenin durumu (ADR-0009, ADR-0017)
+
+Emek para tutmaz: burada yalnızca sağlayıcıdaki ödemenin **referansı ve durumu** izlenir.
+Kart verisi (PAN, CVV, son kullanma) hiçbir kolonda yoktur ve test bunu şema seviyesinde
+doğrular.
+
+| Invariant                               | Kural                                                                                                                                                                                                   |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `uq_payments_live_per_booking`          | Rezervasyon başına **en fazla bir canlı ödeme** (kısmi index: `FAILED`/`AUTHORIZATION_EXPIRED`/`REFUNDED` hariç). Düz UNIQUE, ilk başarısız denemeden sonra rezervasyonu kalıcı olarak ödenemez yapardı |
+| `payments_authorization_complete`       | Yetkilendirilmiş durumlarda `authorized_at` **ve** `authorization_expires_at` dolu olmak zorunda; biri eksikse süre kontrolü sessizce atlanırdı                                                         |
+| `payments_released_consistent`          | `status = 'RELEASED'` ⇔ `released_at` dolu                                                                                                                                                              |
+| `refunded_minor <= amount_minor`        | Tutardan fazla iade edilemez                                                                                                                                                                            |
+| `payments_failure_code_only_on_failure` | Hata kodu yalnızca başarısız/süresi dolmuş ödemede taşınır                                                                                                                                              |
+| `payments_frozen_knows_origin`          | `DISPUTED` bir ödeme **nereye döneceğini bilmek zorunda** (`frozen_from_status`): bilinmezse çözüm sonrası para kilitlenirdi (review bulgusu C2)                                                        |
+| `payments_freeze_origin_consistent`     | `frozen_from_status` yalnızca `DISPUTED` durumunda dolu olabilir                                                                                                                                        |
+
+### `payment_events` — gelen webhook'lar
+
+`UNIQUE (provider, external_event_id)` gelen olayı tekilleştirir (T-09). Tablo
+**append-only**'dir: trigger DELETE'i ve kimlik alanlarının değiştirilmesini reddeder;
+uygulanmış bir olay geri alınamaz. Ham gövde değil, sınıflandırılmış özet saklanır.
+
+### `payment_commands` — giden çağrılar
+
+`external_event_id` yalnızca **geleni** tekilleştirir; çift `authorize` göndermeyi
+engellemez (ADR-0009 §5). Her giden çağrı gönderilmeden **önce** burada rezerve edilir:
+
+| Invariant                                | Kural                                                                                                |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `payment_commands_unique_key`            | Aynı idempotency anahtarıyla ikinci çağrı gönderilemez (T-38)                                        |
+| `payment_commands_unique_attempt`        | `(payment_id, operation, attempt)` tekildir                                                          |
+| `payment_commands_completion_consistent` | `status = 'PENDING'` ⇔ `completed_at` boş; "tamamlanmış ama PENDING" bir satır mutabakatı yanıltırdı |
+
+### `disputes`
+
+`uq_disputes_open_per_booking` kısmi unique index'i, aynı rezervasyon için **aynı anda**
+yalnızca bir açık uyuşmazlığa izin verir: ikinci açık kayıt, release'in hangi gerekçeyle
+bloklandığını belirsizleştirirdi. Kapanmış uyuşmazlıklar sınırsızdır.
+`disputes_resolution_complete`, karara bağlanmış bir uyuşmazlığın kim ve ne zaman karar
+verdiği bilgisini zorunlu kılar.
+
+### `documents` — dijital ispat
+
+Dosya Cloud Storage'da; burada yalnızca metadata + `sha256` + `storage_key` + zaman durur.
+`documents_integrity_guard` trigger'ı `sha256`, `storage_key` ve `booking_id` alanlarının
+yazıldıktan sonra değiştirilmesini reddeder: aksi halde önce/sonra fotoğrafı sessizce
+başka bir nesneyle değiştirilebilir ve kanıt değerini kaybederdi.
+`documents_available_has_hash`, hash'siz bir dokümanın `AVAILABLE` olmasını engeller.
+
+### `reviews`
+
+Değerlendirme matching skorunun girdisidir (Faz 7); manipüle edilebilir bir review tablosu
+doğrudan algoritmayı manipüle eder. `reviews_one_per_author` (booking başına bir yazar bir
+kez), `reviews_not_self` (kendine puan yok) ve `rating BETWEEN 1 AND 5` veritabanındadır.
+"Yalnızca tamamlanmış rezervasyon" kuralı serviste uygulanır: CHECK içinden başka tabloya
+bakılamaz.
 
 ## Sonraki fazlarda gelecek yapılar
 

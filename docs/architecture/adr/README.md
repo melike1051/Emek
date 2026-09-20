@@ -21,3 +21,5 @@ Bir ADR'yi değiştirmek için ADR silinmez: `Superseded by ADR-XXXX` olarak iş
 | [0013](0013-authorization-and-audit-integrity.md) | Yetkilendirme modeli ve audit bütünlüğü                        | Accepted | 2, 12 |
 | [0014](0014-schema-migrations-raw-sql.md)         | Şema ham SQL migration'larla yönetilir                         | Accepted | 1     |
 | [0015](0015-toolchain-choices.md)                 | Toolchain: NestJS 11 (CJS), TypeScript 6, uv, sürüm pinleme    | Accepted | 1     |
+| [0016](0016-firebase-token-verification.md)       | Firebase token doğrulaması jose + JWKS ile                     | Accepted | 2     |
+| [0017](0017-payment-data-model.md)                | Ödeme veri modeli: canlı ödeme, giden komut, kısmi iade        | Accepted | 5     |

@@ -42,6 +42,33 @@ doğrulanmalıdır**. Doğrulama gerektiren noktalar `TODO(legal)` ile işaretli
   (`server_received_at`), oturum başına monoton sıra numarası replay'i engeller, mock-location
   sinyali kayda geçer. "Dijital ispat" tamper-**evident**'tır, tamper-proof değildir (ADR-0008 §7-8).
 
+## 3b. Dijital ispat dokümanları (Faz 5)
+
+Before/after fotoğrafı S1'dir ve müşterinin evinin içini gösterir; bu yüzden en dar erişim
+modeliyle tasarlanmıştır:
+
+- Dosya **Cloud Storage**'dadır; PostgreSQL yalnızca metadata + `sha256` + `storage_key`
+  tutar. Binary veritabanına girmez.
+- Nesneler **private**'tır. Storage portunda public URL üretme yeteneği **bilinçli olarak
+  yoktur**: olsaydı bir yerde yanlışlıkla çağrılabilirdi. Erişim yalnızca kısa ömürlü
+  (varsayılan 300 sn) imzalı URL iledir (T-12).
+- `storage_key` rastgeledir: tahmin edilebilir bir yol, imza doğrulaması dışında ikinci bir
+  savunma katmanını kaybettirirdi.
+- Erişim rezervasyonun **taraflarına** (ve operatöre) açıktır; her indirme URL'i üretimi
+  `DOCUMENT_ACCESS_GRANTED` olarak audit'lenir.
+- `sha256` **storage'daki nesneden okunur**, istemcinin beyanından değil; yazıldıktan sonra
+  trigger ile değiştirilemez. "Dijital ispat" tamper-**evident**'tır.
+- İçerik tipi beyaz listeyle sınırlıdır ve azami boyut yapılandırmadan gelir.
+- `TODO(legal)`: kanıt fotoğraflarının saklama süresi ve uyuşmazlık sonrası imha politikası
+  Faz 12 retention listesine girecek.
+
+## 3c. Ödeme verisi (Faz 5)
+
+- Kart verisi (PAN, CVV, son kullanma) **hiçbir kolonda yoktur**; ödeme sayfası/SDK
+  sağlayıcıya aittir ve Emek PCI kapsamı dışındadır. Bu şema seviyesinde test edilir.
+- `payment_events` ham sağlayıcı gövdesini değil **sınıflandırılmış özeti** saklar.
+- Sağlayıcı referansı (`external_payment_id`) istemciye dönen yanıtlarda yer almaz.
+
 ## 4. Erişim kontrolü
 
 - Authentication: Firebase Auth; backend her istekte token doğrular. Client integrity: App Check.
@@ -110,3 +137,6 @@ Ayrıntı ve takip: `docs/research/technical-risks.md`.
 - `TODO(legal)`: biyometrik/liveness doğrulama kullanılacaksa hukuki dayanak ve aydınlatma.
 - `TODO(legal)`: adli sicil bilgisi talep edilecekse dayanak, kapsam ve saklama.
 - `TODO(legal)`: KVKK veri işleme envanteri, aydınlatma metinleri, açık rıza akışları.
+- `TODO(legal)`: kanıt fotoğrafı/dokümanı saklama süresi ve uyuşmazlık sonrası imha.
+- `TODO(legal)`: uyuşmazlık kararlarının ve ödeme kayıtlarının zorunlu saklama süresi
+  (ticari/vergisel mevzuat) ile KVKK silme talebinin kesişimi.

@@ -30,23 +30,25 @@ Tek doğruluk kaynağı. Bir event burada tanımlanmadan yayınlanmaz; şemalar 
 
 ## Event sözlüğü (v1)
 
-| Event               | Tetikleyici                   | `data` (özet)                                                 | Ana tüketiciler                                                                 |
-| ------------------- | ----------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `UserRegistered`    | yeni user kaydı tamamlandı    | `userId`, `roles`                                             | notification, analytics                                                         |
-| `IdentityVerified`  | verification `VERIFIED`       | `userId`, `verificationLevel`, `assuranceLevel`               | provider onboarding, notification, analytics, audit                             |
-| `ProviderApproved`  | admin/otomatik provider onayı | `userId`, `approvedBy`                                        | matching (uygunluk), notification, analytics                                    |
-| `BookingCreated`    | booking_request → booking     | `bookingId`, `requestId`, `customerId`, `serviceId`, `window` | matching, notification, analytics, safety/fraud                                 |
-| `BookingMatched`    | matching sonucu üretildi      | `bookingId`, `providerId`, `algorithmVersion`, `overallScore` | notification, analytics, research                                               |
-| `ProviderAccepted`  | provider kabul etti           | `bookingId`, `providerId`                                     | notification, analytics (**ödeme yetkilendirme buradan tetiklenmez**)           |
-| `BookingConfirmed`  | booking `CONFIRMED`           | `bookingId`                                                   | notification, analytics                                                         |
-| `PaymentAuthorized` | PSP authorization             | `paymentId`, `bookingId`, `amountMinor`, `currency`           | booking state, notification, analytics                                          |
-| `PaymentReleased`   | settlement serbest bırakıldı  | `paymentId`, `bookingId`, `amountMinor`                       | ledger/reconciliation, notification, analytics                                  |
-| `PaymentRefunded`   | iade                          | `paymentId`, `bookingId`, `amountMinor`, `reason`             | ledger, notification, analytics                                                 |
-| `ServiceStarted`    | check-in / `IN_PROGRESS`      | `bookingId`, `safetySessionId`, `startedAt`                   | safety, notification, analytics                                                 |
-| `ServiceCompleted`  | check-out / `COMPLETED`       | `bookingId`, `completedAt`, `durationMinutes`                 | review daveti, analytics (release akışı booking guard'ından senkron tetiklenir) |
-| `SafetyAlertRaised` | panic veya `HIGH_RISK`+       | `safetySessionId`, `bookingId`, `severity`, `source`          | emergency workflow, admin, notification, audit                                  |
-| `DisputeOpened`     | dispute açıldı                | `disputeId`, `bookingId`, `openedBy`, `reason`                | payment (release bloğu), admin, notification, audit                             |
-| `ReviewCreated`     | review yazıldı                | `reviewId`, `bookingId`, `revieweeId`, `rating`               | quality score güncelleme, analytics                                             |
+| Event                  | Tetikleyici                   | `data` (özet)                                                 | Ana tüketiciler                                                                 |
+| ---------------------- | ----------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `UserRegistered`       | yeni user kaydı tamamlandı    | `userId`, `roles`                                             | notification, analytics                                                         |
+| `IdentityVerified`     | verification `VERIFIED`       | `userId`, `verificationLevel`, `assuranceLevel`               | provider onboarding, notification, analytics, audit                             |
+| `ProviderApproved`     | admin/otomatik provider onayı | `userId`, `approvedBy`                                        | matching (uygunluk), notification, analytics                                    |
+| `BookingCreated`       | booking_request → booking     | `bookingId`, `requestId`, `customerId`, `serviceId`, `window` | matching, notification, analytics, safety/fraud                                 |
+| `BookingMatched`       | matching sonucu üretildi      | `bookingId`, `providerId`, `algorithmVersion`, `overallScore` | notification, analytics, research                                               |
+| `ProviderAccepted`     | provider kabul etti           | `bookingId`, `providerId`                                     | notification, analytics (**ödeme yetkilendirme buradan tetiklenmez**)           |
+| `BookingConfirmed`     | booking `CONFIRMED`           | `bookingId`                                                   | notification, analytics                                                         |
+| `PaymentAuthorized`    | PSP authorization             | `paymentId`, `bookingId`, `amountMinor`, `currency`           | booking state, notification, analytics                                          |
+| `PaymentReleased`      | settlement serbest bırakıldı  | `paymentId`, `bookingId`, `amountMinor`                       | ledger/reconciliation, notification, analytics                                  |
+| `PaymentRefunded`      | iade (tam veya kısmi)         | `paymentId`, `bookingId`, `refundedMinor`, `partial`          | ledger, notification, analytics                                                 |
+| `ServiceStarted`       | check-in / `IN_PROGRESS`      | `bookingId`, `safetySessionId`, `startedAt`                   | safety, notification, analytics                                                 |
+| `ServiceCompleted`     | check-out / `COMPLETED`       | `bookingId`, `completedAt`, `durationMinutes`                 | review daveti, analytics (release akışı booking guard'ından senkron tetiklenir) |
+| `SafetyAlertRaised`    | panic veya `HIGH_RISK`+       | `safetySessionId`, `bookingId`, `severity`, `source`          | emergency workflow, admin, notification, audit                                  |
+| `DisputeOpened`        | dispute açıldı                | `disputeId`, `bookingId`, `reason`                            | payment (release bloğu), admin, notification, audit                             |
+| `DisputeResolved`      | operatör kararı verildi       | `disputeId`, `bookingId`, `status`                            | payment, admin, notification, analytics                                         |
+| `ServiceEvidenceAdded` | kanıt dokümanı doğrulandı     | `bookingId`, `documentId`, `documentType`                     | safety, dispute dosyası, analytics                                              |
+| `ReviewCreated`        | review yazıldı                | `reviewId`, `bookingId`, `revieweeId`, `rating`               | quality score güncelleme, analytics                                             |
 
 ## Uygulama durumu
 

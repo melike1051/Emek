@@ -7,6 +7,7 @@ import { BusinessException } from '../common/errors/business.exception';
 import { ErrorCode } from '../common/errors/error-codes';
 import { EventType, OutboxService } from '../common/outbox/outbox.service';
 import { CatalogService } from '../catalog/catalog.service';
+import { PaymentsService } from '../payments/payments.service';
 import { AvailabilityService } from '../providers/availability.service';
 import type { AppRole } from '../users/user.types';
 import { BookingStateService } from './state/booking-state.service';
@@ -102,6 +103,7 @@ export class BookingsService {
     private readonly addresses: AddressesService,
     private readonly availability: AvailabilityService,
     private readonly catalog: CatalogService,
+    private readonly payments: PaymentsService,
   ) {}
 
   /**
@@ -286,6 +288,8 @@ export class BookingsService {
       );
       const actor = this.resolveActor(booking, input.userId, input.roles);
 
+      await this.assertPaymentAllows(client, input.bookingId, input.to);
+
       await this.state.transition(client, {
         bookingId: input.bookingId,
         to: input.to,
@@ -294,6 +298,7 @@ export class BookingsService {
         ...(input.reason !== undefined ? { reason: input.reason } : {}),
       });
 
+      await this.applyPaymentEffects(client, input.bookingId, input.to);
       await this.publishLifecycleEvent(client, input.bookingId, input.to);
 
       const updated = await client.query<BookingRow>(`${SELECT_BOOKING} WHERE id = $1`, [
@@ -320,6 +325,8 @@ export class BookingsService {
     reason?: string;
   }): Promise<Booking> {
     return this.uow.withTransaction(async (client) => {
+      await this.assertPaymentAllows(client, input.bookingId, input.to);
+
       await this.state.transition(client, {
         bookingId: input.bookingId,
         to: input.to,
@@ -327,6 +334,7 @@ export class BookingsService {
         ...(input.reason !== undefined ? { reason: input.reason } : {}),
       });
 
+      await this.applyPaymentEffects(client, input.bookingId, input.to);
       await this.publishLifecycleEvent(client, input.bookingId, input.to);
 
       const updated = await client.query<BookingRow>(`${SELECT_BOOKING} WHERE id = $1`, [
@@ -388,6 +396,56 @@ export class BookingsService {
       return 'ADMIN';
     }
     throw new BusinessException(ErrorCode.FORBIDDEN);
+  }
+
+  /**
+   * Geçişten **önce** çalışan ödeme kapısı.
+   *
+   * `SETTLED`, "sağlayıcıya ödendi" demektir. Para serbest bırakılmadan bu duruma
+   * geçilebilseydi, hiç para çıkmamışken mutabakatlanmış görünen rezervasyonlar
+   * üretilebilirdi (ADR-0009 §3: booking aggregate root, ödeme projeksiyondur —
+   * ama projeksiyon yalanlanamaz).
+   */
+  private async assertPaymentAllows(
+    client: PoolClient,
+    bookingId: string,
+    to: BookingStatus,
+  ): Promise<void> {
+    if (to === 'SETTLED') {
+      await this.payments.assertSettlementAllowed(client, bookingId);
+    }
+  }
+
+  /**
+   * Geçişten **sonra** çalışan ödeme etkileri.
+   *
+   * Ödeme durumu burada yalnızca **ilerletilir**; para hareketi başlatılmaz.
+   * Hizmet tamamlandı diye otomatik release yapılsaydı uyuşmazlık penceresi
+   * hiç olmazdı (ADR-0009 §6).
+   */
+  private async applyPaymentEffects(
+    client: PoolClient,
+    bookingId: string,
+    to: BookingStatus,
+  ): Promise<void> {
+    if (to === 'COMPLETED') {
+      await this.payments.markServiceCompleted(client, bookingId);
+      return;
+    }
+
+    if (to === 'DISPUTED' || to === 'SAFETY_HOLD') {
+      // Güvenlik askısı da parayı dondurur: askı sırasında release edilebilseydi
+      // güvenlik incelemesi anlamsızlaşırdı.
+      await this.payments.freezeForDispute(client, bookingId);
+      return;
+    }
+
+    // Askıdan normal akışa dönüş (yanlış alarm): para çözülür. Çözülmeseydi bir güvenlik
+    // yanlış alarmı, hizmeti gerçekten tamamlamış sağlayıcının parasını kalıcı olarak
+    // dondururdu (Faz 5 review bulgusu C2).
+    if (to === 'IN_PROGRESS') {
+      await this.payments.unfreeze(client, bookingId);
+    }
   }
 
   private async publishLifecycleEvent(

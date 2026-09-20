@@ -18,9 +18,13 @@ import { OutboxModule } from './common/outbox/outbox.module';
 import { RateLimitGuard } from './common/ratelimit/rate-limit.guard';
 import { RateLimitModule } from './common/ratelimit/rate-limit.module';
 import { CustomersModule } from './customers/customers.module';
+import { DisputesModule } from './disputes/disputes.module';
+import { DocumentsModule } from './documents/documents.module';
 import { HealthModule } from './health/health.module';
 import { IdentityModule } from './identity/identity.module';
+import { PaymentsModule } from './payments/payments.module';
 import { ProvidersModule } from './providers/providers.module';
+import { ReviewsModule } from './reviews/reviews.module';
 import { UsersModule } from './users/users.module';
 
 @Module({
@@ -42,6 +46,10 @@ import { UsersModule } from './users/users.module';
     CatalogModule,
     AddressesModule,
     BookingsModule,
+    PaymentsModule,
+    DisputesModule,
+    DocumentsModule,
+    ReviewsModule,
   ],
   providers: [
     // Guard sırası önemlidir: oran sınırı → kimlik → rol.

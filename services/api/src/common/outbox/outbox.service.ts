@@ -12,6 +12,12 @@ export const EventType = {
   BOOKING_CANCELLED: 'BookingCancelled',
   SERVICE_STARTED: 'ServiceStarted',
   SERVICE_COMPLETED: 'ServiceCompleted',
+  PAYMENT_AUTHORIZED: 'PaymentAuthorized',
+  PAYMENT_RELEASED: 'PaymentReleased',
+  PAYMENT_REFUNDED: 'PaymentRefunded',
+  DISPUTE_OPENED: 'DisputeOpened',
+  DISPUTE_RESOLVED: 'DisputeResolved',
+  SERVICE_EVIDENCE_ADDED: 'ServiceEvidenceAdded',
 } as const;
 
 export type EventTypeValue = (typeof EventType)[keyof typeof EventType];

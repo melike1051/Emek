@@ -68,8 +68,22 @@ describe('OpenAPI contract (integration)', () => {
   it('sözleşme henüz uygulanmamış endpoint içermez', () => {
     const paths = Object.keys(generated.paths ?? {});
 
-    // Ödeme ve safety sonraki fazlara ait: sözleşmede erken görünmemeli
-    // (istemciler var olmayan endpoint'e göre geliştirilmesin).
-    expect(paths.filter((path) => /payments|safety/.test(path))).toEqual([]);
+    // Safety Faz 8'e ait: sözleşmede erken görünmemeli (istemciler var olmayan
+    // endpoint'e göre geliştirilmesin). Ödeme Faz 5'te uygulandı ve artık listededir.
+    expect(paths.filter((path) => /safety|telemetry/.test(path))).toEqual([]);
+  });
+
+  it('ödeme endpoint.leri sözleşmede yer alır', () => {
+    const paths = Object.keys(generated.paths ?? {});
+
+    expect(paths).toEqual(
+      expect.arrayContaining([
+        '/api/v1/bookings/{id}/payment',
+        '/api/v1/payments/{id}/release',
+        '/api/v1/payments/webhook',
+        '/api/v1/bookings/{id}/disputes',
+        '/api/v1/documents',
+      ]),
+    );
   });
 });

@@ -57,6 +57,29 @@ export const envSchema = z
     // Hesap kurtarma bir devralma yoludur: NFC tek başına yetmez (ADR-0005).
     RECOVERY_MIN_ASSURANCE: z.enum(['LOW', 'SUBSTANTIAL', 'HIGH']).default('HIGH'),
 
+    // --- Payment (ADR-0009) ---
+    PAYMENT_WEBHOOK_SECRET: z.string().min(16).default('local-development-payment-secret'),
+    // Yetkilendirmenin geçerlilik süresi. Gerçek sağlayıcılarda tipik olarak birkaç gün;
+    // hizmet günü bundan sonraysa re-authorization zorunludur (ADR-0009 §4).
+    PAYMENT_AUTHORIZATION_TTL_HOURS: z.coerce.number().int().min(1).max(720).default(168),
+    // Yetkilendirmenin bitişine bu süreden az kaldıysa yenileme gerekir.
+    PAYMENT_REAUTH_THRESHOLD_HOURS: z.coerce.number().int().min(1).max(168).default(24),
+    PAYMENT_MAX_REAUTHORIZATIONS: z.coerce.number().int().min(0).max(10).default(3),
+
+    // --- Object storage (dijital ispat) ---
+    // Nesneler private'tır; erişim yalnızca kısa ömürlü signed URL ile olur (T-12).
+    STORAGE_PROVIDER: z.enum(['mock', 'gcs']).default('mock'),
+    STORAGE_BUCKET: z.string().min(1).default('emek-local-documents'),
+    STORAGE_SIGNING_SECRET: z.string().min(16).default('local-development-storage-secret'),
+    // URL ömrü kısa tutulur: uzun ömürlü imzalı URL, pratikte public link demektir.
+    STORAGE_SIGNED_URL_TTL_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
+    STORAGE_MAX_UPLOAD_BYTES: z.coerce
+      .number()
+      .int()
+      .min(1024)
+      .max(64 * 1024 * 1024)
+      .default(10 * 1024 * 1024),
+
     AI_SERVICE_URL: z.string().url().default('http://localhost:8000'),
     AI_SERVICE_TIMEOUT_MS: z.coerce.number().int().min(100).max(60000).default(3000),
 
@@ -104,15 +127,35 @@ export const envSchema = z
     const localDefaults: [string, string][] = [
       ['IDENTITY_HASH_KEY', 'local-development-identity-hash-key-000'],
       ['IDENTITY_CALLBACK_SECRET', 'local-development-callback-secret'],
+      ['PAYMENT_WEBHOOK_SECRET', 'local-development-payment-secret'],
+      ['STORAGE_SIGNING_SECRET', 'local-development-storage-secret'],
     ];
     for (const [key, localValue] of localDefaults) {
-      if (env[key as 'IDENTITY_HASH_KEY' | 'IDENTITY_CALLBACK_SECRET'] === localValue) {
+      if (
+        env[
+          key as
+            | 'IDENTITY_HASH_KEY'
+            | 'IDENTITY_CALLBACK_SECRET'
+            | 'PAYMENT_WEBHOOK_SECRET'
+            | 'STORAGE_SIGNING_SECRET'
+        ] === localValue
+      ) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: [key],
           message: `${key} production ortamında yerel varsayılan değeri olamaz`,
         });
       }
+    }
+
+    // Mock storage bellekte tutar ve süreç yeniden başladığında kanıtları kaybeder;
+    // "dijital ispat" iddiası bununla taşınamaz.
+    if (env.STORAGE_PROVIDER !== 'gcs') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['STORAGE_PROVIDER'],
+        message: 'STORAGE_PROVIDER production ortamında gcs olmalı',
+      });
     }
 
     if (env.PUBSUB_EMULATOR_HOST !== undefined) {

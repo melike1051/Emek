@@ -10,7 +10,9 @@
             "description": ""
           }
         },
-        "tags": ["Health"]
+        "tags": [
+          "Health"
+        ]
       }
     },
     "/api/v1/health": {
@@ -22,7 +24,9 @@
             "description": ""
           }
         },
-        "tags": ["Health"]
+        "tags": [
+          "Health"
+        ]
       }
     },
     "/api/v1/auth/session": {
@@ -34,7 +38,9 @@
             "description": ""
           }
         },
-        "tags": ["Auth"]
+        "tags": [
+          "Auth"
+        ]
       }
     },
     "/api/v1/users/me": {
@@ -46,7 +52,9 @@
             "description": ""
           }
         },
-        "tags": ["Users"]
+        "tags": [
+          "Users"
+        ]
       },
       "patch": {
         "operationId": "UsersController_updateMe",
@@ -66,7 +74,9 @@
             "description": ""
           }
         },
-        "tags": ["Users"]
+        "tags": [
+          "Users"
+        ]
       }
     },
     "/api/v1/users/me/roles": {
@@ -78,7 +88,9 @@
             "description": ""
           }
         },
-        "tags": ["Users"]
+        "tags": [
+          "Users"
+        ]
       }
     },
     "/api/v1/customers/profile": {
@@ -100,7 +112,9 @@
             "description": ""
           }
         },
-        "tags": ["Customers"]
+        "tags": [
+          "Customers"
+        ]
       }
     },
     "/api/v1/customers/me": {
@@ -112,7 +126,9 @@
             "description": ""
           }
         },
-        "tags": ["Customers"]
+        "tags": [
+          "Customers"
+        ]
       },
       "patch": {
         "operationId": "CustomersController_update",
@@ -132,7 +148,9 @@
             "description": ""
           }
         },
-        "tags": ["Customers"]
+        "tags": [
+          "Customers"
+        ]
       }
     },
     "/api/v1/providers/profile": {
@@ -154,7 +172,9 @@
             "description": ""
           }
         },
-        "tags": ["Providers"]
+        "tags": [
+          "Providers"
+        ]
       }
     },
     "/api/v1/providers/me": {
@@ -166,7 +186,9 @@
             "description": ""
           }
         },
-        "tags": ["Providers"]
+        "tags": [
+          "Providers"
+        ]
       },
       "patch": {
         "operationId": "ProvidersController_update",
@@ -186,7 +208,9 @@
             "description": ""
           }
         },
-        "tags": ["Providers"]
+        "tags": [
+          "Providers"
+        ]
       }
     },
     "/api/v1/providers/me/skills": {
@@ -198,7 +222,9 @@
             "description": ""
           }
         },
-        "tags": ["Providers"]
+        "tags": [
+          "Providers"
+        ]
       },
       "post": {
         "operationId": "ProvidersController_addSkill",
@@ -218,7 +244,9 @@
             "description": ""
           }
         },
-        "tags": ["Providers"]
+        "tags": [
+          "Providers"
+        ]
       }
     },
     "/api/v1/providers/me/availability": {
@@ -230,7 +258,9 @@
             "description": ""
           }
         },
-        "tags": ["Providers"]
+        "tags": [
+          "Providers"
+        ]
       },
       "post": {
         "operationId": "ProvidersController_addAvailability",
@@ -250,7 +280,9 @@
             "description": ""
           }
         },
-        "tags": ["Providers"]
+        "tags": [
+          "Providers"
+        ]
       }
     },
     "/api/v1/providers/me/availability/{availabilityId}": {
@@ -271,7 +303,9 @@
             "description": ""
           }
         },
-        "tags": ["Providers"]
+        "tags": [
+          "Providers"
+        ]
       }
     },
     "/api/v1/providers/me/skills/{skillId}": {
@@ -292,7 +326,9 @@
             "description": ""
           }
         },
-        "tags": ["Providers"]
+        "tags": [
+          "Providers"
+        ]
       }
     },
     "/api/v1/verification/session": {
@@ -314,7 +350,9 @@
             "description": ""
           }
         },
-        "tags": ["Identity"]
+        "tags": [
+          "Identity"
+        ]
       }
     },
     "/api/v1/verification/session/{id}": {
@@ -335,7 +373,9 @@
             "description": ""
           }
         },
-        "tags": ["Identity"]
+        "tags": [
+          "Identity"
+        ]
       }
     },
     "/api/v1/verification/callback": {
@@ -347,7 +387,9 @@
             "description": ""
           }
         },
-        "tags": ["Identity"]
+        "tags": [
+          "Identity"
+        ]
       }
     },
     "/api/v1/verification/status": {
@@ -359,7 +401,9 @@
             "description": ""
           }
         },
-        "tags": ["Identity"]
+        "tags": [
+          "Identity"
+        ]
       }
     },
     "/api/v1/service-categories": {
@@ -371,7 +415,9 @@
             "description": ""
           }
         },
-        "tags": ["Catalog"]
+        "tags": [
+          "Catalog"
+        ]
       }
     },
     "/api/v1/services": {
@@ -383,7 +429,9 @@
             "description": ""
           }
         },
-        "tags": ["Catalog"]
+        "tags": [
+          "Catalog"
+        ]
       }
     },
     "/api/v1/services/{id}": {
@@ -404,7 +452,9 @@
             "description": ""
           }
         },
-        "tags": ["Catalog"]
+        "tags": [
+          "Catalog"
+        ]
       }
     },
     "/api/v1/skills": {
@@ -416,7 +466,9 @@
             "description": ""
           }
         },
-        "tags": ["Catalog"]
+        "tags": [
+          "Catalog"
+        ]
       }
     },
     "/api/v1/addresses": {
@@ -428,7 +480,9 @@
             "description": ""
           }
         },
-        "tags": ["Addresses"]
+        "tags": [
+          "Addresses"
+        ]
       },
       "post": {
         "operationId": "AddressesController_create",
@@ -448,7 +502,9 @@
             "description": ""
           }
         },
-        "tags": ["Addresses"]
+        "tags": [
+          "Addresses"
+        ]
       }
     },
     "/api/v1/addresses/{id}": {
@@ -469,7 +525,9 @@
             "description": ""
           }
         },
-        "tags": ["Addresses"]
+        "tags": [
+          "Addresses"
+        ]
       }
     },
     "/api/v1/bookings": {
@@ -491,7 +549,9 @@
             "description": ""
           }
         },
-        "tags": ["Bookings"]
+        "tags": [
+          "Bookings"
+        ]
       },
       "get": {
         "operationId": "BookingsController_list",
@@ -501,7 +561,9 @@
             "description": ""
           }
         },
-        "tags": ["Bookings"]
+        "tags": [
+          "Bookings"
+        ]
       }
     },
     "/api/v1/bookings/{id}": {
@@ -522,7 +584,9 @@
             "description": ""
           }
         },
-        "tags": ["Bookings"]
+        "tags": [
+          "Bookings"
+        ]
       }
     },
     "/api/v1/bookings/{id}/history": {
@@ -543,7 +607,9 @@
             "description": ""
           }
         },
-        "tags": ["Bookings"]
+        "tags": [
+          "Bookings"
+        ]
       }
     },
     "/api/v1/bookings/{id}/confirm": {
@@ -564,7 +630,9 @@
             "description": ""
           }
         },
-        "tags": ["Bookings"]
+        "tags": [
+          "Bookings"
+        ]
       }
     },
     "/api/v1/bookings/{id}/cancel": {
@@ -595,7 +663,9 @@
             "description": ""
           }
         },
-        "tags": ["Bookings"]
+        "tags": [
+          "Bookings"
+        ]
       }
     },
     "/api/v1/bookings/{id}/transitions": {
@@ -626,7 +696,392 @@
             "description": ""
           }
         },
-        "tags": ["Bookings"]
+        "tags": [
+          "Bookings"
+        ]
+      }
+    },
+    "/api/v1/bookings/{id}/payment": {
+      "post": {
+        "operationId": "PaymentsController_authorize",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Payments"
+        ]
+      },
+      "get": {
+        "operationId": "PaymentsController_detail",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Payments"
+        ]
+      }
+    },
+    "/api/v1/payments/{id}/release": {
+      "post": {
+        "operationId": "PaymentsController_release",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Payments"
+        ]
+      }
+    },
+    "/api/v1/payments/{id}/refund": {
+      "post": {
+        "operationId": "PaymentsController_refund",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefundPaymentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Payments"
+        ]
+      }
+    },
+    "/api/v1/payments/{id}/reauthorize": {
+      "post": {
+        "operationId": "PaymentsController_reauthorize",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Payments"
+        ]
+      }
+    },
+    "/api/v1/payments/webhook": {
+      "post": {
+        "operationId": "PaymentsController_webhook",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Payments"
+        ]
+      }
+    },
+    "/api/v1/bookings/{id}/disputes": {
+      "post": {
+        "operationId": "DisputesController_open",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenDisputeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Disputes"
+        ]
+      },
+      "get": {
+        "operationId": "DisputesController_list",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Disputes"
+        ]
+      }
+    },
+    "/api/v1/disputes/{id}/resolve": {
+      "post": {
+        "operationId": "DisputesController_resolve",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveDisputeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Disputes"
+        ]
+      }
+    },
+    "/api/v1/documents": {
+      "post": {
+        "operationId": "DocumentsController_register",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDocumentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
+    "/api/v1/documents/{id}/confirm": {
+      "post": {
+        "operationId": "DocumentsController_confirm",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmUploadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
+    "/api/v1/documents/{id}/download-url": {
+      "get": {
+        "operationId": "DocumentsController_downloadUrl",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
+    "/api/v1/bookings/{id}/documents": {
+      "get": {
+        "operationId": "DocumentsController_listForBooking",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Documents"
+        ]
+      }
+    },
+    "/api/v1/bookings/{id}/review": {
+      "post": {
+        "operationId": "ReviewsController_create",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReviewDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Reviews"
+        ]
+      }
+    },
+    "/api/v1/users/{id}/reviews": {
+      "get": {
+        "operationId": "ReviewsController_listForUser",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Reviews"
+        ]
       }
     }
   },
@@ -693,6 +1148,30 @@
         "properties": {}
       },
       "TransitionBookingDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "RefundPaymentDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "OpenDisputeDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "ResolveDisputeDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "RegisterDocumentDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "ConfirmUploadDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateReviewDto": {
         "type": "object",
         "properties": {}
       }

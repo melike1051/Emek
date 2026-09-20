@@ -115,6 +115,12 @@ Bu yapıyı değiştirmek gerekirse önce `docs/architecture/adr/` altında ADR 
 - PSP'ye giden çağrılar senkron ve kendi idempotency key'ini taşır. **Event'ten para hareketi
   tetiklenmez** (at-least-once teslim → çift yetkilendirme).
 - Yetkilendirme süresi dolabilir: `authorization_expires_at` + re-authorization akışı zorunlu.
+- **Giden** çağrıların idempotency'si `payment_commands`'ta tutulur: `external_event_id`
+  yalnızca **geleni** tekilleştirir. Her işlemin kendi anahtarı olur (ADR-0017 §4).
+- Para serbest bırakılmadan booking `SETTLED` olamaz; hizmet tamamlandı diye para otomatik
+  çıkmaz (uyuşmazlık penceresi).
+- Kanıt dosyaları private storage'da; erişim yalnızca kısa ömürlü signed URL ile ve audit'li.
+  `sha256` storage'daki nesneden okunur, yazıldıktan sonra değiştirilemez.
 
 **Security**
 
@@ -157,7 +163,7 @@ Bu yapıyı değiştirmek gerekirse önce `docs/architecture/adr/` altında ADR 
 | 2   | Core backend: auth, users, roles, RBAC, profiller, service catalog, skills, error handling + **audit (rol ayrımı/hash zinciri), outbox, idempotency altyapısı** | ✅ tamamlandı |
 | 3   | Identity: adapter, identity_records, unique identity, recovery, verification levels                                                                             | ✅ tamamlandı |
 | 4   | Provider & Booking: availability, PostGIS service areas, booking state machine                                                                                  | ✅ tamamlandı |
-| 5   | Payment & Digital Proof: adapter, webhook idempotency, documents, disputes                                                                                      | sırada        |
+| 5   | Payment & Digital Proof: adapter, webhook idempotency, documents, disputes                                                                                      | ✅ tamamlandı |
 | 6   | Python AI/NLP: structured extraction, versiyonlama, evaluation dataset                                                                                          |               |
 | 7   | Matching & Optimization: retrieval, constraints, scoring, OR-Tools, explainability, benchmark                                                                   |               |
 | 8   | Safety: sessions, geofence, telemetry, rules + anomaly, panic flow                                                                                              |               |
@@ -200,7 +206,7 @@ ADR-0015), Python 3.12 + uv. Build `tsc` iledir; `@nestjs/cli` kullanılmaz.
 | Dosya                                       | İçerik                                                         |
 | ------------------------------------------- | -------------------------------------------------------------- |
 | `docs/architecture/initial-assessment.md`   | Mevcut durum, boşluk analizi, anti-hedefler                    |
-| `docs/architecture/adr/`                    | Architecture Decision Record'lar (0001-0015)                   |
+| `docs/architecture/adr/`                    | Architecture Decision Record'lar (0001-0017)                   |
 | `docs/api/error-codes.md`                   | Business error kodları                                         |
 | `docs/architecture/local-development.md`    | Kurulum, komutlar, sorun giderme                               |
 | `docs/database/schema.md`                   | Şema, invariant'lar, migration kuralları                       |
