@@ -2,8 +2,9 @@ import { Global, Module } from '@nestjs/common';
 import type { Logger } from 'pino';
 import { AppConfigService } from '../config/app-config.service';
 import { createRootLogger } from './logger';
+import { ROOT_LOGGER } from './logging.tokens';
 
-export const ROOT_LOGGER = Symbol('ROOT_LOGGER');
+export { ROOT_LOGGER } from './logging.tokens';
 
 /**
  * Uygulamada tek bir pino örneği olur: Nest framework logları, exception filter ve

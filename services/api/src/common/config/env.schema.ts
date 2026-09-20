@@ -40,6 +40,10 @@ export const envSchema = z
     IDENTITY_PROVIDER: providerSchema.default('mock'),
     PAYMENT_PROVIDER: providerSchema.default('mock'),
 
+    // Kimlik doğrulama sağlayıcısı (ADR-0016). 'mock' yalnızca development/test içindir.
+    AUTH_PROVIDER: z.enum(['firebase', 'mock']).default('mock'),
+    FIREBASE_PROJECT_ID: z.string().min(1).default('emek-local'),
+
     AI_SERVICE_URL: z.string().url().default('http://localhost:8000'),
     AI_SERVICE_TIMEOUT_MS: z.coerce.number().int().min(100).max(60000).default(3000),
 
@@ -54,7 +58,7 @@ export const envSchema = z
       return;
     }
 
-    for (const key of ['IDENTITY_PROVIDER', 'PAYMENT_PROVIDER'] as const) {
+    for (const key of ['IDENTITY_PROVIDER', 'PAYMENT_PROVIDER', 'AUTH_PROVIDER'] as const) {
       if (env[key] === 'mock') {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -62,6 +66,16 @@ export const envSchema = z
           message: `${key}=mock production ortamında kullanılamaz`,
         });
       }
+    }
+
+    // Firebase token doğrulaması audience/issuer olarak proje kimliğini kullanır;
+    // yerel varsayılanla production'a çıkmak tüm token'ları geçersiz kılar (ADR-0016).
+    if (env.AUTH_PROVIDER === 'firebase' && env.FIREBASE_PROJECT_ID === 'emek-local') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['FIREBASE_PROJECT_ID'],
+        message: 'FIREBASE_PROJECT_ID production ortamında gerçek proje kimliği olmalı',
+      });
     }
 
     if (env.PUBSUB_EMULATOR_HOST !== undefined) {

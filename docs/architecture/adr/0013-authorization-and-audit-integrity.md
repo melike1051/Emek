@@ -63,6 +63,24 @@ Hash zinciri ucuzdur ve ayrıcalıklı erişim senaryosunda tek tespit mekanizma
 - Test zorunlu: T-30 (IDOR/rol), T-35 (uygulama rolüyle audit UPDATE/DELETE denemesi başarısız),
   T-36 (hash zinciri kopukluğu tespit edilir).
 
+## Uygulama notu (Faz 2)
+
+Karar §6 "uygulama rolünden UPDATE/DELETE yetkisinin alınması" diyordu. Faz 2'de bu,
+**veritabanı trigger'ı** ile uygulandı ve rol ayrımı Faz 13'e alındı:
+
+- `audit_logs` üzerinde `BEFORE UPDATE OR DELETE` ve `BEFORE TRUNCATE` trigger'ları işlemi
+  reddeder. Bu koruma **role bağlı değildir**: bağlantı hangi kullanıcıyla açılırsa açılsın
+  geçerlidir. Yetki tabanlı korumadan daha geniştir ve Faz 2'de hemen uygulanabilir.
+- Gerçek DB rol ayrımı (`emek_app` rolü, migration rolünden ayrı kimlik bilgisi) Cloud SQL
+  kullanıcılarının Terraform ile sağlandığı **Faz 13**'te yapılır; yerelde ikinci bir rol için
+  kimlik bilgisi üretmek, migration dosyasına parola koymak anlamına gelirdi.
+- Hash zinciri (`prev_hash`/`hash`) ve `audit_chain_broken_at()` doğrulama fonksiyonu
+  veritabanında hesaplanır: uygulama katmanı zinciri atlayamaz veya yanlış hesaplayamaz.
+- **`actor_user_id` üzerinde foreign key yoktur.** Audit değişmez olduğu için
+  `ON DELETE SET NULL/CASCADE` uygulanamaz; FK `NO ACTION` olarak kalsaydı denetlenmiş bir
+  kullanıcı hiç silinemez ve KVKK silme talebi (Faz 12) teknik olarak imkânsız olurdu.
+  Referans "soft"tur; tarihsel kayıt kullanıcı silinse bile kimin işlem yaptığını gösterir.
+
 ## Alternatifler
 
 - **Yalnız uygulama seviyesinde "silmeyiz" disiplini (reddedildi):** kanıtlanamaz.

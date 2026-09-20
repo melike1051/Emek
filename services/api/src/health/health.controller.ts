@@ -1,8 +1,11 @@
 import { Controller, Get, HttpCode, HttpStatus, Res } from '@nestjs/common';
 import type { Response } from 'express';
+import { Public } from '../auth/auth.decorators';
 import { HealthService, type HealthReport } from './health.service';
 
 @Controller('health')
+// Health, orchestrator ve load balancer tarafından çağrılır: kimlik doğrulaması olamaz.
+@Public()
 export class HealthController {
   constructor(private readonly health: HealthService) {}
 

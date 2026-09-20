@@ -2,9 +2,10 @@ import { Global, Inject, Module, type OnApplicationShutdown } from '@nestjs/comm
 import Redis from 'ioredis';
 import type { Logger } from 'pino';
 import { AppConfigService } from '../config/app-config.service';
-import { ROOT_LOGGER } from '../logging/logging.module';
+import { ROOT_LOGGER } from '../logging/logging.tokens';
+import { REDIS_CLIENT } from './redis.tokens';
 
-export const REDIS_CLIENT = Symbol('REDIS_CLIENT');
+export { REDIS_CLIENT } from './redis.tokens';
 
 @Global()
 @Module({

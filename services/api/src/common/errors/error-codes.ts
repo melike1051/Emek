@@ -15,6 +15,13 @@ export const ErrorCode = {
   RATE_LIMITED: 'RATE_LIMITED',
   SERVICE_DEGRADED: 'SERVICE_DEGRADED',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
+  IDEMPOTENCY_KEY_REUSED: 'IDEMPOTENCY_KEY_REUSED',
+  IDEMPOTENCY_IN_PROGRESS: 'IDEMPOTENCY_IN_PROGRESS',
+  VERIFICATION_REQUIRED: 'VERIFICATION_REQUIRED',
+  AUTH_CONTACT_REQUIRED: 'AUTH_CONTACT_REQUIRED',
+  PROFILE_ALREADY_EXISTS: 'PROFILE_ALREADY_EXISTS',
+  PROFILE_NOT_FOUND: 'PROFILE_NOT_FOUND',
+  SKILL_ALREADY_ADDED: 'SKILL_ALREADY_ADDED',
 } as const;
 
 export type ErrorCodeValue = (typeof ErrorCode)[keyof typeof ErrorCode];
@@ -28,6 +35,13 @@ export const ERROR_STATUS: Record<ErrorCodeValue, HttpStatus> = {
   [ErrorCode.RATE_LIMITED]: HttpStatus.TOO_MANY_REQUESTS,
   [ErrorCode.SERVICE_DEGRADED]: HttpStatus.SERVICE_UNAVAILABLE,
   [ErrorCode.INTERNAL_ERROR]: HttpStatus.INTERNAL_SERVER_ERROR,
+  [ErrorCode.IDEMPOTENCY_KEY_REUSED]: HttpStatus.CONFLICT,
+  [ErrorCode.IDEMPOTENCY_IN_PROGRESS]: HttpStatus.CONFLICT,
+  [ErrorCode.VERIFICATION_REQUIRED]: HttpStatus.FORBIDDEN,
+  [ErrorCode.AUTH_CONTACT_REQUIRED]: HttpStatus.BAD_REQUEST,
+  [ErrorCode.PROFILE_ALREADY_EXISTS]: HttpStatus.CONFLICT,
+  [ErrorCode.PROFILE_NOT_FOUND]: HttpStatus.NOT_FOUND,
+  [ErrorCode.SKILL_ALREADY_ADDED]: HttpStatus.CONFLICT,
 };
 
 /**
@@ -43,6 +57,15 @@ export const CLIENT_MESSAGES: Record<ErrorCodeValue, string> = {
   [ErrorCode.RATE_LIMITED]: 'Çok fazla istek gönderildi, lütfen sonra tekrar deneyin.',
   [ErrorCode.SERVICE_DEGRADED]: 'Servis şu anda tam kapasiteyle çalışmıyor.',
   [ErrorCode.INTERNAL_ERROR]: 'Beklenmeyen bir hata oluştu.',
+  [ErrorCode.IDEMPOTENCY_KEY_REUSED]:
+    'Bu istek anahtarı farklı bir içerikle kullanılmış. Yeni bir anahtarla tekrar deneyin.',
+  [ErrorCode.IDEMPOTENCY_IN_PROGRESS]: 'Aynı istek hâlâ işleniyor, lütfen tekrar deneyin.',
+  [ErrorCode.VERIFICATION_REQUIRED]: 'Bu işlem için hesabınızın doğrulanması gerekiyor.',
+  [ErrorCode.AUTH_CONTACT_REQUIRED]:
+    'Hesap oluşturmak için e-posta veya telefon bilgisi gerekiyor.',
+  [ErrorCode.PROFILE_ALREADY_EXISTS]: 'Bu profil zaten oluşturulmuş.',
+  [ErrorCode.PROFILE_NOT_FOUND]: 'Profil bulunamadı.',
+  [ErrorCode.SKILL_ALREADY_ADDED]: 'Bu yetkinlik profilinizde zaten var.',
 };
 
 /** HTTP status → kod (framework'ün ürettiği HttpException'ları kodlu yanıta çevirmek için). */

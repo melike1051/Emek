@@ -15,10 +15,14 @@ bağlı olabilir.
 
 ## Migration dosyaları
 
-| Migration                           | İçerik                                                         |
-| ----------------------------------- | -------------------------------------------------------------- |
-| `…120000_shared-updated-at-trigger` | Paylaşılan `set_updated_at()` fonksiyonu                       |
-| `…120100_init-extensions-and-users` | Extension'lar, `user_status`/`app_role`, `users`, `user_roles` |
+| Migration                           | İçerik                                                                             | Faz |
+| ----------------------------------- | ---------------------------------------------------------------------------------- | --- |
+| `…120000_shared-updated-at-trigger` | Paylaşılan `set_updated_at()` fonksiyonu                                           | 1   |
+| `…120100_init-extensions-and-users` | Extension'lar, `user_status`/`app_role`, `users`, `user_roles`                     | 1   |
+| `…130000_audit-logs`                | `audit_logs` + hash zinciri + değişmezlik trigger'ları + `audit_chain_broken_at()` | 2   |
+| `…130100_outbox-and-idempotency`    | `outbox`, `processed_events`, `idempotency_keys`                                   | 2   |
+| `…130200_profiles-and-catalog`      | `customer_profiles`, `provider_profiles`, katalog ve yetkinlik tabloları           | 2   |
+| `…130300_auth-subjects`             | `auth_subjects` (sağlayıcı subject → user eşlemesi)                                | 2   |
 
 `set_updated_at()` kendi migration'ındadır: birden çok tablo ona bağlanacak ve fonksiyon ilk
 kullanan tablonun migration'ına gömülürse o migration'ın `down` yönü sonraki tabloların
@@ -85,13 +89,51 @@ akışı (Faz 12 retention) iletişim alanlarını anonimleştirir; index'e `DEL
 PK `(user_id, role)`: aynı rol iki kez verilemez, aynı kullanıcı birden fazla role sahip olabilir
 (müşteri + sağlayıcı aynı hesapta — ADR-0004).
 
+## Faz 2 tabloları
+
+### `audit_logs` — değişmez denetim kaydı (ADR-0013)
+
+| Invariant                 | Nasıl                                                                                                                                                         |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Append-only               | `BEFORE UPDATE OR DELETE` ve `BEFORE TRUNCATE` trigger'ları işlemi reddeder (role bağlı değil)                                                                |
+| Tamper-evident            | `prev_hash`/`hash` zinciri veritabanında hesaplanır; `audit_chain_broken_at()` ilk bozuk satırı döner                                                         |
+| Eşzamanlılık              | zincir hesaplaması `pg_advisory_xact_lock` ile serileştirilir (çatallanma olmaz)                                                                              |
+| Kullanıcı silinebilirliği | `actor_user_id` üzerinde **FK yok**: audit değişmez olduğu için CASCADE/SET NULL uygulanamaz; FK olsaydı denetlenmiş kullanıcı hiç silinemezdi (KVKK, Faz 12) |
+| Hassas veri               | `old_value`/`new_value` yalnızca "hangi alan değişti" bilgisini taşır, değerleri taşımaz                                                                      |
+
+### `outbox`, `processed_events`, `idempotency_keys` (ADR-0010, ADR-0003)
+
+| Tablo              | Amaç                                                    | Kritik nokta                                                                                                          |
+| ------------------ | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `outbox`           | domain değişikliğiyle aynı transaction'da yazılan event | `status <> 'PUBLISHED'` kısmi indeksi; `CHECK ((status='PUBLISHED') = (published_at IS NOT NULL))` tutarlılığı zorlar |
+| `processed_events` | tüketici bazlı idempotency                              | PK `(consumer, event_id)`: aynı event farklı tüketicilerde bir kez işlenir                                            |
+| `idempotency_keys` | komut idempotency'si                                    | PK `(scope, key)`; `request_fingerprint` aynı anahtarın farklı gövdeyle kullanımını yakalar; Redis'te tutulmaz        |
+
+### `auth_subjects`
+
+Oturum kimliği (Firebase `sub`) ↔ `users.id` eşlemesi. Faz 3'te gelecek `identity_records`'dan
+**ayrıdır**: bu tablo oturum kimliğiyle, o tablo doğrulanmış gerçek kimlikle ilgilidir.
+PK `(provider, provider_subject)` aynı subject'in iki kullanıcıya bağlanmasını,
+`UNIQUE (user_id, provider)` bir kullanıcının aynı sağlayıcıda iki subject'i olmasını engeller.
+
+### Profiller ve katalog
+
+| Tablo                                      | Kritik invariant'lar                                                                                                                        |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `customer_profiles`                        | `display_name` boş olamaz (`btrim` kontrolü)                                                                                                |
+| `provider_profiles`                        | `state` enum (`DRAFT`→`APPROVED`…); `rating_avg` 1-5 arası; `(rating_avg IS NULL) = (rating_count = 0)` — ortalama ve sayaç birbirini tutar |
+| `service_categories`, `services`, `skills` | `slug` regex ile kısıtlı ve UNIQUE; `services.default_duration_minutes` 1-1440                                                              |
+| `provider_skills`                          | PK `(provider_id, skill_id)`; `verified` varsayılan `FALSE` — doğrulama Faz 3'e ait                                                         |
+
+Katalog içeriği migration'a gömülmez; `npm run seed:catalog --workspace=@emek/api` ile yazılır
+(idempotent). Testler de aynı seed fonksiyonunu kullanır.
+
 ## Sonraki fazlarda gelecek yapılar
 
 Bunlar Faz 1'de **bilinçli olarak yok**; ilgili domain ile birlikte gelir:
 
 | Faz | Yapı                                                                                                                                                          |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2   | `audit_logs` (append-only + hash zinciri), `outbox`, `processed_events`, `idempotency_keys`, profiller, hizmet katalogu                                       |
 | 3   | `identity_records` (sağlayıcıdan bağımsız `identity_hash` unique index), `verification_attempts`                                                              |
 | 4   | `addresses`, `provider_service_areas` (MULTIPOLYGON + GIST), `availability`, `bookings` (+ `EXCLUDE USING GIST` iptal predikatıyla), `booking_status_history` |
 | 5   | `payments`, `payment_events`, `documents`, `disputes`, `reviews`                                                                                              |

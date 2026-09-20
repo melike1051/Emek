@@ -1,8 +1,10 @@
 import { Global, Inject, Module, type OnApplicationShutdown } from '@nestjs/common';
 import { Pool } from 'pg';
 import { AppConfigService } from '../config/app-config.service';
+import { POSTGRES_POOL } from './database.tokens';
+import { UnitOfWork } from './unit-of-work';
 
-export const POSTGRES_POOL = Symbol('POSTGRES_POOL');
+export { POSTGRES_POOL } from './database.tokens';
 
 @Global()
 @Module({
@@ -19,8 +21,9 @@ export const POSTGRES_POOL = Symbol('POSTGRES_POOL');
           idleTimeoutMillis: 30000,
         }),
     },
+    UnitOfWork,
   ],
-  exports: [POSTGRES_POOL],
+  exports: [POSTGRES_POOL, UnitOfWork],
 })
 export class DatabaseModule implements OnApplicationShutdown {
   constructor(@Inject(POSTGRES_POOL) private readonly pool: Pool) {}

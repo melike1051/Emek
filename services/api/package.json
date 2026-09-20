@@ -14,15 +14,19 @@
     "test:integration": "dotenv -e ../../.env -- jest --config jest.integration.config.js",
     "migrate:up": "dotenv -e ../../.env -- node-pg-migrate up",
     "migrate:down": "dotenv -e ../../.env -- node-pg-migrate down",
-    "migrate:redo": "npm run migrate:down && npm run migrate:up"
+    "migrate:redo": "npm run migrate:down && npm run migrate:up",
+    "seed:catalog": "dotenv -e ../../.env -- node --require ts-node/register scripts/seed-catalog.ts",
+    "contracts:generate": "dotenv -e ../../.env -- node --require ts-node/register scripts/generate-openapi.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.6",
     "@nestjs/core": "^11.1.6",
     "@nestjs/platform-express": "^11.1.6",
+    "@nestjs/swagger": "^11.4.7",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "ioredis": "^5.4.2",
+    "jose": "^5.10.0",
     "pg": "^8.13.1",
     "pino": "^9.6.0",
     "reflect-metadata": "^0.2.2",

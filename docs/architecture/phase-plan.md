@@ -59,29 +59,29 @@ TypeScript 6, uv, sürüm pinleme).
 **Faz 1 code review bulguları ve çözümleri** (bağımsız review agent'ı; blueprint, ADR'ler ve
 test stratejisini sıfırdan okuyarak). Hepsi aynı faz içinde kapatıldı:
 
-| Bulgu | Çözüm |
-|---|---|
+| Bulgu                                                                                                                 | Çözüm                                                                                                                                                                |
+| --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `lazyConnect` + `enableOfflineQueue: false` ilk Redis komutunu her zaman reddediyor → health boot'tan sonra 503 döner | `enableOfflineQueue: true` + `commandTimeout`/`maxRetriesPerRequest` sınırları; `lazyConnect` kaldırıldı. Regresyon testi: `health-dependencies.integration.spec.ts` |
-| Integration testleri geliştirme veritabanını sıfırlıyor, veri temizliği yok | Ayrı `emek_test` veritabanı + `_test` son eki kontrolü (aksi halde koşucu başlamaz), `afterEach` TRUNCATE, `maxWorkers: 1` config'e taşındı |
-| Bootstrap yapılandırması testlerde kopyalanmış → üretimdeki davranış test edilmiyor | `configureApp()` ayrıştırıldı; main ve integration testleri aynı kurulumu kullanıyor |
-| `listen()` başarısız olursa açık pool/Redis ile süreç ayakta kalıyor | `app.close()` + `process.exit(1)` |
-| Global filter HTTP dışı bağlamda (Faz 9 Pub/Sub) Express response arayacak | `host.getType() !== 'http'` guard'ı + test |
-| `BusinessException` sabit mesaj politikasını atlayabiliyor | Mesaj varsayılan olarak `CLIENT_MESSAGES[code]`; özel metin açık `clientMessage` ile |
-| pino `redact` joker karakteri tek seviye eşliyor → derin PII maskelenmiyor | Anahtar adına göre derin maskeleme (`redact.ts`) + iç içe/`err` testleri |
-| İstemci `x-request-id` göndererek audit korelasyonunu bulandırabiliyor | `requestId` her zaman sunucuda üretilir; istemci değeri `clientTraceId` olarak yalnızca bilgi amaçlı taşınır |
-| Telefon normalize edilmiyor → aynı kişi birden fazla hesap açabilir | `users_phone_e164` CHECK + 5 biçim için test |
-| `DELETED` kullanıcı iletişim bilgisini serbest bırakıyor mu (tanımsız) | Karar yazıldı ve test edildi: tekillik `DELETED`'ı da kapsar |
-| Paylaşılan `set_updated_at()` ilk tablonun migration'ında → sonraki rollback'leri kırar | Kendi migration'ına alındı + sabit `search_path` |
-| Faz 3'e kadar kullanılmayan doğrulama enum'ları Faz 1'de oluşturuluyor | Kaldırıldı; `identity_records` ile gelecek (test bunu doğruluyor) |
-| `.dockerignore` yok → host `node_modules` ve `.env` imaja giriyor | `.dockerignore` eklendi |
-| CI'da `permissions` bloğu yok | `permissions: contents: read` |
-| Health endpoint'i kimlik doğrulamasız ve her çağrı 3 bağlantı alıyor | 1 saniyelik önbellek + eşzamanlı çağrıların tek turu paylaşması (+ test) |
-| Tautolojik testler (`latencyMs >= 0`, postgis mock'u postgres'ten ayrışmıyor) | Silindi/yeniden yazıldı; PostGIS eksikliği ayrı ayırt edilebilir senaryo oldu |
-| Aşırı mühendislik: 15 geçişli `AppConfigService`, tek dosya için `packages/config` workspace'i | Config doğrudan tiplenmiş `env` nesnesini sunar; `packages/config` kaldırıldı |
+| Integration testleri geliştirme veritabanını sıfırlıyor, veri temizliği yok                                           | Ayrı `emek_test` veritabanı + `_test` son eki kontrolü (aksi halde koşucu başlamaz), `afterEach` TRUNCATE, `maxWorkers: 1` config'e taşındı                          |
+| Bootstrap yapılandırması testlerde kopyalanmış → üretimdeki davranış test edilmiyor                                   | `configureApp()` ayrıştırıldı; main ve integration testleri aynı kurulumu kullanıyor                                                                                 |
+| `listen()` başarısız olursa açık pool/Redis ile süreç ayakta kalıyor                                                  | `app.close()` + `process.exit(1)`                                                                                                                                    |
+| Global filter HTTP dışı bağlamda (Faz 9 Pub/Sub) Express response arayacak                                            | `host.getType() !== 'http'` guard'ı + test                                                                                                                           |
+| `BusinessException` sabit mesaj politikasını atlayabiliyor                                                            | Mesaj varsayılan olarak `CLIENT_MESSAGES[code]`; özel metin açık `clientMessage` ile                                                                                 |
+| pino `redact` joker karakteri tek seviye eşliyor → derin PII maskelenmiyor                                            | Anahtar adına göre derin maskeleme (`redact.ts`) + iç içe/`err` testleri                                                                                             |
+| İstemci `x-request-id` göndererek audit korelasyonunu bulandırabiliyor                                                | `requestId` her zaman sunucuda üretilir; istemci değeri `clientTraceId` olarak yalnızca bilgi amaçlı taşınır                                                         |
+| Telefon normalize edilmiyor → aynı kişi birden fazla hesap açabilir                                                   | `users_phone_e164` CHECK + 5 biçim için test                                                                                                                         |
+| `DELETED` kullanıcı iletişim bilgisini serbest bırakıyor mu (tanımsız)                                                | Karar yazıldı ve test edildi: tekillik `DELETED`'ı da kapsar                                                                                                         |
+| Paylaşılan `set_updated_at()` ilk tablonun migration'ında → sonraki rollback'leri kırar                               | Kendi migration'ına alındı + sabit `search_path`                                                                                                                     |
+| Faz 3'e kadar kullanılmayan doğrulama enum'ları Faz 1'de oluşturuluyor                                                | Kaldırıldı; `identity_records` ile gelecek (test bunu doğruluyor)                                                                                                    |
+| `.dockerignore` yok → host `node_modules` ve `.env` imaja giriyor                                                     | `.dockerignore` eklendi                                                                                                                                              |
+| CI'da `permissions` bloğu yok                                                                                         | `permissions: contents: read`                                                                                                                                        |
+| Health endpoint'i kimlik doğrulamasız ve her çağrı 3 bağlantı alıyor                                                  | 1 saniyelik önbellek + eşzamanlı çağrıların tek turu paylaşması (+ test)                                                                                             |
+| Tautolojik testler (`latencyMs >= 0`, postgis mock'u postgres'ten ayrışmıyor)                                         | Silindi/yeniden yazıldı; PostGIS eksikliği ayrı ayırt edilebilir senaryo oldu                                                                                        |
+| Aşırı mühendislik: 15 geçişli `AppConfigService`, tek dosya için `packages/config` workspace'i                        | Config doğrudan tiplenmiş `env` nesnesini sunar; `packages/config` kaldırıldı                                                                                        |
 
 ---
 
-## Faz 2 — Core Backend
+## Faz 2 — Core Backend ✅
 
 **Kapsam:** Firebase Auth token doğrulama + session; `users`, `roles`, `user_roles`; RBAC guard'ları
 (`CUSTOMER`/`PROVIDER`/`ADMIN`/`SUPPORT`) + ownership kontrolü + `docs/security/rbac-matrix.md`
@@ -98,11 +98,45 @@ temeli.
   garantisi buna dayanır.
 - `idempotency_keys` tablosu ve `Idempotency-Key` middleware'i (ADR-0003).
 
-**Exit:** auth/RBAC testleri (yetkisiz erişim reddi, rol yükseltme denemesi, başka kullanıcının
-kaynağına erişim — T-30) yeşil; guard'sız endpoint taraması temiz (T-37); `audit_logs` uygulama
-rolüyle değiştirilemiyor (T-35); outbox commit edilmiş ama publish edilmemiş event'i kurtarıyor
-(T-39); idempotency Redis'ten bağımsız çalışıyor (T-07c); OpenAPI üretiliyor ve contract test var;
-ham 500 mesajı dışarı sızmıyor; loglarda PII yok (T-31, T-32).
+**Exit kriterleri (durum):**
+
+- ✅ Auth/RBAC: token yok/geçersiz → 401, rol yok → 403, askıya alınmış hesap → 403 (T-30).
+  Kullanıcı verisi yalnızca `/me` üzerinden; yol parametresiyle IDOR yüzeyi açılmadı.
+- ✅ Guard'sız endpoint taraması (T-37): rota keşfi guard ile **aynı** metadata çözümlemesini
+  kullanır ve beyaz liste iki yönlü doğrulanır (tespit bozulursa test kırılır).
+- ✅ `audit_logs` UPDATE/DELETE/TRUNCATE reddediliyor + hash zinciri kopukluğu tespit ediliyor
+  (T-35 kısmi — rol ayrımı Faz 13, T-36).
+- ✅ Outbox: event domain değişikliğiyle aynı transaction'da yazılıyor, transport hatasında
+  PENDING kalıp yeniden deneniyor, atomik sahiplenme çift yayını engelliyor (T-39).
+- ✅ Idempotency: kalıcı kayıt (Redis flush'ı bozmuyor — T-07c), farklı gövde reddi (T-07b),
+  eşzamanlı istek paralel yürütülmüyor, **kapsam kullanıcıyı içeriyor** (çapraz kullanıcı
+  sızıntısı testi).
+- ✅ OpenAPI sözleşmesi üretiliyor ve contract testi kod ile dosya ayrışmasını yakalıyor.
+- ✅ Ham 500 mesajı sızmıyor (T-31); loglarda PII yok (T-32, derin maskeleme).
+- ✅ 77 unit + 103 integration test; lint/typecheck/format/build temiz; `npm audit` 0 açık.
+
+**Bu fazda alınan ek karar:** ADR-0016 (Firebase ID token doğrulaması `jose` + JWKS ile;
+`firebase-admin` bağımlılığı reddedildi — 8 moderate açık ve kullanılmayan Firestore/Storage ağacı).
+
+**Faz 2 code review bulguları ve çözümleri** (bağımsız review agent'ı):
+
+| Bulgu                                                                                                                            | Çözüm                                                                                                             |
+| -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| **Kritik:** idempotency kapsamı kullanıcıyı içermiyordu → başka kullanıcının saklanmış yanıtı aynı anahtar+gövdeyle okunabilirdi | Kapsam `metot + yol + kullanıcı`; çapraz kullanıcı sızıntısı testi eklendi                                        |
+| `FOR UPDATE SKIP LOCKED` havuz üzerinden çalışan tek SELECT'te kilit tutmuyor → iki instance çift yayın yapar                    | Atomik sahiplenme: `UPDATE ... WHERE event_id IN (SELECT ... FOR UPDATE SKIP LOCKED) RETURNING` + kiralama süresi |
+| `OUTBOX_MAX_ATTEMPTS` etkisiz: claim sorgusu `FAILED` kayıtları da alıyordu                                                      | Claim yalnızca `PENDING` okur; FAILED kayıt bir daha alınmaz                                                      |
+| Audit hash zinciri eşzamanlılıkta çatallanıyor (`BIGSERIAL` id, trigger'dan önce atanır)                                         | Advisory lock trigger'dan çıkarılıp `AuditService.record()` içinde INSERT'ten önce alınıyor                       |
+| Zincir payload'ı oturum saat dilimine bağlıydı → farklı TZ ile bağlanan doğrulama işi her satırı "bozuk" görürdü                 | `to_char(... AT TIME ZONE 'UTC', ...)` ve `host(ip)` ile deterministik biçim                                      |
+| `complete()` fire-and-forget: yanıt kayıt yazılmadan gidiyordu; çökme sonrası anahtar 24 saat kilitli kalıyordu                  | Kayıt yanıttan önce yazılıyor; kiralama süresi dolan IN_PROGRESS rezervasyon devralınabiliyor                     |
+| Rate limit'in kullanıcı dalı ölüydü (guard auth'tan önce çalışıyor)                                                              | Ölü dal kaldırıldı, IP bazlı olduğu belgelendi; kullanıcı bazlı kota Faz 12                                       |
+| `UnitOfWork`: rollback başarısızsa bozuk bağlantı havuza dönüyordu                                                               | `client.release(error)` ile bağlantı yok ediliyor                                                                 |
+| Eşzamanlı ilk oturum unique ihlaliyle 500 veriyordu                                                                              | `23505` yakalanıp mevcut kullanıcı okunuyor + eşzamanlılık testi                                                  |
+| `auth_subjects` sorgusu `provider` filtrelemiyordu → ikinci sağlayıcı eklendiğinde kimlik karışması                              | Sorgu `provider`'ı da filtreliyor, sabit tek yerde                                                                |
+| T-35 "rol ayrımı Faz 2'de kurulu" diyordu ama trigger tabanlı koruma vardı                                                       | Test stratejisi dürüstleştirildi (kısmi), `REVOKE ... FROM PUBLIC` eklendi, rol ayrımı Faz 13                     |
+| Tamper testi geri yüklemeyi `try` içinde yapıyordu → assert düşerse zincir kalıcı bozulur                                        | Geri yükleme `finally`'ye taşındı                                                                                 |
+| Oran sınırı testi "fail-closed" diyordu ama onu test etmiyordu                                                                   | Başlık düzeltildi; fail-closed guard'ın unit testinde                                                             |
+| Route-coverage'da dolgu iddia (`protectedCount > n/2`)                                                                           | Kaldırıldı; testin metadata sınırı belgelendi                                                                     |
+| `audit_logs` down migration'ı denetim izini sessizce siliyor                                                                     | Uyarı yorumu + ADR-0013 §8 retention-locked export referansı                                                      |
 
 ---
 

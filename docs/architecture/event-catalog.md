@@ -48,6 +48,19 @@ Tek doğruluk kaynağı. Bir event burada tanımlanmadan yayınlanmaz; şemalar 
 | `DisputeOpened`     | dispute açıldı                | `disputeId`, `bookingId`, `openedBy`, `reason`                | payment (release bloğu), admin, notification, audit                             |
 | `ReviewCreated`     | review yazıldı                | `reviewId`, `bookingId`, `revieweeId`, `rating`               | quality score güncelleme, analytics                                             |
 
+## Uygulama durumu
+
+| Bileşen                                           | Durum                                                     |
+| ------------------------------------------------- | --------------------------------------------------------- |
+| `outbox` tablosu + transactional yazım            | ✅ Faz 2                                                  |
+| Publisher (poll + retry + backoff + FAILED eşiği) | ✅ Faz 2                                                  |
+| `processed_events` tablosu (consumer idempotency) | ✅ Faz 2 (tablo hazır, consumer'lar Faz 9)                |
+| `EventTransport` portu                            | ✅ Faz 2 — yerel log transport'u; Pub/Sub adapter'ı Faz 9 |
+| Topic/subscription topolojisi, DLQ, observability | ⏳ Faz 9                                                  |
+| Şema dosyaları (`packages/api-contracts/events/`) | ⏳ Faz 9                                                  |
+
+Yayınlanan eventler: `UserRegistered`, `ProviderProfileSubmitted` (Faz 2).
+
 ## Topic ve subscription yapısı (Faz 9)
 
 - **Domain başına topic** (`emek.booking`, `emek.payment`, `emek.safety`, gerekirse `emek.identity`);

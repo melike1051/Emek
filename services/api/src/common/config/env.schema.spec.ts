@@ -5,6 +5,15 @@ const baseEnv = {
   REDIS_URL: 'redis://localhost:6379',
 };
 
+/** Production'da geçerli olması gereken asgari yapılandırma. */
+const productionEnv = {
+  NODE_ENV: 'production',
+  IDENTITY_PROVIDER: 'live',
+  PAYMENT_PROVIDER: 'live',
+  AUTH_PROVIDER: 'firebase',
+  FIREBASE_PROJECT_ID: 'emek-production',
+};
+
 describe('validateEnv', () => {
   it('varsayılanlarla geçerli bir yapılandırma üretir', () => {
     const env = validateEnv({ ...baseEnv });
@@ -43,49 +52,51 @@ describe('validateEnv', () => {
 
   // ADR-0005 / ADR-0009: mock sağlayıcı production'da devre dışıdır.
   it('production + IDENTITY_PROVIDER=mock ile servis başlamaz', () => {
-    expect(() =>
-      validateEnv({
-        ...baseEnv,
-        NODE_ENV: 'production',
-        IDENTITY_PROVIDER: 'mock',
-        PAYMENT_PROVIDER: 'live',
-      }),
-    ).toThrow(/IDENTITY_PROVIDER/);
+    expect(() => validateEnv({ ...baseEnv, ...productionEnv, IDENTITY_PROVIDER: 'mock' })).toThrow(
+      /IDENTITY_PROVIDER/,
+    );
   });
 
   it('production + PAYMENT_PROVIDER=mock ile servis başlamaz', () => {
-    expect(() =>
-      validateEnv({
-        ...baseEnv,
-        NODE_ENV: 'production',
-        IDENTITY_PROVIDER: 'live',
-        PAYMENT_PROVIDER: 'mock',
-      }),
-    ).toThrow(/PAYMENT_PROVIDER/);
+    expect(() => validateEnv({ ...baseEnv, ...productionEnv, PAYMENT_PROVIDER: 'mock' })).toThrow(
+      /PAYMENT_PROVIDER/,
+    );
   });
 
   it('production ortamında Pub/Sub emulator tanımlı olamaz', () => {
     expect(() =>
-      validateEnv({
-        ...baseEnv,
-        NODE_ENV: 'production',
-        IDENTITY_PROVIDER: 'live',
-        PAYMENT_PROVIDER: 'live',
-        PUBSUB_EMULATOR_HOST: 'localhost:8085',
-      }),
+      validateEnv({ ...baseEnv, ...productionEnv, PUBSUB_EMULATOR_HOST: 'localhost:8085' }),
     ).toThrow(/PUBSUB_EMULATOR_HOST/);
   });
 
   it('gerçek sağlayıcılarla production yapılandırması geçerlidir', () => {
     const env = validateEnv({
       ...baseEnv,
-      NODE_ENV: 'production',
-      IDENTITY_PROVIDER: 'live',
-      PAYMENT_PROVIDER: 'live',
+      ...productionEnv,
     });
 
     expect(env.NODE_ENV).toBe('production');
     expect(env.PUBSUB_EMULATOR_HOST).toBeUndefined();
+  });
+
+  // ADR-0016: mock token doğrulayıcı production'da kabul edilemez.
+  it('production + AUTH_PROVIDER=mock ile servis başlamaz', () => {
+    expect(() => validateEnv({ ...baseEnv, ...productionEnv, AUTH_PROVIDER: 'mock' })).toThrow(
+      /AUTH_PROVIDER/,
+    );
+  });
+
+  it('production ortamında yerel Firebase proje kimliği reddedilir', () => {
+    expect(() =>
+      validateEnv({ ...baseEnv, ...productionEnv, FIREBASE_PROJECT_ID: 'emek-local' }),
+    ).toThrow(/FIREBASE_PROJECT_ID/);
+  });
+
+  it('development ortamında mock sağlayıcılar varsayılandır', () => {
+    const env = validateEnv({ ...baseEnv });
+
+    expect(env.AUTH_PROVIDER).toBe('mock');
+    expect(env.FIREBASE_PROJECT_ID).toBe('emek-local');
   });
 
   it('hata mesajı ortam değişkeni değerlerini sızdırmaz', () => {

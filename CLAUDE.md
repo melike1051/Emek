@@ -184,6 +184,8 @@ npm run infra:up                                          # Postgres+PostGIS + R
 npm run infra:up:events                                   # + Pub/Sub emulator (opsiyonel, Faz 2)
 npm run migrate:up                                        # şema
 npm run dev --workspace=@emek/api                         # core API (watch)
+npm run seed:catalog --workspace=@emek/api                # hizmet katalogu referans verisi
+npm run contracts:generate --workspace=@emek/api          # OpenAPI sözleşmesini yeniden üret
 npm run lint && npm run typecheck && npm test             # hızlı kontrol (altyapı gerekmez)
 npm run test:integration                                  # gerçek Postgres+Redis gerektirir
 cd services/ai && uv run pytest                           # AI servisi testleri
