@@ -301,18 +301,66 @@ verilmiyor), doküman hash değişmezliği ve Faz 4 invariant'larının bozulmam
 | İkinci ödeme denemesi "geçersiz durum" hatası veriyordu                        | Yetkilendirme sonrası rezervasyon `SCHEDULED` olduğu için durum kontrolü önce tetikleniyordu                                                        | Canlı ödeme kontrolü durum kontrolünden öne alındı; istemci gerçek sebebi görüyor |
 | Uyuşmazlık varken release "geçersiz durum" diyordu                             | Dondurma ödemeyi `DISPUTED` yapıyor, geçerlilik kontrolü blok kontrolünden önce çalışıyordu                                                         | Blok kontrolleri geçerlilik kontrolünden öne alındı                               |
 
-## Faz 6 — Python AI / NLP
+## Faz 6 — Python AI / NLP ✅
 
 **Kapsam:** FastAPI AI servisi; Türkçe serbest metin → structured request; Pydantic şema
 doğrulama + confidence; `parser_version`; kural tabanlı baseline parser; evaluation dataset
-yapısı (sentetik/anonim) + harness; NLP metrikleri (precision/recall/F1, slot F1); düşük
+yapısı (sentetik) + harness; NLP metrikleri (precision/recall/F1, slot F1); düşük
 confidence'ta netleştirme/form fallback; prompt injection ve zararlı girdi testleri.
 
-**Exit:** baseline vs proposed karşılaştırması ölçüldü ve `docs/research/experiments/` altında
-raporlandı; şemaya uymayan model çıktısı reddediliyor; AI servisi down iken core akış form
-yoluyla çalışıyor (test).
+**Exit kriterleri (durum):**
 
----
+- ✅ Baseline vs proposed karşılaştırması ölçüldü ve raporlandı:
+  [EXP-001](../research/experiments/exp-001-nlp-baseline-vs-heuristic.md).
+  Intent macro F1 0.55 → 0.98, slot macro F1 0.19 → 0.93, netleştirme recall'ı 0.50 → 1.00.
+- ✅ Şemaya uymayan çıktı reddediliyor (T-13): bilinmeyen hizmet slug'ı, aralık dışı süre,
+  tekrar eden yetkinlik ve sürümsüz yanıt hem AI servisinde hem core istemcisinde eleniyor.
+- ✅ Düşük confidence'ta talep **oluşturulmuyor**, netleştirme soruluyor.
+- ✅ Prompt injection veri olarak işleniyor (T-14): talimat eklenmiş metin, eklenmemişle
+  **aynı** yapılandırılmış sonucu veriyor; şemada hedeflenebilecek bir alan yok.
+- ✅ AI servisi down iken core akış form yoluyla çalışıyor (T-15); serbest metin yolu
+  çökmüyor, `FORM_REQUIRED` dönüyor.
+- ✅ Ayrıştırma deterministik: `today` enjekte ediliyor, sistem saatine bağlı değil.
+- ✅ 91 AI testi + 141 core unit + 242 core integration; ruff/mypy/lint/typecheck temiz.
+
+**Bu fazda ölçülen ama çözülmeyen:** güven kalibrasyonu (ECE/reliability diagram) yalnızca
+ortalama fark olarak raporlandı — R-46, Faz 7.
+
+**Faz 6 code review bulguları ve çözümleri** (bağımsız review agent'ı):
+
+| Bulgu                                                                                                                                                                                                                                                       | Önem     | Çözüm                                                                                                                                                                                                                           |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Her `N-M` sayı aralığı saat aralığı sanılıyordu.** "Yarın **sabah** temizlik, 3-5 kişi gelecek" cümlesi 03:00-05:00 randevusu üretiyor, üstelik aynı cümledeki "sabah" eziliyordu — güven 0.74 ile eşiğin üstünde olduğu için netleştirme de sorulmuyordu | CRITICAL | Saat aralığı artık **açık gösterim** (`:`/`.`) istiyor. Çapasız aralık en sona alındı ve yalnızca "saat/arası" gibi bir çapa varken, "yaş/kişi/oda" gibi engelleyici yokken ve **düşük güvenle** kabul ediliyor                 |
+| **Üç karakterlik ek bütçesi sıradan Türkçe çekimleri reddediyordu.** "Bebeğime bakacak birini arıyorum" hiç eşleşmiyor, dataset örneği `ca-003` sessizce kaçırılıyordu                                                                                      | CRITICAL | Ek, karakter sayısıyla değil **ek listesiyle** tanınıyor: kalıntı bilinen eklere ayrıştırılabiliyorsa çekimdir. Ünsüz yumuşaması için kök varyantları (`bebek`/`bebeg`, `cocuk`/`cocug`, `temizlik`/`temizlig`) sözlüğe eklendi |
+| **NLP saatleri yerel, core UTC yazıyordu:** "sabah" diyen müşteriye 3 saat kaymış randevu; aynı tabloda form yolu ile metin yolu farklı zaman anlayışı üretiyordu                                                                                           | HIGH     | Saatler `SERVICE_TIMEZONE_OFFSET` (varsayılan `+03:00`) ile mutlak ana çevriliyor; gün sonu (24) ertesi güne taşıyor, bozuk tarih biçimi pencere üretmiyor. Üç integration testi eklendi                                        |
+| **Deney raporunun hata analizi elle yazılmıştı ve yanlış örnekleri gösteriyordu** — bu yüzden gerçek bir hata (ek çözümleme) gözden kaçmıştı                                                                                                                | HIGH     | Hata analizi artık `collect_errors` ile **koddan üretiliyor** ve JSON rapora giriyor. İlk çalıştırmada bir **etiket hatası** yakaladı (`cl-007` "haftaya pazartesi")                                                            |
+| Yükleme boyut sınırı gibi, `preferences` alanı da şemanın "serbest metin yok" güvencesini kâğıt üzerinde bırakıyordu (hiç doldurulmuyordu ama tipi serbest metindi)                                                                                         | MEDIUM   | Alan kaldırıldı; soft constraint'ler Faz 7'de **kapalı slug kümesiyle** dönecek. Alan **adlarını** değil **tiplerini** de denetleyen bir test eklendi                                                                           |
+| "camiye" ek kurallarına göre geçerli bir çekim ve `cam-temizligi` yetkinliği üretiyordu                                                                                                                                                                     | MEDIUM   | Dil bilgisiyle çözülemeyen çakışmalar açık bir dışlama listesinde (`_TERM_EXCLUSIONS`)                                                                                                                                          |
+| T-15 iki ayrı seviyede test ediliyordu; gerçek istemci + servis kararı **birlikte** hiç çalıştırılmıyordu                                                                                                                                                   | MEDIUM   | Gerçek `HttpNlpClient` ile yönlendirilemez adrese (TEST-NET-1) karşı uçtan uca test eklendi                                                                                                                                     |
+| AI servisinin kendi yetkilendirmesi yoktu; yalnızca ağ politikasına güveniliyordu                                                                                                                                                                           | LOW      | `x-service-key` paylaşılan sır kontrolü (sabit zamanlı karşılaştırma); production'da **her iki serviste de zorunlu**                                                                                                            |
+
+Reviewer'ın doğruladıkları: metrik hesaplamaları (per-class PRF, macro F1, slot F1)
+doğru ve rapordaki sayılar yeniden üretilebiliyor; baseline gerçekten naif, yapay olarak
+sakatlanmamış; core tarafındaki şema yeniden doğrulaması sağlam; `(structured_request IS
+NULL) = (parser_version IS NULL)` her iki yolda korunuyor; form yolu NLP'ye hiç dokunmuyor
+ve `degraded` bayrağı yetki/sahiplik davranışını değiştirmiyor; `turkish_lower`/`fold`
+doğru.
+
+**Geliştirme sırasında bulunan hatalar:**
+
+| Hata                                                                                                   | Kök neden                                                                                                                     | Çözüm                                                                                            |
+| ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| "çamaşır" talebi `cam-temizligi` yetkinliği üretiyordu                                                 | Sonek toleransı sınırsızdı: katlanmış "camasir" içinde "cam" eşleşiyordu                                                      | Ek uzunluğu 3 karakterle ve Türkçe ek harfleriyle sınırlandı                                     |
+| "TEMİZLİĞE İHTİYACIM VAR" hiç eşleşmiyordu                                                             | Sözlükte kök yerine tam biçim ("temizlik") vardı; ek almış biçim tutmuyordu                                                   | Sözlük kökleri ek toleransıyla uyumlu hale getirildi ("temizli")                                 |
+| Doğru çekimserlik (hizmet yok → tahmin yok) accuracy'de hata sayılıyordu                               | Metrik yalnızca eşleşen tahminleri doğru sayıyordu                                                                            | `add_intent` doğru çekimserliği doğru sayıyor; aksi halde uydurma ödüllendirilirdi               |
+| Integration paketi aralıklı olarak "socket hang up" ile düşüyordu (her ~3 koşumda bir, rastgele suite) | supertest, dinlemeyen bir sunucuya her istekte geçici port açıp kapatıyordu; paket büyüdükçe efemeral port baskısı oluştu     | Sunucu `createTestApp` içinde **suite başına bir kez** dinlemeye alınıyor; 9 ardışık koşum yeşil |
+| Outbox testi aralıklı kırılıyordu                                                                      | Test, elle çağrılan `drain()`'in dönüş değerine bakıyordu; publisher arka planda da çalıştığı için olayı bazen o yayınlıyordu | Test artık **sonuca** bakıyor: satır `PUBLISHED` oluyor ve `attempts = 1` (tam olarak bir kez)   |
+| `NODE_ENV=test` ayarlanınca seed betiği test koşumunu düşürdü                                          | `scripts/seed-catalog.ts` **import edildiğinde** `main()` çalıştırıyordu; testler `seedCatalog`'u içe aktarıyor               | `require.main === module` koşulu eklendi; import artık yan etkisiz                               |
+
+**Bilinen, engelleyici olmayan durum:** `health-dependencies` suite'i "Jest did not exit"
+uyarısı üretiyor. `--detectOpenHandles` hiçbir sızan handle raporlamıyor — erişilemeyen
+Postgres testinin soketi Jest'in 1 saniyelik bekleme penceresinden biraz geç kapanıyor.
+Testler kararlı; uyarı bastırılmadı, kaydedildi.
 
 ## Faz 7 — Matching & Optimization
 

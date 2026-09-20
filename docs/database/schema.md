@@ -240,6 +240,24 @@ GMV metriklerini manipüle edebilirdi.
 Tek parçalı bir CHECK, mevcut fiyatsız satırlar nedeniyle migration'ı kırardı; bu yüzden
 invariant iki parçaya ayrıldı ve fiyatsız satırlar migration'da pasife alındı.
 
+### `booking_requests` — NLP izlenebilirliği (Faz 6'da dolduruldu)
+
+Tablo Faz 4'te oluşturuldu, Faz 6'da **kullanılmaya başlandı**. Ar-Ge kolonları
+(`raw_text`, `structured_request`, `parser_version`, `parser_confidence`) opsiyonel
+değildir, birlikte anlamlıdır (ADR-0012 §1):
+
+| Durum                                                | `raw_text` | `structured_request` + `parser_version` |
+| ---------------------------------------------------- | ---------- | --------------------------------------- |
+| Serbest metin yolu                                   | dolu       | dolu                                    |
+| Form yolu (AI erişilemez veya kullanıcı formu seçti) | boş        | boş                                     |
+
+`CHECK ((structured_request IS NULL) = (parser_version IS NULL))` bu ikisinin
+ayrışmasını engeller: sürümsüz bir yapılandırılmış çıktı, hangi parser'ın ürettiği
+bilinmediği için deney karşılaştırmasında kullanılamazdı.
+
+Ham metin **audit'e yazılmaz** (kişisel veri içerebilir); audit yalnızca hizmet,
+süre, parser sürümü ve kaynağı (`TEXT`/`FORM`) kaydeder.
+
 ## Faz 5 tabloları — ödeme, uyuşmazlık, dijital ispat
 
 ### `payments` — ödemenin durumu (ADR-0009, ADR-0017)

@@ -196,7 +196,16 @@ async function main(): Promise<void> {
   }
 }
 
-void main().catch((error: unknown) => {
-  process.stderr.write(`Seed başarısız: ${String(error)}\n`);
-  process.exit(1);
-});
+/**
+ * Yalnızca **doğrudan çalıştırıldığında** seed uygular.
+ *
+ * Koşul olmasaydı `seedCatalog`'u içe aktarmak (testler bunu yapıyor) her import'ta
+ * tam bir seed turu başlatır, kendi bağlantı havuzunu açar ve hata hâlinde
+ * `process.exit(1)` ile test koşumunu düşürürdü.
+ */
+if (require.main === module) {
+  void main().catch((error: unknown) => {
+    process.stderr.write(`Seed başarısız: ${String(error)}\n`);
+    process.exit(1);
+  });
+}

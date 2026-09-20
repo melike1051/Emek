@@ -48,6 +48,27 @@ describe('core infrastructure (integration)', () => {
 
   const http = (): request.Agent => request(app.getHttpServer());
 
+  /**
+   * Koşul sağlanana kadar kısa aralıklarla yeniden dener.
+   *
+   * Arka planda çalışan bir bileşenin sonucunu ölçerken sabit bir bekleme süresi ya
+   * yavaş ya da kırılgan olur; koşula bakmak ikisini de önler.
+   */
+  async function waitFor<T>(probe: () => Promise<T | null>, timeoutMs = 3000): Promise<T> {
+    const deadline = Date.now() + timeoutMs;
+
+    for (;;) {
+      const result = await probe();
+      if (result !== null) {
+        return result;
+      }
+      if (Date.now() > deadline) {
+        throw new Error('beklenen durum zaman aşımına uğradı');
+      }
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+  }
+
   async function register(subject: string): Promise<string> {
     const response = await http()
       .post(`${PREFIX}/auth/session`)
@@ -164,19 +185,33 @@ describe('core infrastructure (integration)', () => {
       ]);
     });
 
-    it('publisher bekleyen event.i yayınlar ve işaretler', async () => {
+    /**
+     * Garanti "elle çağırdığım drain 1 döndürdü" değil, **event tam olarak bir kez
+     * yayınlanır**'dır.
+     *
+     * Publisher üretimde arka plan zamanlayıcısıyla da çalışır; elle çağrılan tur
+     * bazen olayı zaten yayınlanmış bulur ve 0 döner. Dönüş değerine bakan test bu
+     * yüzden aralıklı olarak kırılıyordu — ölçtüğü şey davranış değil, yarışın hangi
+     * tarafının kazandığıydı.
+     */
+    it('publisher bekleyen event.i tam olarak bir kez yayınlar', async () => {
       await register('outbox-sub-2');
 
-      const published = await app.get(OutboxPublisher).drain();
+      await app.get(OutboxPublisher).drain();
 
-      expect(published).toBe(1);
-      const rows = await pool.query<{
-        status: string;
-        published_at: Date | null;
-        attempts: number;
-      }>(`SELECT status, published_at, attempts FROM outbox`);
-      expect(rows.rows[0]?.status).toBe('PUBLISHED');
+      const rows = await waitFor(async () => {
+        const result = await pool.query<{
+          status: string;
+          published_at: Date | null;
+          attempts: number;
+        }>(`SELECT status, published_at, attempts FROM outbox`);
+        return result.rows[0]?.status === 'PUBLISHED' ? result : null;
+      });
+
+      expect(rows.rows).toHaveLength(1);
       expect(rows.rows[0]?.published_at).not.toBeNull();
+      // Tam olarak bir deneme: iki publisher turu aynı satırı işlemiş olsaydı artardı.
+      expect(Number(rows.rows[0]?.attempts)).toBe(1);
     });
 
     it('yayınlanmış event tekrar yayınlanmaz', async () => {

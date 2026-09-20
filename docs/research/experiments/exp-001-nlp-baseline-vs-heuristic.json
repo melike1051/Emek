@@ -1,0 +1,219 @@
+{
+  "baseline": {
+    "parser_version": "baseline-v0",
+    "example_count": 24,
+    "intent_per_class": {
+      "cocuk-bakimi": {
+        "precision": 1.0,
+        "recall": 0.3333,
+        "f1": 0.5,
+        "support": 3
+      },
+      "detayli-temizlik": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 2
+      },
+      "gunluk-yemek": {
+        "precision": 0.6667,
+        "recall": 1.0,
+        "f1": 0.8,
+        "support": 2
+      },
+      "haftalik-mealprep": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "support": 1
+      },
+      "hasta-refakati": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 1
+      },
+      "standart-temizlik": {
+        "precision": 0.75,
+        "recall": 0.3333,
+        "f1": 0.4615,
+        "support": 9
+      },
+      "tasinma-temizligi": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "support": 1
+      },
+      "yasli-bakimi": {
+        "precision": 1.0,
+        "recall": 0.5,
+        "f1": 0.6667,
+        "support": 2
+      }
+    },
+    "intent_macro_f1": 0.5535,
+    "intent_accuracy": 0.5,
+    "slots": {
+      "duration_minutes": {
+        "correct": 2,
+        "missed": 6,
+        "spurious": 0,
+        "wrong": 1,
+        "f1": 0.3333
+      },
+      "requirements": {
+        "correct": 0,
+        "missed": 6,
+        "spurious": 0,
+        "wrong": 0,
+        "f1": 0.0
+      },
+      "service_date": {
+        "correct": 5,
+        "missed": 14,
+        "spurious": 0,
+        "wrong": 0,
+        "f1": 0.4167
+      },
+      "time_window": {
+        "correct": 0,
+        "missed": 19,
+        "spurious": 0,
+        "wrong": 0,
+        "f1": 0.0
+      }
+    },
+    "slot_macro_f1": 0.1875,
+    "schema_valid_rate": 1.0,
+    "clarification_rate": 0.5,
+    "clarification_recall": 0.5,
+    "mean_confidence": 0.25,
+    "calibration_gap": 0.25
+  },
+  "proposed": {
+    "parser_version": "heuristic-v1",
+    "example_count": 24,
+    "intent_per_class": {
+      "cocuk-bakimi": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 3
+      },
+      "detayli-temizlik": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 2
+      },
+      "gunluk-yemek": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 2
+      },
+      "haftalik-mealprep": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 1
+      },
+      "hasta-refakati": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 1
+      },
+      "standart-temizlik": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 9
+      },
+      "tasinma-temizligi": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "support": 1
+      },
+      "yasli-bakimi": {
+        "precision": 0.6667,
+        "recall": 1.0,
+        "f1": 0.8,
+        "support": 2
+      }
+    },
+    "intent_macro_f1": 0.975,
+    "intent_accuracy": 0.9583,
+    "slots": {
+      "duration_minutes": {
+        "correct": 9,
+        "missed": 0,
+        "spurious": 0,
+        "wrong": 0,
+        "f1": 1.0
+      },
+      "requirements": {
+        "correct": 5,
+        "missed": 1,
+        "spurious": 1,
+        "wrong": 0,
+        "f1": 0.8333
+      },
+      "service_date": {
+        "correct": 19,
+        "missed": 0,
+        "spurious": 0,
+        "wrong": 0,
+        "f1": 1.0
+      },
+      "time_window": {
+        "correct": 17,
+        "missed": 0,
+        "spurious": 0,
+        "wrong": 2,
+        "f1": 0.8947
+      }
+    },
+    "slot_macro_f1": 0.932,
+    "schema_valid_rate": 1.0,
+    "clarification_rate": 0.25,
+    "clarification_recall": 1.0,
+    "mean_confidence": 0.7029,
+    "calibration_gap": 0.2554
+  },
+  "deltas": {
+    "intent_macro_f1": 0.4215,
+    "intent_accuracy": 0.4583,
+    "slot_macro_f1": 0.7445,
+    "clarification_recall": 0.5,
+    "calibration_gap": 0.0054
+  },
+  "proposed_errors": [
+    {
+      "example_id": "cl-004",
+      "category": "detayli",
+      "raw_text": "Detaylı bahar temizliği yaptırmak istiyorum, 12.03 tarihinde 10:00-14:00 arası",
+      "field": "requirements",
+      "gold": "('derin-temizlik',)",
+      "predicted": "()"
+    },
+    {
+      "example_id": "ed-003",
+      "category": "cok_hizmet",
+      "raw_text": "Yaşlı bakımı mı temizlik mi karar veremedim",
+      "field": "service_type",
+      "gold": null,
+      "predicted": "yasli-bakimi"
+    },
+    {
+      "example_id": "ed-003",
+      "category": "cok_hizmet",
+      "raw_text": "Yaşlı bakımı mı temizlik mi karar veremedim",
+      "field": "requirements",
+      "gold": "()",
+      "predicted": "('yasli-bakim-deneyimi',)"
+    }
+  ]
+}

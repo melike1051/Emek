@@ -81,7 +81,27 @@ export const envSchema = z
       .default(10 * 1024 * 1024),
 
     AI_SERVICE_URL: z.string().url().default('http://localhost:8000'),
+    /**
+     * Hizmet saatlerinin yorumlandığı zaman dilimi ofseti.
+     *
+     * NLP çıktısındaki saatler **yerel saattir** (müşterinin "sabah" dediği saat);
+     * mutlak ana çevrilirken bu ofset kullanılır. Türkiye 2016'dan beri yaz saati
+     * uygulamıyor ve sabit UTC+03:00'tedir — bu yüzden sabit ofset yeterli.
+     * TODO(legal): yaz saati uygulaması geri gelirse veya başka bir ülkeye açılırsa
+     * IANA zaman dilimi (Europe/Istanbul) ile değiştirilmeli.
+     */
+    SERVICE_TIMEZONE_OFFSET: z
+      .string()
+      .regex(/^[+-][0-9]{2}:[0-9]{2}$/, 'SERVICE_TIMEZONE_OFFSET ±HH:MM biçiminde olmalı')
+      .default('+03:00'),
     AI_SERVICE_TIMEOUT_MS: z.coerce.number().int().min(100).max(60000).default(3000),
+    /**
+     * AI servisine giden isteklerin taşıdığı paylaşılan sır.
+     *
+     * Ağ politikası tek savunma katmanı olmamalı (ADR-0013 "deny by default");
+     * production'da zorunludur.
+     */
+    AI_SERVICE_API_KEY: z.string().min(16).optional(),
 
     GCP_PROJECT_ID: z.string().min(1).default('emek-local'),
     PUBSUB_EMULATOR_HOST: z.string().min(1).optional(),
@@ -155,6 +175,15 @@ export const envSchema = z
         code: z.ZodIssueCode.custom,
         path: ['STORAGE_PROVIDER'],
         message: 'STORAGE_PROVIDER production ortamında gcs olmalı',
+      });
+    }
+
+    // AI servisi yalnızca ağ yapılandırmasına güvenemez (Faz 6 review bulgusu L1).
+    if (env.AI_SERVICE_API_KEY === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['AI_SERVICE_API_KEY'],
+        message: 'AI_SERVICE_API_KEY production ortamında tanımlı olmalı',
       });
     }
 

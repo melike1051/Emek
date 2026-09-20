@@ -54,9 +54,9 @@ Bu senaryolar ilgili faz **tamamlanmış sayılmadan önce** testle kanıtlanır
 | T-10  | Out-of-order payment event                                                                                            | geri durum geçişi reddedilir, durum monotonluğu korunur                                                                                                 | ✅ Faz 5                                                         |
 | T-11  | Dispute/`SAFETY_HOLD` varken release denemesi                                                                         | bloklanır, gerekçe audit'li                                                                                                                             | ✅ Faz 5 (dispute + SAFETY_HOLD); safety tetikleyicisi Faz 8     |
 | T-12  | Storage erişimi                                                                                                       | nesneler private; yalnızca kısa ömürlü signed URL ile erişilebilir; imza süresi dolmuş URL reddedilir                                                   | ✅ Faz 5                                                         |
-| T-13  | NLP şema ihlali / düşük confidence                                                                                    | çıktı reddedilir veya netleştirme istenir; doğrulanmamış çıktı iş kuralına girmez                                                                       | 6                                                                |
-| T-14  | `raw_text` içinde talimat benzeri içerik (prompt injection)                                                           | veri olarak işlenir, talimat olarak yorumlanmaz; hard constraint'ler etkilenmez                                                                         | 6                                                                |
-| T-15  | AI servisi down                                                                                                       | yapılandırılmış form yolu çalışır; core akış ayakta                                                                                                     | 6                                                                |
+| T-13  | NLP şema ihlali / düşük confidence                                                                                    | çıktı reddedilir veya netleştirme istenir; doğrulanmamış çıktı iş kuralına girmez                                                                       | ✅ Faz 6                                                         |
+| T-14  | `raw_text` içinde talimat benzeri içerik (prompt injection)                                                           | veri olarak işlenir, talimat olarak yorumlanmaz; hard constraint'ler etkilenmez                                                                         | ✅ Faz 6                                                         |
+| T-15  | AI servisi down                                                                                                       | yapılandırılmış form yolu çalışır; core akış ayakta                                                                                                     | ✅ Faz 6                                                         |
 | T-16  | Optimization timeout                                                                                                  | fallback (scoring-only/greedy) devreye girer, sonuç `degraded` işaretli döner                                                                           | 7                                                                |
 | T-17  | Matching determinizmi                                                                                                 | aynı girdi + aynı `algorithm_version` → aynı sıralama                                                                                                   | 7                                                                |
 | T-18  | Hard constraint ihlali yüksek skorla birlikte                                                                         | aday elenir; skor telafi etmez                                                                                                                          | 7                                                                |
@@ -103,3 +103,13 @@ Kapsam bir **sinyaldir**, hedef değil:
 - Gerçek kişisel veri test ortamında kullanılmaz. Fixture/factory ile sentetik veri üretilir.
 - AI evaluation dataset'i anonimleştirilmiş/sentetiktir ve versiyonlanır (`docs/research/experiments/`).
 - Testler birbirinden izole: her test kendi verisini kurar, paylaşılan global state'e dayanmaz.
+
+## Integration test koşum disiplini (Faz 6)
+
+- Uygulama sunucusu **suite başına bir kez** dinlemeye alınır (`createTestApp`).
+  supertest'in her istekte geçici port açıp kapatması, paket büyüdükçe efemeral port
+  baskısı yaratıp rastgele suite'lerde "socket hang up" üretiyordu.
+- Arka planda çalışan bileşenlerin (outbox publisher) sonucu, **elle tetiklenen çağrının
+  dönüş değerine** değil kalıcı duruma bakılarak ölçülür; aksi halde test, yarışın hangi
+  tarafının kazandığını ölçer.
+- Testler `NODE_ENV=test` ile çalışır; `.env` geliştirme içindir ve üzerine yazılır.

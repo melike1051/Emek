@@ -53,6 +53,7 @@ def test_docs_are_available_outside_production() -> None:
 
 def test_docs_are_disabled_in_production(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AI_ENVIRONMENT", "production")
+    monkeypatch.setenv("AI_SERVICE_API_KEY", "production-grade-service-key")
 
     with TestClient(create_app()) as client:
         assert client.get("/docs").status_code == 404

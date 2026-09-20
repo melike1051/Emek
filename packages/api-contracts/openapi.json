@@ -10,9 +10,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Health"
-        ]
+        "tags": ["Health"]
       }
     },
     "/api/v1/health": {
@@ -24,9 +22,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Health"
-        ]
+        "tags": ["Health"]
       }
     },
     "/api/v1/auth/session": {
@@ -38,9 +34,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Auth"
-        ]
+        "tags": ["Auth"]
       }
     },
     "/api/v1/users/me": {
@@ -52,9 +46,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Users"
-        ]
+        "tags": ["Users"]
       },
       "patch": {
         "operationId": "UsersController_updateMe",
@@ -74,9 +66,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Users"
-        ]
+        "tags": ["Users"]
       }
     },
     "/api/v1/users/me/roles": {
@@ -88,9 +78,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Users"
-        ]
+        "tags": ["Users"]
       }
     },
     "/api/v1/customers/profile": {
@@ -112,9 +100,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Customers"
-        ]
+        "tags": ["Customers"]
       }
     },
     "/api/v1/customers/me": {
@@ -126,9 +112,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Customers"
-        ]
+        "tags": ["Customers"]
       },
       "patch": {
         "operationId": "CustomersController_update",
@@ -148,9 +132,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Customers"
-        ]
+        "tags": ["Customers"]
       }
     },
     "/api/v1/providers/profile": {
@@ -172,9 +154,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Providers"
-        ]
+        "tags": ["Providers"]
       }
     },
     "/api/v1/providers/me": {
@@ -186,9 +166,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Providers"
-        ]
+        "tags": ["Providers"]
       },
       "patch": {
         "operationId": "ProvidersController_update",
@@ -208,9 +186,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Providers"
-        ]
+        "tags": ["Providers"]
       }
     },
     "/api/v1/providers/me/skills": {
@@ -222,9 +198,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Providers"
-        ]
+        "tags": ["Providers"]
       },
       "post": {
         "operationId": "ProvidersController_addSkill",
@@ -244,9 +218,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Providers"
-        ]
+        "tags": ["Providers"]
       }
     },
     "/api/v1/providers/me/availability": {
@@ -258,9 +230,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Providers"
-        ]
+        "tags": ["Providers"]
       },
       "post": {
         "operationId": "ProvidersController_addAvailability",
@@ -280,9 +250,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Providers"
-        ]
+        "tags": ["Providers"]
       }
     },
     "/api/v1/providers/me/availability/{availabilityId}": {
@@ -303,9 +271,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Providers"
-        ]
+        "tags": ["Providers"]
       }
     },
     "/api/v1/providers/me/skills/{skillId}": {
@@ -326,9 +292,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Providers"
-        ]
+        "tags": ["Providers"]
       }
     },
     "/api/v1/verification/session": {
@@ -350,9 +314,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Identity"
-        ]
+        "tags": ["Identity"]
       }
     },
     "/api/v1/verification/session/{id}": {
@@ -373,9 +335,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Identity"
-        ]
+        "tags": ["Identity"]
       }
     },
     "/api/v1/verification/callback": {
@@ -387,9 +347,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Identity"
-        ]
+        "tags": ["Identity"]
       }
     },
     "/api/v1/verification/status": {
@@ -401,9 +359,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Identity"
-        ]
+        "tags": ["Identity"]
       }
     },
     "/api/v1/service-categories": {
@@ -415,9 +371,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Catalog"
-        ]
+        "tags": ["Catalog"]
       }
     },
     "/api/v1/services": {
@@ -429,9 +383,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Catalog"
-        ]
+        "tags": ["Catalog"]
       }
     },
     "/api/v1/services/{id}": {
@@ -452,9 +404,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Catalog"
-        ]
+        "tags": ["Catalog"]
       }
     },
     "/api/v1/skills": {
@@ -466,9 +416,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Catalog"
-        ]
+        "tags": ["Catalog"]
       }
     },
     "/api/v1/addresses": {
@@ -480,9 +428,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Addresses"
-        ]
+        "tags": ["Addresses"]
       },
       "post": {
         "operationId": "AddressesController_create",
@@ -502,9 +448,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Addresses"
-        ]
+        "tags": ["Addresses"]
       }
     },
     "/api/v1/addresses/{id}": {
@@ -525,9 +469,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Addresses"
-        ]
+        "tags": ["Addresses"]
       }
     },
     "/api/v1/bookings": {
@@ -549,9 +491,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Bookings"
-        ]
+        "tags": ["Bookings"]
       },
       "get": {
         "operationId": "BookingsController_list",
@@ -561,9 +501,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Bookings"
-        ]
+        "tags": ["Bookings"]
       }
     },
     "/api/v1/bookings/{id}": {
@@ -584,9 +522,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Bookings"
-        ]
+        "tags": ["Bookings"]
       }
     },
     "/api/v1/bookings/{id}/history": {
@@ -607,9 +543,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Bookings"
-        ]
+        "tags": ["Bookings"]
       }
     },
     "/api/v1/bookings/{id}/confirm": {
@@ -630,9 +564,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Bookings"
-        ]
+        "tags": ["Bookings"]
       }
     },
     "/api/v1/bookings/{id}/cancel": {
@@ -663,9 +595,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Bookings"
-        ]
+        "tags": ["Bookings"]
       }
     },
     "/api/v1/bookings/{id}/transitions": {
@@ -696,9 +626,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Bookings"
-        ]
+        "tags": ["Bookings"]
       }
     },
     "/api/v1/bookings/{id}/payment": {
@@ -719,9 +647,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Payments"
-        ]
+        "tags": ["Payments"]
       },
       "get": {
         "operationId": "PaymentsController_detail",
@@ -740,9 +666,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Payments"
-        ]
+        "tags": ["Payments"]
       }
     },
     "/api/v1/payments/{id}/release": {
@@ -763,9 +687,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Payments"
-        ]
+        "tags": ["Payments"]
       }
     },
     "/api/v1/payments/{id}/refund": {
@@ -796,9 +718,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Payments"
-        ]
+        "tags": ["Payments"]
       }
     },
     "/api/v1/payments/{id}/reauthorize": {
@@ -819,9 +739,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Payments"
-        ]
+        "tags": ["Payments"]
       }
     },
     "/api/v1/payments/webhook": {
@@ -833,9 +751,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Payments"
-        ]
+        "tags": ["Payments"]
       }
     },
     "/api/v1/bookings/{id}/disputes": {
@@ -866,9 +782,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Disputes"
-        ]
+        "tags": ["Disputes"]
       },
       "get": {
         "operationId": "DisputesController_list",
@@ -887,9 +801,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Disputes"
-        ]
+        "tags": ["Disputes"]
       }
     },
     "/api/v1/disputes/{id}/resolve": {
@@ -920,9 +832,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Disputes"
-        ]
+        "tags": ["Disputes"]
       }
     },
     "/api/v1/documents": {
@@ -944,9 +854,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Documents"
-        ]
+        "tags": ["Documents"]
       }
     },
     "/api/v1/documents/{id}/confirm": {
@@ -977,9 +885,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Documents"
-        ]
+        "tags": ["Documents"]
       }
     },
     "/api/v1/documents/{id}/download-url": {
@@ -1000,9 +906,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Documents"
-        ]
+        "tags": ["Documents"]
       }
     },
     "/api/v1/bookings/{id}/documents": {
@@ -1023,9 +927,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Documents"
-        ]
+        "tags": ["Documents"]
       }
     },
     "/api/v1/bookings/{id}/review": {
@@ -1056,9 +958,7 @@
             "description": ""
           }
         },
-        "tags": [
-          "Reviews"
-        ]
+        "tags": ["Reviews"]
       }
     },
     "/api/v1/users/{id}/reviews": {
@@ -1079,9 +979,72 @@
             "description": ""
           }
         },
-        "tags": [
-          "Reviews"
-        ]
+        "tags": ["Reviews"]
+      }
+    },
+    "/api/v1/booking-requests/from-text": {
+      "post": {
+        "operationId": "BookingRequestsController_fromText",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRequestFromTextDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": ["BookingRequests"]
+      }
+    },
+    "/api/v1/booking-requests": {
+      "post": {
+        "operationId": "BookingRequestsController_fromForm",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRequestFromFormDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": ["BookingRequests"]
+      }
+    },
+    "/api/v1/booking-requests/{id}": {
+      "get": {
+        "operationId": "BookingRequestsController_detail",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["BookingRequests"]
       }
     }
   },
@@ -1172,6 +1135,14 @@
         "properties": {}
       },
       "CreateReviewDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateRequestFromTextDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateRequestFromFormDto": {
         "type": "object",
         "properties": {}
       }

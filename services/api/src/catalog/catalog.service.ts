@@ -118,6 +118,50 @@ export class CatalogService {
   }
 
   /**
+   * Slug ile aktif hizmet arar.
+   *
+   * NLP çıktısındaki hizmet türü bir slug'dır ve **katalogda gerçekten var olmak
+   * zorundadır**: AI servisi bilinen ama pasife alınmış bir hizmet döndürürse
+   * sessizce başka bir hizmete düşmek yerine `null` döner ve çağıran kullanıcıya
+   * sorar (ADR-0007 §2).
+   */
+  async findServiceBySlug(slug: string): Promise<ServiceDefinition | null> {
+    const services = await this.uow.query<{
+      id: string;
+      slug: string;
+      name: string;
+      description: string | null;
+      category_id: string;
+      category_slug: string;
+      default_duration_minutes: number | null;
+      pricing_model: 'FIXED' | 'HOURLY';
+    }>(
+      `SELECT s.id, s.slug, s.name, s.description, s.category_id,
+              c.slug AS category_slug, s.default_duration_minutes, s.pricing_model
+         FROM services s
+         JOIN service_categories c ON c.id = s.category_id
+        WHERE s.slug = $1 AND s.active AND c.active`,
+      [slug],
+    );
+
+    const row = services[0];
+    if (row === undefined) {
+      return null;
+    }
+
+    return {
+      id: row.id,
+      slug: row.slug,
+      name: row.name,
+      description: row.description,
+      categoryId: row.category_id,
+      categorySlug: row.category_slug,
+      defaultDurationMinutes: row.default_duration_minutes,
+      pricingModel: row.pricing_model,
+    };
+  }
+
+  /**
    * Rezervasyon fiyatını **sunucuda** hesaplar.
    *
    * İstemciden fiyat almak, müşteri (veya anlaşmalı müşteri-sağlayıcı çifti) tarafından

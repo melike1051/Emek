@@ -16,12 +16,60 @@ export const PREFIX = `/${API_PREFIX}`;
  * aynıdır (Faz 1 review bulgusu). `AUTH_PROVIDER=mock` olduğu için token'lar
  * `mock:<subject>` biçiminde üretilir.
  */
-export async function createTestApp(): Promise<INestApplication> {
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+export interface TestAppOptions {
+  /**
+   * DI token değişimi.
+   *
+   * Yalnızca **dış servis sınırları** için kullanılır (ör. NLP istemcisi): domain
+   * servislerini değiştirmek, testin gerçek kodu değil kendi kurgusunu ölçmesine
+   * yol açardı.
+   */
+  overrides?: { token: unknown; value: unknown }[];
+  /**
+   * Uygulama kurulmadan önce geçici olarak ayarlanan ortam değişkenleri.
+   *
+   * Gerçek istemcinin gerçek bir hata yolunu (ör. erişilemeyen AI servisi) izlemesi
+   * gerektiğinde kullanılır: bileşeni değiştirmek yerine **dünyayı** değiştirmek,
+   * testin ölçtüğü şeyin gerçek kod olmasını sağlar.
+   */
+  env?: Record<string, string>;
+}
+
+export async function createTestApp(options: TestAppOptions = {}): Promise<INestApplication> {
+  const previous = new Map<string, string | undefined>();
+  for (const [key, value] of Object.entries(options.env ?? {})) {
+    previous.set(key, process.env[key]);
+    process.env[key] = value;
+  }
+
+  let builder = Test.createTestingModule({ imports: [AppModule] });
+
+  for (const override of options.overrides ?? []) {
+    builder = builder.overrideProvider(override.token).useValue(override.value);
+  }
+
+  const moduleRef = await builder.compile();
+
+  // Yapılandırma okundu; süreç ortamı eski hâline döner ki diğer testler etkilenmesin.
+  for (const [key, value] of previous) {
+    if (value === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
+  }
 
   const app = moduleRef.createNestApplication({ logger: false, rawBody: true });
   configureApp(app);
-  await app.init();
+
+  // Sunucu **suite başına bir kez** dinlemeye alınır.
+  //
+  // supertest, dinlemeyen bir sunucuya istek atıldığında onu geçici bir portta açar
+  // ve istek bitince kapatır. Paket büyüdükçe bu, yüzlerce aç/kapa döngüsü demektir;
+  // macOS'ta efemeral port baskısı yaratıp rastgele suite'lerde "socket hang up"
+  // olarak görünen aralıklı hatalara yol açıyordu. Sunucu zaten dinliyorsa supertest
+  // mevcut adresi kullanır.
+  await app.listen(0);
   return app;
 }
 

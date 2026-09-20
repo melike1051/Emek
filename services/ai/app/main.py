@@ -5,6 +5,7 @@ import logging
 from fastapi import FastAPI
 
 from app.api.health import router as health_router
+from app.api.nlp import router as nlp_router
 from app.config import Settings, get_settings
 
 API_PREFIX = "/api/v1"
@@ -26,6 +27,7 @@ def create_app() -> FastAPI:
         openapi_url=None if settings.is_production else "/openapi.json",
     )
     app.include_router(health_router, prefix=API_PREFIX)
+    app.include_router(nlp_router, prefix=API_PREFIX)
     return app
 
 

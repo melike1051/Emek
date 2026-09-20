@@ -18,6 +18,7 @@ const productionEnv = {
   PAYMENT_WEBHOOK_SECRET: 'production-grade-payment-webhook-secret',
   STORAGE_PROVIDER: 'gcs',
   STORAGE_SIGNING_SECRET: 'production-grade-storage-signing-secret',
+  AI_SERVICE_API_KEY: 'production-grade-ai-service-key',
 };
 
 describe('validateEnv', () => {
@@ -97,6 +98,25 @@ describe('validateEnv', () => {
         STORAGE_SIGNING_SECRET: 'local-development-storage-secret',
       }),
     ).toThrow(/STORAGE_SIGNING_SECRET/);
+  });
+
+  // Faz 6 review bulgusu L1: AI servisi yalnızca ağ politikasına güvenemez.
+  it('production ortamında AI servis anahtarı zorunludur', () => {
+    const withoutKey = { ...productionEnv };
+    delete (withoutKey as Record<string, string>).AI_SERVICE_API_KEY;
+
+    expect(() => validateEnv({ ...baseEnv, ...withoutKey })).toThrow(/AI_SERVICE_API_KEY/);
+  });
+
+  // Faz 6 review bulgusu H2: NLP saatleri yerel saattir, ofset yapılandırmadan gelir.
+  it('hizmet saati ofseti varsayılan olarak Türkiye saatidir', () => {
+    expect(validateEnv({ ...baseEnv }).SERVICE_TIMEZONE_OFFSET).toBe('+03:00');
+  });
+
+  it('geçersiz zaman dilimi ofseti reddedilir', () => {
+    expect(() => validateEnv({ ...baseEnv, SERVICE_TIMEZONE_OFFSET: 'Europe/Istanbul' })).toThrow(
+      /SERVICE_TIMEZONE_OFFSET/,
+    );
   });
 
   it('production ortamında Pub/Sub emulator tanımlı olamaz', () => {

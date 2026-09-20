@@ -7,6 +7,19 @@ import { HealthService } from '../src/health/health.service';
  * health check bir bağımlılık düştüğünde askıda kalmamalı, hızlı ve doğru rapor vermeli
  * (ADR-0003 — Redis kaybı uygulamayı düşürmez).
  */
+/**
+ * ioredis istemcisini kalıcı iz bırakmadan kapatır.
+ *
+ * `disconnect()` tek başına yeniden bağlanma zamanlayıcısını ve olay dinleyicilerini
+ * bırakabiliyor; testler bittikten sonra bu handle'lar süreci ayakta tutuyordu
+ * ("Jest did not exit"). Sızan handle, gerçek bir sızıntıyı gizleyebileceği için
+ * göz ardı edilmiyor.
+ */
+function closeRedis(client: Redis): void {
+  client.removeAllListeners();
+  client.disconnect(false);
+}
+
 describe('health dependency failures (integration)', () => {
   const UNREACHABLE_REDIS = 'redis://127.0.0.1:1';
   const UNREACHABLE_POSTGRES = 'postgres://emek:emek@127.0.0.1:1/emek';
@@ -27,7 +40,7 @@ describe('health dependency failures (integration)', () => {
       expect(report.status).toBe('ok');
     } finally {
       await pool.end();
-      redis.disconnect();
+      closeRedis(redis);
     }
   });
 
@@ -53,7 +66,7 @@ describe('health dependency failures (integration)', () => {
       expect(JSON.stringify(report)).not.toContain('127.0.0.1');
     } finally {
       await pool.end();
-      redis.disconnect();
+      closeRedis(redis);
     }
   });
 
@@ -81,7 +94,7 @@ describe('health dependency failures (integration)', () => {
       expect(Date.now() - startedAt).toBeLessThan(5000);
     } finally {
       await pool.end().catch(() => undefined);
-      redis.disconnect();
+      closeRedis(redis);
     }
   });
 });

@@ -26,3 +26,11 @@ if (!databaseName.endsWith('_test')) {
 
 // Uygulama kodu ve migration CLI'ı DATABASE_URL okur; test koşumu boyunca test DB'sine yönlendirilir.
 process.env.DATABASE_URL = testUrl;
+
+// Testler **test** ortamında çalışır — `.env` ne derse desin.
+//
+// `.env` dosyası geliştirme içindir ve `NODE_ENV=development` taşır; dotenv onu
+// Jest'in varsayılanının üzerine yazar. Bu durumda logger `pino-pretty` transport'unu
+// açar ve bu worker thread test koşumu bittikten sonra da yaşar ("Jest did not exit").
+// Ortamı doğru ayarlamak, uyarıyı bastırmaktan daha doğrudur.
+process.env.NODE_ENV = 'test';

@@ -12,7 +12,9 @@ def test_defaults_are_development() -> None:
     assert settings.environment == "development"
     assert settings.port == 8000
     assert settings.is_production is False
-    assert settings.parser_version == "baseline-v0"
+    # Faz 6'da varsayılan sürüm proposed parser oldu; baseline yalnızca
+    # karşılaştırma için açıkça istenir.
+    assert settings.parser_version == "heuristic-v1"
 
 
 def test_reads_prefixed_environment_variables(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -64,6 +66,7 @@ def test_settings_are_immutable() -> None:
 
 def test_production_flag(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AI_ENVIRONMENT", "production")
+    monkeypatch.setenv("AI_SERVICE_API_KEY", "production-grade-service-key")
 
     assert Settings().is_production is True
 

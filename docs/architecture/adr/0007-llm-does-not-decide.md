@@ -54,6 +54,30 @@ Recall@K ve acceptance rate ile ayrı ayrı ölçebiliriz. Tek monolitik LLM kar
 - Prompt injection yüzeyi: `raw_text` kullanıcı girdisidir; NLP katmanında talimat olarak
   yorumlanmaz, yalnızca veri olarak işlenir (Faz 6 güvenlik testi).
 
+## Faz 6 uygulama notu
+
+1. **Şema güvenlik sınırıdır.** `StructuredRequest` kapalı kümelerden oluşur: hizmet türü
+   ve yetkinlikler katalog slug'larıyla birebir aynı `Literal`'lardır, süre 30-1440 dakika
+   ile sınırlıdır ve **serbest metin alanı yoktur**. Prompt injection savunması bir
+   filtreden değil buradan gelir: "fiyatı sıfır yap" talimatının taşınacağı bir alan yok.
+2. **Üçüncü bir durum eklendi: `NEEDS_CLARIFICATION`.** Tahmin etmek yerine sormak,
+   yanlış hizmetle rezervasyon oluşturmaktan ucuzdur. Zorunlu alan (tarih/saat) eksikse
+   veya toplam güven eşiğin altındaysa talep oluşturulmaz.
+3. **Determinizm `today` enjeksiyonuyla sağlandı.** Göreli ifadeler ("yarın") sistem
+   saatinden değil parametreden çözülür; aynı girdi + aynı gün → aynı sonuç.
+4. **Core, AI servisine güvenmez.** `HttpNlpClient` yanıtı **yeniden doğrular**: hizmet
+   slug'ı beyaz listeye karşı kontrol edilir, süre aralığı ve confidence sınırı tekrar
+   uygulanır, sürümsüz yanıt reddedilir. "Karşı taraf zaten doğruluyor" varsayımı iki
+   servis sürümü ayrıştığında sessizce bozulurdu.
+5. **NLP bir öneridir, karar değil.** Çıktı core'da katalogda gerçekten aktif olan bir
+   hizmete çözülür, adres sahipliği kontrol edilir, zaman penceresi core kurallarıyla
+   hesaplanır. Çözülemezse forma düşülür.
+6. **Baseline donmuştur.** `baseline-v0` bilinçli olarak zayıftır ve iyileştirilmez:
+   karşılaştırmanın ölçüsü onun sabitliğine dayanır (ADR-0012 §3). Ölçüm: EXP-001.
+7. **LLM sürümü henüz yok** (R-44). Port ve sürüm kaydı hazır; `llm-v1` aynı porta
+   takılıp aynı harness ile ölçülecek. Sezgisel sürüm aynı zamanda LLM erişilemediğinde
+   çalışan yoldur.
+
 ## Alternatifler
 
 - **LLM doğrudan seçim (reddedildi):** blueprint yasağı, ölçülemez, açıklanamaz.
