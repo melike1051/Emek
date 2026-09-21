@@ -150,6 +150,12 @@ exports.up = (pgm) => {
       active_rules TEXT[] NOT NULL DEFAULT '{}',
       anomaly_flagged BOOLEAN NOT NULL DEFAULT FALSE,
 
+      -- Operatörün yükselttiği seviye, süreli bir **taban**dır: otomatik değerlendirme
+      -- bu süre boyunca seviyeyi tabanın altına indiremez (aksi hâlde operatörün
+      -- kararı bir sonraki turda sessizce geri alınırdı). Tabanın üstüne yükseliş serbesttir.
+      risk_floor safety_risk_level,
+      risk_floor_until TIMESTAMPTZ,
+
       -- Panik: **etkin** panik varken tekrar basış yan etki üretmez. Operatör acil
       -- durumu çözdükten sonra (yanlış alarm) yeni bir panik yeniden kabul edilir —
       -- aksi hâlde ilk yanlış alarm, aynı hizmetteki gerçek bir acil durumu
@@ -184,6 +190,7 @@ exports.up = (pgm) => {
       CHECK (geofence_candidate_count >= 0),
       CHECK (scheduled_end > scheduled_start),
       CHECK (panic_count >= 0),
+      CHECK ((risk_floor IS NULL) = (risk_floor_until IS NULL)),
       CHECK ((panic_raised_at IS NULL) = (panic_count = 0)),
       CHECK (emergency_resolved_at IS NULL OR panic_raised_at IS NOT NULL),
       -- Kapanış üç alanın birlikte hareket etmesidir; biri eksikse durum belirsizdir.
@@ -199,12 +206,11 @@ exports.up = (pgm) => {
       CONSTRAINT safety_sessions_not_self CHECK (provider_id <> customer_id)
     );
 
-    -- Rezervasyon başına **aynı anda tek** açık oturum. Eşzamanlı iki istek iki oturum
-    -- açabilseydi, telemetri ikiye bölünür ve hiçbir oturum tam resmi görmezdi.
-    CREATE UNIQUE INDEX uq_safety_sessions_open_booking
-      ON safety_sessions (booking_id) WHERE status <> 'CLOSED';
-
-    CREATE INDEX idx_safety_sessions_booking ON safety_sessions (booking_id, created_at DESC);
+    -- Rezervasyon başına **tek** oturum — açık ya da kapalı. Eşzamanlı iki istek iki
+    -- oturum açabilseydi telemetri ikiye bölünürdü; kapanmış bir oturumun yerine
+    -- sonraki bir booking geçişi sessizce yenisini açabilseydi, operatörün kapatma
+    -- kararı geri alınır ve panik/kanıt geçmişi oturumlara bölünürdü (Faz 8 review).
+    CREATE UNIQUE INDEX uq_safety_sessions_booking ON safety_sessions (booking_id);
     CREATE INDEX idx_safety_sessions_provider ON safety_sessions (provider_id, created_at DESC);
     CREATE INDEX idx_safety_sessions_customer ON safety_sessions (customer_id, created_at DESC);
     -- Operatör görünümü: açık ve riskli oturumlar.
@@ -274,11 +280,12 @@ exports.up = (pgm) => {
       captured_at TIMESTAMPTZ NOT NULL,
       server_received_at TIMESTAMPTZ NOT NULL DEFAULT now(),
 
+      -- Mekânsal kolon ve GIST index **bilinçli olarak yok**: mesafe ingest'te PostGIS
+      -- ile hizmet noktasına göre hesaplanıp saklanır ve hiçbir sorgu örnekler üzerinde
+      -- mekânsal arama yapmaz. En sıcak tabloda kullanılmayan bir index, her örnekte
+      -- yazma maliyetidir (Faz 8 review).
       latitude DOUBLE PRECISION NOT NULL,
       longitude DOUBLE PRECISION NOT NULL,
-      location GEOGRAPHY(Point, 4326) GENERATED ALWAYS AS (
-        ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::geography
-      ) STORED,
       accuracy_meters REAL NOT NULL,
       speed_mps REAL,
       heading_degrees REAL,
@@ -310,7 +317,6 @@ exports.up = (pgm) => {
     -- Garanti oturum satırı kilidi + last_sequence karşılaştırmasıdır (tek yazma yolu).
     CREATE INDEX idx_location_events_session
       ON location_events (session_id, server_received_at DESC);
-    CREATE INDEX idx_location_events_geo ON location_events USING GIST (location);
 
     CREATE TABLE location_events_default PARTITION OF location_events DEFAULT;
   `);
@@ -357,6 +363,12 @@ exports.up = (pgm) => {
       RETURN partition_name;
     END;
     $$;
+
+    -- Bu ay ve gelecek ay partition'ları hemen açılır: ilk bakım turunu beklemek,
+    -- o arada gelen örneklerin DEFAULT'a düşmesine ve o ayın partition'ının hiç
+    -- açılamamasına yol açardı (Faz 8 review). Uygulama açılışta da aynısını yapar.
+    SELECT safety_ensure_location_partition(now());
+    SELECT safety_ensure_location_partition(now() + interval '1 month');
   `);
 
   // --- Güvenlik olayları ---

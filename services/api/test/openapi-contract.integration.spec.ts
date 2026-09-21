@@ -79,12 +79,22 @@ describe('OpenAPI contract (integration)', () => {
     );
   });
 
-  it('sözleşme henüz uygulanmamış endpoint içermez', () => {
+  it('safety endpoint.leri sözleşmede yer alır (Faz 8)', () => {
     const paths = Object.keys(generated.paths ?? {});
 
-    // Safety Faz 8'e ait: sözleşmede erken görünmemeli (istemciler var olmayan
-    // endpoint'e göre geliştirilmesin). Ödeme Faz 5'te uygulandı ve artık listededir.
-    expect(paths.filter((path) => /safety|telemetry/.test(path))).toEqual([]);
+    expect(paths).toEqual(
+      expect.arrayContaining([
+        '/api/v1/bookings/{id}/safety-session',
+        '/api/v1/safety/sessions/{id}/telemetry',
+        '/api/v1/safety/sessions/{id}/panic',
+        '/api/v1/safety/operator/sessions',
+        '/api/v1/safety/operator/sessions/{id}',
+        '/api/v1/safety/operator/sessions/{id}/locations',
+        '/api/v1/safety/operator/sessions/{id}/risk',
+        '/api/v1/safety/operator/sessions/{id}/close',
+        '/api/v1/safety/operator/sessions/{id}/evaluate',
+      ]),
+    );
   });
 
   it('ödeme endpoint.leri sözleşmede yer alır', () => {

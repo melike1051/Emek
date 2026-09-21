@@ -6,7 +6,7 @@
     "sessions_per_family": 20,
     "evaluation_tick_seconds": 120,
     "ruleset_version": "safety-rules-v2",
-    "aggregation_version": "risk-agg-v1",
+    "aggregation_version": "risk-agg-v2",
     "anomaly_model_versions": {
       "baseline": "anomaly-deviation-v1",
       "default": "anomaly-deviation-v2"
@@ -29,41 +29,71 @@
     "routing_provider": "Faz 7 routing portu — haversine (gerçek rota değil)"
   },
   "counts": {
-    "sessions": 360,
-    "normal_sessions": 200,
+    "sessions": 380,
+    "normal_sessions": 220,
     "incident_sessions": 160,
-    "evaluation_ticks": 21366
+    "evaluation_ticks": 22780
   },
   "arms": {
     "rules": {
       "at_warning": {
         "incidents": 160,
-        "normals": 200,
-        "true_positives": 141,
+        "normals": 220,
+        "true_positives": 142,
         "false_positives": 8,
-        "precision": 0.9463,
-        "recall": 0.8813,
-        "false_positive_rate": 0.04,
-        "false_negative_rate": 0.1188,
+        "precision": 0.9467,
+        "recall": 0.8875,
+        "false_positive_rate": 0.0364,
+        "false_negative_rate": 0.1125,
         "detection_latency_seconds": {
           "p50": 600,
-          "p90": 1025,
-          "max": 1420
+          "p90": 1036,
+          "max": 1588
         }
       },
       "at_high_risk": {
         "incidents": 160,
-        "normals": 200,
-        "true_positives": 102,
+        "normals": 220,
+        "true_positives": 100,
         "false_positives": 0,
         "precision": 1,
-        "recall": 0.6375,
+        "recall": 0.625,
         "false_positive_rate": 0,
-        "false_negative_rate": 0.3625,
+        "false_negative_rate": 0.375,
         "detection_latency_seconds": {
           "p50": 1800,
-          "p90": 2722,
-          "max": 2902
+          "p90": 2712,
+          "max": 2893
+        }
+      },
+      "at_warning_excluding_panic": {
+        "incidents": 140,
+        "normals": 220,
+        "true_positives": 122,
+        "false_positives": 8,
+        "precision": 0.9385,
+        "recall": 0.8714,
+        "false_positive_rate": 0.0364,
+        "false_negative_rate": 0.1286,
+        "detection_latency_seconds": {
+          "p50": 600,
+          "p90": 1075,
+          "max": 1588
+        }
+      },
+      "at_high_risk_excluding_panic": {
+        "incidents": 140,
+        "normals": 220,
+        "true_positives": 80,
+        "false_positives": 0,
+        "precision": 1,
+        "recall": 0.5714,
+        "false_positive_rate": 0,
+        "false_negative_rate": 0.4286,
+        "detection_latency_seconds": {
+          "p50": 1800,
+          "p90": 2747,
+          "max": 2893
         }
       },
       "pre_onset_alarm_sessions": 0,
@@ -179,13 +209,24 @@
             "NORMAL": 20
           }
         },
+        "N11_benign_repeats": {
+          "label": "NORMAL",
+          "sessions": 20,
+          "alarm_rate": 0,
+          "reached_expected_level_rate": 1,
+          "exact_level_rate": 1,
+          "warning_latency_p50_seconds": null,
+          "max_level_distribution": {
+            "NORMAL": 20
+          }
+        },
         "I01_prolonged_exit": {
           "label": "INCIDENT",
           "sessions": 20,
           "alarm_rate": 1,
           "reached_expected_level_rate": 1,
           "exact_level_rate": 1,
-          "warning_latency_p50_seconds": 441,
+          "warning_latency_p50_seconds": 448,
           "max_level_distribution": {
             "HIGH_RISK": 20
           }
@@ -196,7 +237,7 @@
           "alarm_rate": 1,
           "reached_expected_level_rate": 1,
           "exact_level_rate": 1,
-          "warning_latency_p50_seconds": 639,
+          "warning_latency_p50_seconds": 630,
           "max_level_distribution": {
             "HIGH_RISK": 20
           }
@@ -206,11 +247,11 @@
           "sessions": 20,
           "alarm_rate": 1,
           "reached_expected_level_rate": 1,
-          "exact_level_rate": 0.5,
-          "warning_latency_p50_seconds": 706,
+          "exact_level_rate": 0.55,
+          "warning_latency_p50_seconds": 739,
           "max_level_distribution": {
-            "HIGH_RISK": 10,
-            "WARNING": 10
+            "HIGH_RISK": 9,
+            "WARNING": 11
           }
         },
         "I04_gps_spoofing": {
@@ -219,7 +260,7 @@
           "alarm_rate": 1,
           "reached_expected_level_rate": 1,
           "exact_level_rate": 1,
-          "warning_latency_p50_seconds": 104,
+          "warning_latency_p50_seconds": 113,
           "max_level_distribution": {
             "WARNING": 20
           }
@@ -229,23 +270,23 @@
           "sessions": 20,
           "alarm_rate": 1,
           "reached_expected_level_rate": 1,
-          "exact_level_rate": 0.4,
-          "warning_latency_p50_seconds": 1107,
+          "exact_level_rate": 0.45,
+          "warning_latency_p50_seconds": 1155,
           "max_level_distribution": {
-            "HIGH_RISK": 12,
-            "WARNING": 8
+            "HIGH_RISK": 11,
+            "WARNING": 9
           }
         },
         "I06_subtle_combination": {
           "label": "INCIDENT",
           "sessions": 20,
-          "alarm_rate": 0.05,
-          "reached_expected_level_rate": 0.05,
-          "exact_level_rate": 0.05,
-          "warning_latency_p50_seconds": 845,
+          "alarm_rate": 0.1,
+          "reached_expected_level_rate": 0.1,
+          "exact_level_rate": 0.1,
+          "warning_latency_p50_seconds": 864,
           "max_level_distribution": {
-            "NORMAL": 19,
-            "WARNING": 1
+            "NORMAL": 18,
+            "WARNING": 2
           }
         },
         "I07_panic": {
@@ -254,7 +295,7 @@
           "alarm_rate": 1,
           "reached_expected_level_rate": 1,
           "exact_level_rate": 1,
-          "warning_latency_p50_seconds": 91,
+          "warning_latency_p50_seconds": 69,
           "max_level_distribution": {
             "EMERGENCY": 20
           }
@@ -275,32 +316,62 @@
     "hybrid_v1": {
       "at_warning": {
         "incidents": 160,
-        "normals": 200,
-        "true_positives": 141,
+        "normals": 220,
+        "true_positives": 142,
         "false_positives": 8,
-        "precision": 0.9463,
-        "recall": 0.8813,
-        "false_positive_rate": 0.04,
-        "false_negative_rate": 0.1188,
+        "precision": 0.9467,
+        "recall": 0.8875,
+        "false_positive_rate": 0.0364,
+        "false_negative_rate": 0.1125,
         "detection_latency_seconds": {
           "p50": 600,
-          "p90": 1025,
-          "max": 1420
+          "p90": 1036,
+          "max": 1588
         }
       },
       "at_high_risk": {
         "incidents": 160,
-        "normals": 200,
-        "true_positives": 120,
+        "normals": 220,
+        "true_positives": 100,
         "false_positives": 0,
         "precision": 1,
-        "recall": 0.75,
+        "recall": 0.625,
         "false_positive_rate": 0,
-        "false_negative_rate": 0.25,
+        "false_negative_rate": 0.375,
         "detection_latency_seconds": {
-          "p50": 1296,
-          "p90": 2126,
-          "max": 2980
+          "p50": 1800,
+          "p90": 2712,
+          "max": 2893
+        }
+      },
+      "at_warning_excluding_panic": {
+        "incidents": 140,
+        "normals": 220,
+        "true_positives": 122,
+        "false_positives": 8,
+        "precision": 0.9385,
+        "recall": 0.8714,
+        "false_positive_rate": 0.0364,
+        "false_negative_rate": 0.1286,
+        "detection_latency_seconds": {
+          "p50": 600,
+          "p90": 1075,
+          "max": 1588
+        }
+      },
+      "at_high_risk_excluding_panic": {
+        "incidents": 140,
+        "normals": 220,
+        "true_positives": 80,
+        "false_positives": 0,
+        "precision": 1,
+        "recall": 0.5714,
+        "false_positive_rate": 0,
+        "false_negative_rate": 0.4286,
+        "detection_latency_seconds": {
+          "p50": 1800,
+          "p90": 2747,
+          "max": 2893
         }
       },
       "pre_onset_alarm_sessions": 0,
@@ -416,13 +487,24 @@
             "NORMAL": 20
           }
         },
+        "N11_benign_repeats": {
+          "label": "NORMAL",
+          "sessions": 20,
+          "alarm_rate": 0,
+          "reached_expected_level_rate": 1,
+          "exact_level_rate": 1,
+          "warning_latency_p50_seconds": null,
+          "max_level_distribution": {
+            "NORMAL": 20
+          }
+        },
         "I01_prolonged_exit": {
           "label": "INCIDENT",
           "sessions": 20,
           "alarm_rate": 1,
           "reached_expected_level_rate": 1,
           "exact_level_rate": 1,
-          "warning_latency_p50_seconds": 441,
+          "warning_latency_p50_seconds": 448,
           "max_level_distribution": {
             "HIGH_RISK": 20
           }
@@ -433,7 +515,7 @@
           "alarm_rate": 1,
           "reached_expected_level_rate": 1,
           "exact_level_rate": 1,
-          "warning_latency_p50_seconds": 639,
+          "warning_latency_p50_seconds": 630,
           "max_level_distribution": {
             "HIGH_RISK": 20
           }
@@ -443,10 +525,11 @@
           "sessions": 20,
           "alarm_rate": 1,
           "reached_expected_level_rate": 1,
-          "exact_level_rate": 0,
-          "warning_latency_p50_seconds": 706,
+          "exact_level_rate": 0.55,
+          "warning_latency_p50_seconds": 739,
           "max_level_distribution": {
-            "HIGH_RISK": 20
+            "HIGH_RISK": 9,
+            "WARNING": 11
           }
         },
         "I04_gps_spoofing": {
@@ -455,7 +538,7 @@
           "alarm_rate": 1,
           "reached_expected_level_rate": 1,
           "exact_level_rate": 1,
-          "warning_latency_p50_seconds": 104,
+          "warning_latency_p50_seconds": 113,
           "max_level_distribution": {
             "WARNING": 20
           }
@@ -465,22 +548,23 @@
           "sessions": 20,
           "alarm_rate": 1,
           "reached_expected_level_rate": 1,
-          "exact_level_rate": 0,
-          "warning_latency_p50_seconds": 1107,
+          "exact_level_rate": 0.45,
+          "warning_latency_p50_seconds": 1155,
           "max_level_distribution": {
-            "HIGH_RISK": 20
+            "HIGH_RISK": 11,
+            "WARNING": 9
           }
         },
         "I06_subtle_combination": {
           "label": "INCIDENT",
           "sessions": 20,
-          "alarm_rate": 0.05,
-          "reached_expected_level_rate": 0.05,
-          "exact_level_rate": 0.05,
-          "warning_latency_p50_seconds": 845,
+          "alarm_rate": 0.1,
+          "reached_expected_level_rate": 0.1,
+          "exact_level_rate": 0.1,
+          "warning_latency_p50_seconds": 864,
           "max_level_distribution": {
-            "NORMAL": 19,
-            "WARNING": 1
+            "NORMAL": 18,
+            "WARNING": 2
           }
         },
         "I07_panic": {
@@ -489,7 +573,7 @@
           "alarm_rate": 1,
           "reached_expected_level_rate": 1,
           "exact_level_rate": 1,
-          "warning_latency_p50_seconds": 91,
+          "warning_latency_p50_seconds": 69,
           "max_level_distribution": {
             "EMERGENCY": 20
           }
@@ -510,32 +594,62 @@
     "anomaly_v1": {
       "at_warning": {
         "incidents": 160,
-        "normals": 200,
-        "true_positives": 100,
+        "normals": 220,
+        "true_positives": 80,
         "false_positives": 0,
         "precision": 1,
-        "recall": 0.625,
+        "recall": 0.5,
         "false_positive_rate": 0,
-        "false_negative_rate": 0.375,
+        "false_negative_rate": 0.5,
         "detection_latency_seconds": {
-          "p50": 1260,
-          "p90": 2533,
-          "max": 2980
+          "p50": 1288,
+          "p90": 2647,
+          "max": 2898
         }
       },
       "at_high_risk": {
         "incidents": 160,
-        "normals": 200,
-        "true_positives": 20,
+        "normals": 220,
+        "true_positives": 0,
+        "false_positives": 0,
+        "precision": null,
+        "recall": 0,
+        "false_positive_rate": 0,
+        "false_negative_rate": 1,
+        "detection_latency_seconds": {
+          "p50": null,
+          "p90": null,
+          "max": null
+        }
+      },
+      "at_warning_excluding_panic": {
+        "incidents": 140,
+        "normals": 220,
+        "true_positives": 80,
         "false_positives": 0,
         "precision": 1,
-        "recall": 0.125,
+        "recall": 0.5714,
         "false_positive_rate": 0,
-        "false_negative_rate": 0.875,
+        "false_negative_rate": 0.4286,
         "detection_latency_seconds": {
-          "p50": 91,
-          "p90": 114,
-          "max": 119
+          "p50": 1288,
+          "p90": 2647,
+          "max": 2898
+        }
+      },
+      "at_high_risk_excluding_panic": {
+        "incidents": 140,
+        "normals": 220,
+        "true_positives": 0,
+        "false_positives": 0,
+        "precision": null,
+        "recall": 0,
+        "false_positive_rate": 0,
+        "false_negative_rate": 1,
+        "detection_latency_seconds": {
+          "p50": null,
+          "p90": null,
+          "max": null
         }
       },
       "pre_onset_alarm_sessions": 0,
@@ -650,13 +764,24 @@
             "NORMAL": 20
           }
         },
+        "N11_benign_repeats": {
+          "label": "NORMAL",
+          "sessions": 20,
+          "alarm_rate": 0,
+          "reached_expected_level_rate": 1,
+          "exact_level_rate": 1,
+          "warning_latency_p50_seconds": null,
+          "max_level_distribution": {
+            "NORMAL": 20
+          }
+        },
         "I01_prolonged_exit": {
           "label": "INCIDENT",
           "sessions": 20,
           "alarm_rate": 1,
           "reached_expected_level_rate": 0,
           "exact_level_rate": 0,
-          "warning_latency_p50_seconds": 1265,
+          "warning_latency_p50_seconds": 1251,
           "max_level_distribution": {
             "WARNING": 20
           }
@@ -667,7 +792,7 @@
           "alarm_rate": 1,
           "reached_expected_level_rate": 0,
           "exact_level_rate": 0,
-          "warning_latency_p50_seconds": 1119,
+          "warning_latency_p50_seconds": 1134,
           "max_level_distribution": {
             "WARNING": 20
           }
@@ -678,7 +803,7 @@
           "alarm_rate": 1,
           "reached_expected_level_rate": 1,
           "exact_level_rate": 1,
-          "warning_latency_p50_seconds": 1553,
+          "warning_latency_p50_seconds": 1619,
           "max_level_distribution": {
             "WARNING": 20
           }
@@ -700,7 +825,7 @@
           "alarm_rate": 1,
           "reached_expected_level_rate": 1,
           "exact_level_rate": 1,
-          "warning_latency_p50_seconds": 2535,
+          "warning_latency_p50_seconds": 2582,
           "max_level_distribution": {
             "WARNING": 20
           }
@@ -719,12 +844,12 @@
         "I07_panic": {
           "label": "INCIDENT",
           "sessions": 20,
-          "alarm_rate": 1,
-          "reached_expected_level_rate": 1,
-          "exact_level_rate": 1,
-          "warning_latency_p50_seconds": 91,
+          "alarm_rate": 0,
+          "reached_expected_level_rate": 0,
+          "exact_level_rate": 0,
+          "warning_latency_p50_seconds": null,
           "max_level_distribution": {
-            "EMERGENCY": 20
+            "NORMAL": 20
           }
         },
         "I08_no_telemetry_after_departure": {
@@ -743,32 +868,62 @@
     "hybrid": {
       "at_warning": {
         "incidents": 160,
-        "normals": 200,
+        "normals": 220,
         "true_positives": 160,
-        "false_positives": 8,
-        "precision": 0.9524,
+        "false_positives": 14,
+        "precision": 0.9195,
         "recall": 1,
-        "false_positive_rate": 0.04,
+        "false_positive_rate": 0.0636,
         "false_negative_rate": 0,
         "detection_latency_seconds": {
           "p50": 600,
-          "p90": 3514,
-          "max": 3907
+          "p90": 3491,
+          "max": 3909
         }
       },
       "at_high_risk": {
         "incidents": 160,
-        "normals": 200,
-        "true_positives": 121,
+        "normals": 220,
+        "true_positives": 100,
         "false_positives": 0,
         "precision": 1,
-        "recall": 0.7563,
+        "recall": 0.625,
         "false_positive_rate": 0,
-        "false_negative_rate": 0.2438,
+        "false_negative_rate": 0.375,
         "detection_latency_seconds": {
-          "p50": 1301,
-          "p90": 2309,
-          "max": 3845
+          "p50": 1800,
+          "p90": 2712,
+          "max": 2893
+        }
+      },
+      "at_warning_excluding_panic": {
+        "incidents": 140,
+        "normals": 220,
+        "true_positives": 140,
+        "false_positives": 14,
+        "precision": 0.9091,
+        "recall": 1,
+        "false_positive_rate": 0.0636,
+        "false_negative_rate": 0,
+        "detection_latency_seconds": {
+          "p50": 610,
+          "p90": 3523,
+          "max": 3909
+        }
+      },
+      "at_high_risk_excluding_panic": {
+        "incidents": 140,
+        "normals": 220,
+        "true_positives": 80,
+        "false_positives": 0,
+        "precision": 1,
+        "recall": 0.5714,
+        "false_positive_rate": 0,
+        "false_negative_rate": 0.4286,
+        "detection_latency_seconds": {
+          "p50": 1800,
+          "p90": 2747,
+          "max": 2893
         }
       },
       "pre_onset_alarm_sessions": 0,
@@ -884,13 +1039,25 @@
             "NORMAL": 20
           }
         },
+        "N11_benign_repeats": {
+          "label": "NORMAL",
+          "sessions": 20,
+          "alarm_rate": 0.3,
+          "reached_expected_level_rate": 1,
+          "exact_level_rate": 0.7,
+          "warning_latency_p50_seconds": null,
+          "max_level_distribution": {
+            "NORMAL": 14,
+            "WARNING": 6
+          }
+        },
         "I01_prolonged_exit": {
           "label": "INCIDENT",
           "sessions": 20,
           "alarm_rate": 1,
           "reached_expected_level_rate": 1,
           "exact_level_rate": 1,
-          "warning_latency_p50_seconds": 441,
+          "warning_latency_p50_seconds": 448,
           "max_level_distribution": {
             "HIGH_RISK": 20
           }
@@ -901,7 +1068,7 @@
           "alarm_rate": 1,
           "reached_expected_level_rate": 1,
           "exact_level_rate": 1,
-          "warning_latency_p50_seconds": 639,
+          "warning_latency_p50_seconds": 630,
           "max_level_distribution": {
             "HIGH_RISK": 20
           }
@@ -911,10 +1078,11 @@
           "sessions": 20,
           "alarm_rate": 1,
           "reached_expected_level_rate": 1,
-          "exact_level_rate": 0,
-          "warning_latency_p50_seconds": 706,
+          "exact_level_rate": 0.55,
+          "warning_latency_p50_seconds": 739,
           "max_level_distribution": {
-            "HIGH_RISK": 20
+            "HIGH_RISK": 9,
+            "WARNING": 11
           }
         },
         "I04_gps_spoofing": {
@@ -923,7 +1091,7 @@
           "alarm_rate": 1,
           "reached_expected_level_rate": 1,
           "exact_level_rate": 1,
-          "warning_latency_p50_seconds": 104,
+          "warning_latency_p50_seconds": 113,
           "max_level_distribution": {
             "WARNING": 20
           }
@@ -933,10 +1101,11 @@
           "sessions": 20,
           "alarm_rate": 1,
           "reached_expected_level_rate": 1,
-          "exact_level_rate": 0,
-          "warning_latency_p50_seconds": 1107,
+          "exact_level_rate": 0.45,
+          "warning_latency_p50_seconds": 1155,
           "max_level_distribution": {
-            "HIGH_RISK": 20
+            "HIGH_RISK": 11,
+            "WARNING": 9
           }
         },
         "I06_subtle_combination": {
@@ -944,11 +1113,10 @@
           "sessions": 20,
           "alarm_rate": 1,
           "reached_expected_level_rate": 1,
-          "exact_level_rate": 0.95,
-          "warning_latency_p50_seconds": 3584,
+          "exact_level_rate": 1,
+          "warning_latency_p50_seconds": 3550,
           "max_level_distribution": {
-            "HIGH_RISK": 1,
-            "WARNING": 19
+            "WARNING": 20
           }
         },
         "I07_panic": {
@@ -957,7 +1125,7 @@
           "alarm_rate": 1,
           "reached_expected_level_rate": 1,
           "exact_level_rate": 1,
-          "warning_latency_p50_seconds": 91,
+          "warning_latency_p50_seconds": 69,
           "max_level_distribution": {
             "EMERGENCY": 20
           }
@@ -978,32 +1146,62 @@
     "anomaly": {
       "at_warning": {
         "incidents": 160,
-        "normals": 200,
-        "true_positives": 120,
-        "false_positives": 0,
-        "precision": 1,
-        "recall": 0.75,
-        "false_positive_rate": 0,
-        "false_negative_rate": 0.25,
+        "normals": 220,
+        "true_positives": 100,
+        "false_positives": 6,
+        "precision": 0.9434,
+        "recall": 0.625,
+        "false_positive_rate": 0.0273,
+        "false_negative_rate": 0.375,
         "detection_latency_seconds": {
-          "p50": 1296,
-          "p90": 3553,
-          "max": 3907
+          "p50": 1619,
+          "p90": 3552,
+          "max": 3909
         }
       },
       "at_high_risk": {
         "incidents": 160,
-        "normals": 200,
-        "true_positives": 20,
+        "normals": 220,
+        "true_positives": 0,
         "false_positives": 0,
-        "precision": 1,
-        "recall": 0.125,
+        "precision": null,
+        "recall": 0,
         "false_positive_rate": 0,
-        "false_negative_rate": 0.875,
+        "false_negative_rate": 1,
         "detection_latency_seconds": {
-          "p50": 91,
-          "p90": 114,
-          "max": 119
+          "p50": null,
+          "p90": null,
+          "max": null
+        }
+      },
+      "at_warning_excluding_panic": {
+        "incidents": 140,
+        "normals": 220,
+        "true_positives": 100,
+        "false_positives": 6,
+        "precision": 0.9434,
+        "recall": 0.7143,
+        "false_positive_rate": 0.0273,
+        "false_negative_rate": 0.2857,
+        "detection_latency_seconds": {
+          "p50": 1619,
+          "p90": 3552,
+          "max": 3909
+        }
+      },
+      "at_high_risk_excluding_panic": {
+        "incidents": 140,
+        "normals": 220,
+        "true_positives": 0,
+        "false_positives": 0,
+        "precision": null,
+        "recall": 0,
+        "false_positive_rate": 0,
+        "false_negative_rate": 1,
+        "detection_latency_seconds": {
+          "p50": null,
+          "p90": null,
+          "max": null
         }
       },
       "pre_onset_alarm_sessions": 0,
@@ -1118,13 +1316,25 @@
             "NORMAL": 20
           }
         },
+        "N11_benign_repeats": {
+          "label": "NORMAL",
+          "sessions": 20,
+          "alarm_rate": 0.3,
+          "reached_expected_level_rate": 1,
+          "exact_level_rate": 0.7,
+          "warning_latency_p50_seconds": null,
+          "max_level_distribution": {
+            "NORMAL": 14,
+            "WARNING": 6
+          }
+        },
         "I01_prolonged_exit": {
           "label": "INCIDENT",
           "sessions": 20,
           "alarm_rate": 1,
           "reached_expected_level_rate": 0,
           "exact_level_rate": 0,
-          "warning_latency_p50_seconds": 1265,
+          "warning_latency_p50_seconds": 1251,
           "max_level_distribution": {
             "WARNING": 20
           }
@@ -1135,7 +1345,7 @@
           "alarm_rate": 1,
           "reached_expected_level_rate": 0,
           "exact_level_rate": 0,
-          "warning_latency_p50_seconds": 1119,
+          "warning_latency_p50_seconds": 1134,
           "max_level_distribution": {
             "WARNING": 20
           }
@@ -1146,7 +1356,7 @@
           "alarm_rate": 1,
           "reached_expected_level_rate": 1,
           "exact_level_rate": 1,
-          "warning_latency_p50_seconds": 1553,
+          "warning_latency_p50_seconds": 1619,
           "max_level_distribution": {
             "WARNING": 20
           }
@@ -1168,7 +1378,7 @@
           "alarm_rate": 1,
           "reached_expected_level_rate": 1,
           "exact_level_rate": 1,
-          "warning_latency_p50_seconds": 2535,
+          "warning_latency_p50_seconds": 2582,
           "max_level_distribution": {
             "WARNING": 20
           }
@@ -1179,7 +1389,7 @@
           "alarm_rate": 1,
           "reached_expected_level_rate": 1,
           "exact_level_rate": 1,
-          "warning_latency_p50_seconds": 3584,
+          "warning_latency_p50_seconds": 3554,
           "max_level_distribution": {
             "WARNING": 20
           }
@@ -1187,12 +1397,12 @@
         "I07_panic": {
           "label": "INCIDENT",
           "sessions": 20,
-          "alarm_rate": 1,
-          "reached_expected_level_rate": 1,
-          "exact_level_rate": 1,
-          "warning_latency_p50_seconds": 91,
+          "alarm_rate": 0,
+          "reached_expected_level_rate": 0,
+          "exact_level_rate": 0,
+          "warning_latency_p50_seconds": null,
           "max_level_distribution": {
-            "EMERGENCY": 20
+            "NORMAL": 20
           }
         },
         "I08_no_telemetry_after_departure": {
@@ -1209,81 +1419,351 @@
       }
     }
   },
+  "holdout_seed": {
+    "seed": 1729,
+    "arms": {
+      "rules": {
+        "at_warning": {
+          "incidents": 160,
+          "normals": 220,
+          "true_positives": 141,
+          "false_positives": 3,
+          "precision": 0.9792,
+          "recall": 0.8813,
+          "false_positive_rate": 0.0136,
+          "false_negative_rate": 0.1188,
+          "detection_latency_seconds": {
+            "p50": 600,
+            "p90": 1077,
+            "max": 1535
+          }
+        },
+        "at_high_risk": {
+          "incidents": 160,
+          "normals": 220,
+          "true_positives": 103,
+          "false_positives": 0,
+          "precision": 1,
+          "recall": 0.6438,
+          "false_positive_rate": 0,
+          "false_negative_rate": 0.3563,
+          "detection_latency_seconds": {
+            "p50": 1800,
+            "p90": 2231,
+            "max": 2989
+          }
+        },
+        "alarm_rate_by_family": {
+          "N01_on_time": 0,
+          "N02_slow_traffic": 0,
+          "N03_indoor_jitter": 0,
+          "N04_short_signal_loss": 0,
+          "N05_legit_overrun": 0,
+          "N06_early_arrival_wait": 0,
+          "N07_short_exit": 0,
+          "N08_device_sleep_buffered": 0.15,
+          "N09_clock_skew_minor": 0,
+          "N10_traffic_detour": 0,
+          "N11_benign_repeats": 0,
+          "I01_prolonged_exit": 1,
+          "I02_telemetry_blackout": 1,
+          "I03_moving_away_arrival": 1,
+          "I04_gps_spoofing": 1,
+          "I05_stalled_en_route": 1,
+          "I06_subtle_combination": 0.05,
+          "I07_panic": 1,
+          "I08_no_telemetry_after_departure": 1
+        }
+      },
+      "hybrid_v1": {
+        "at_warning": {
+          "incidents": 160,
+          "normals": 220,
+          "true_positives": 141,
+          "false_positives": 3,
+          "precision": 0.9792,
+          "recall": 0.8813,
+          "false_positive_rate": 0.0136,
+          "false_negative_rate": 0.1188,
+          "detection_latency_seconds": {
+            "p50": 600,
+            "p90": 1077,
+            "max": 1535
+          }
+        },
+        "at_high_risk": {
+          "incidents": 160,
+          "normals": 220,
+          "true_positives": 103,
+          "false_positives": 0,
+          "precision": 1,
+          "recall": 0.6438,
+          "false_positive_rate": 0,
+          "false_negative_rate": 0.3563,
+          "detection_latency_seconds": {
+            "p50": 1800,
+            "p90": 2231,
+            "max": 2989
+          }
+        },
+        "alarm_rate_by_family": {
+          "N01_on_time": 0,
+          "N02_slow_traffic": 0,
+          "N03_indoor_jitter": 0,
+          "N04_short_signal_loss": 0,
+          "N05_legit_overrun": 0,
+          "N06_early_arrival_wait": 0,
+          "N07_short_exit": 0,
+          "N08_device_sleep_buffered": 0.15,
+          "N09_clock_skew_minor": 0,
+          "N10_traffic_detour": 0,
+          "N11_benign_repeats": 0,
+          "I01_prolonged_exit": 1,
+          "I02_telemetry_blackout": 1,
+          "I03_moving_away_arrival": 1,
+          "I04_gps_spoofing": 1,
+          "I05_stalled_en_route": 1,
+          "I06_subtle_combination": 0.05,
+          "I07_panic": 1,
+          "I08_no_telemetry_after_departure": 1
+        }
+      },
+      "anomaly_v1": {
+        "at_warning": {
+          "incidents": 160,
+          "normals": 220,
+          "true_positives": 78,
+          "false_positives": 0,
+          "precision": 1,
+          "recall": 0.4875,
+          "false_positive_rate": 0,
+          "false_negative_rate": 0.5125,
+          "detection_latency_seconds": {
+            "p50": 1275,
+            "p90": 2618,
+            "max": 2975
+          }
+        },
+        "at_high_risk": {
+          "incidents": 160,
+          "normals": 220,
+          "true_positives": 0,
+          "false_positives": 0,
+          "precision": null,
+          "recall": 0,
+          "false_positive_rate": 0,
+          "false_negative_rate": 1,
+          "detection_latency_seconds": {
+            "p50": null,
+            "p90": null,
+            "max": null
+          }
+        },
+        "alarm_rate_by_family": {
+          "N01_on_time": 0,
+          "N02_slow_traffic": 0,
+          "N03_indoor_jitter": 0,
+          "N04_short_signal_loss": 0,
+          "N05_legit_overrun": 0,
+          "N06_early_arrival_wait": 0,
+          "N07_short_exit": 0,
+          "N08_device_sleep_buffered": 0,
+          "N09_clock_skew_minor": 0,
+          "N10_traffic_detour": 0,
+          "N11_benign_repeats": 0,
+          "I01_prolonged_exit": 1,
+          "I02_telemetry_blackout": 1,
+          "I03_moving_away_arrival": 1,
+          "I04_gps_spoofing": 0,
+          "I05_stalled_en_route": 0.9,
+          "I06_subtle_combination": 0,
+          "I07_panic": 0,
+          "I08_no_telemetry_after_departure": 0
+        }
+      },
+      "hybrid": {
+        "at_warning": {
+          "incidents": 160,
+          "normals": 220,
+          "true_positives": 160,
+          "false_positives": 6,
+          "precision": 0.9639,
+          "recall": 1,
+          "false_positive_rate": 0.0273,
+          "false_negative_rate": 0,
+          "detection_latency_seconds": {
+            "p50": 600,
+            "p90": 3504,
+            "max": 3861
+          }
+        },
+        "at_high_risk": {
+          "incidents": 160,
+          "normals": 220,
+          "true_positives": 103,
+          "false_positives": 0,
+          "precision": 1,
+          "recall": 0.6438,
+          "false_positive_rate": 0,
+          "false_negative_rate": 0.3563,
+          "detection_latency_seconds": {
+            "p50": 1800,
+            "p90": 2231,
+            "max": 2989
+          }
+        },
+        "alarm_rate_by_family": {
+          "N01_on_time": 0,
+          "N02_slow_traffic": 0,
+          "N03_indoor_jitter": 0,
+          "N04_short_signal_loss": 0,
+          "N05_legit_overrun": 0,
+          "N06_early_arrival_wait": 0,
+          "N07_short_exit": 0,
+          "N08_device_sleep_buffered": 0.15,
+          "N09_clock_skew_minor": 0,
+          "N10_traffic_detour": 0,
+          "N11_benign_repeats": 0.15,
+          "I01_prolonged_exit": 1,
+          "I02_telemetry_blackout": 1,
+          "I03_moving_away_arrival": 1,
+          "I04_gps_spoofing": 1,
+          "I05_stalled_en_route": 1,
+          "I06_subtle_combination": 1,
+          "I07_panic": 1,
+          "I08_no_telemetry_after_departure": 1
+        }
+      },
+      "anomaly": {
+        "at_warning": {
+          "incidents": 160,
+          "normals": 220,
+          "true_positives": 98,
+          "false_positives": 3,
+          "precision": 0.9703,
+          "recall": 0.6125,
+          "false_positive_rate": 0.0136,
+          "false_negative_rate": 0.3875,
+          "detection_latency_seconds": {
+            "p50": 1496,
+            "p90": 3562,
+            "max": 3861
+          }
+        },
+        "at_high_risk": {
+          "incidents": 160,
+          "normals": 220,
+          "true_positives": 0,
+          "false_positives": 0,
+          "precision": null,
+          "recall": 0,
+          "false_positive_rate": 0,
+          "false_negative_rate": 1,
+          "detection_latency_seconds": {
+            "p50": null,
+            "p90": null,
+            "max": null
+          }
+        },
+        "alarm_rate_by_family": {
+          "N01_on_time": 0,
+          "N02_slow_traffic": 0,
+          "N03_indoor_jitter": 0,
+          "N04_short_signal_loss": 0,
+          "N05_legit_overrun": 0,
+          "N06_early_arrival_wait": 0,
+          "N07_short_exit": 0,
+          "N08_device_sleep_buffered": 0,
+          "N09_clock_skew_minor": 0,
+          "N10_traffic_detour": 0,
+          "N11_benign_repeats": 0.15,
+          "I01_prolonged_exit": 1,
+          "I02_telemetry_blackout": 1,
+          "I03_moving_away_arrival": 1,
+          "I04_gps_spoofing": 0,
+          "I05_stalled_en_route": 0.9,
+          "I06_subtle_combination": 1,
+          "I07_panic": 0,
+          "I08_no_telemetry_after_departure": 0
+        }
+      }
+    }
+  },
   "anomaly_threshold_sensitivity": {
     "0.7": {
       "hybrid_v1": {
         "at_warning": {
           "incidents": 160,
-          "normals": 200,
-          "true_positives": 141,
+          "normals": 220,
+          "true_positives": 142,
           "false_positives": 8,
-          "precision": 0.9463,
-          "recall": 0.8813,
-          "false_positive_rate": 0.04,
-          "false_negative_rate": 0.1188,
+          "precision": 0.9467,
+          "recall": 0.8875,
+          "false_positive_rate": 0.0364,
+          "false_negative_rate": 0.1125,
           "detection_latency_seconds": {
             "p50": 600,
-            "p90": 1025,
-            "max": 1420
+            "p90": 1036,
+            "max": 1588
           }
         },
         "at_high_risk": {
           "incidents": 160,
-          "normals": 200,
-          "true_positives": 140,
+          "normals": 220,
+          "true_positives": 100,
           "false_positives": 0,
           "precision": 1,
-          "recall": 0.875,
+          "recall": 0.625,
           "false_positive_rate": 0,
-          "false_negative_rate": 0.125,
+          "false_negative_rate": 0.375,
           "detection_latency_seconds": {
-            "p50": 1071,
-            "p90": 1867,
-            "max": 2380
+            "p50": 1800,
+            "p90": 2712,
+            "max": 2893
           }
         },
         "subtle_combination": {
           "label": "INCIDENT",
           "sessions": 20,
-          "alarm_rate": 0.05,
-          "reached_expected_level_rate": 0.05,
-          "exact_level_rate": 0.05,
-          "warning_latency_p50_seconds": 845,
+          "alarm_rate": 0.1,
+          "reached_expected_level_rate": 0.1,
+          "exact_level_rate": 0.1,
+          "warning_latency_p50_seconds": 864,
           "max_level_distribution": {
-            "NORMAL": 19,
-            "WARNING": 1
+            "NORMAL": 18,
+            "WARNING": 2
           }
         }
       },
       "anomaly_v1": {
         "at_warning": {
           "incidents": 160,
-          "normals": 200,
-          "true_positives": 120,
+          "normals": 220,
+          "true_positives": 100,
           "false_positives": 0,
           "precision": 1,
-          "recall": 0.75,
+          "recall": 0.625,
           "false_positive_rate": 0,
-          "false_negative_rate": 0.25,
+          "false_negative_rate": 0.375,
           "detection_latency_seconds": {
-            "p50": 1033,
-            "p90": 1935,
-            "max": 2380
+            "p50": 1092,
+            "p90": 2012,
+            "max": 2308
           }
         },
         "at_high_risk": {
           "incidents": 160,
-          "normals": 200,
-          "true_positives": 20,
+          "normals": 220,
+          "true_positives": 0,
           "false_positives": 0,
-          "precision": 1,
-          "recall": 0.125,
+          "precision": null,
+          "recall": 0,
           "false_positive_rate": 0,
-          "false_negative_rate": 0.875,
+          "false_negative_rate": 1,
           "detection_latency_seconds": {
-            "p50": 91,
-            "p90": 114,
-            "max": 119
+            "p50": null,
+            "p90": null,
+            "max": null
           }
         },
         "subtle_combination": {
@@ -1301,76 +1781,32 @@
       "hybrid": {
         "at_warning": {
           "incidents": 160,
-          "normals": 200,
+          "normals": 220,
           "true_positives": 160,
-          "false_positives": 8,
-          "precision": 0.9524,
+          "false_positives": 14,
+          "precision": 0.9195,
           "recall": 1,
-          "false_positive_rate": 0.04,
+          "false_positive_rate": 0.0636,
           "false_negative_rate": 0,
           "detection_latency_seconds": {
             "p50": 600,
-            "p90": 3387,
-            "max": 3474
+            "p90": 3363,
+            "max": 3468
           }
         },
         "at_high_risk": {
           "incidents": 160,
-          "normals": 200,
-          "true_positives": 141,
+          "normals": 220,
+          "true_positives": 100,
           "false_positives": 0,
           "precision": 1,
-          "recall": 0.8813,
+          "recall": 0.625,
           "false_positive_rate": 0,
-          "false_negative_rate": 0.1188,
+          "false_negative_rate": 0.375,
           "detection_latency_seconds": {
-            "p50": 1075,
-            "p90": 1885,
-            "max": 3845
-          }
-        },
-        "subtle_combination": {
-          "label": "INCIDENT",
-          "sessions": 20,
-          "alarm_rate": 1,
-          "reached_expected_level_rate": 1,
-          "exact_level_rate": 0.95,
-          "warning_latency_p50_seconds": 3413,
-          "max_level_distribution": {
-            "HIGH_RISK": 1,
-            "WARNING": 19
-          }
-        }
-      },
-      "anomaly": {
-        "at_warning": {
-          "incidents": 160,
-          "normals": 200,
-          "true_positives": 140,
-          "false_positives": 0,
-          "precision": 1,
-          "recall": 0.875,
-          "false_positive_rate": 0,
-          "false_negative_rate": 0.125,
-          "detection_latency_seconds": {
-            "p50": 1071,
-            "p90": 3393,
-            "max": 3474
-          }
-        },
-        "at_high_risk": {
-          "incidents": 160,
-          "normals": 200,
-          "true_positives": 20,
-          "false_positives": 0,
-          "precision": 1,
-          "recall": 0.125,
-          "false_positive_rate": 0,
-          "false_negative_rate": 0.875,
-          "detection_latency_seconds": {
-            "p50": 91,
-            "p90": 114,
-            "max": 119
+            "p50": 1800,
+            "p90": 2712,
+            "max": 2893
           }
         },
         "subtle_combination": {
@@ -1379,7 +1815,50 @@
           "alarm_rate": 1,
           "reached_expected_level_rate": 1,
           "exact_level_rate": 1,
-          "warning_latency_p50_seconds": 3413,
+          "warning_latency_p50_seconds": 3414,
+          "max_level_distribution": {
+            "WARNING": 20
+          }
+        }
+      },
+      "anomaly": {
+        "at_warning": {
+          "incidents": 160,
+          "normals": 220,
+          "true_positives": 120,
+          "false_positives": 6,
+          "precision": 0.9524,
+          "recall": 0.75,
+          "false_positive_rate": 0.0273,
+          "false_negative_rate": 0.25,
+          "detection_latency_seconds": {
+            "p50": 1143,
+            "p90": 3398,
+            "max": 3468
+          }
+        },
+        "at_high_risk": {
+          "incidents": 160,
+          "normals": 220,
+          "true_positives": 0,
+          "false_positives": 0,
+          "precision": null,
+          "recall": 0,
+          "false_positive_rate": 0,
+          "false_negative_rate": 1,
+          "detection_latency_seconds": {
+            "p50": null,
+            "p90": null,
+            "max": null
+          }
+        },
+        "subtle_combination": {
+          "label": "INCIDENT",
+          "sessions": 20,
+          "alarm_rate": 1,
+          "reached_expected_level_rate": 1,
+          "exact_level_rate": 1,
+          "warning_latency_p50_seconds": 3414,
           "max_level_distribution": {
             "WARNING": 20
           }
@@ -1390,76 +1869,76 @@
       "hybrid_v1": {
         "at_warning": {
           "incidents": 160,
-          "normals": 200,
-          "true_positives": 141,
+          "normals": 220,
+          "true_positives": 142,
           "false_positives": 8,
-          "precision": 0.9463,
-          "recall": 0.8813,
-          "false_positive_rate": 0.04,
-          "false_negative_rate": 0.1188,
+          "precision": 0.9467,
+          "recall": 0.8875,
+          "false_positive_rate": 0.0364,
+          "false_negative_rate": 0.1125,
           "detection_latency_seconds": {
             "p50": 600,
-            "p90": 1025,
-            "max": 1420
+            "p90": 1036,
+            "max": 1588
           }
         },
         "at_high_risk": {
           "incidents": 160,
-          "normals": 200,
-          "true_positives": 140,
+          "normals": 220,
+          "true_positives": 100,
           "false_positives": 0,
           "precision": 1,
-          "recall": 0.875,
+          "recall": 0.625,
           "false_positive_rate": 0,
-          "false_negative_rate": 0.125,
+          "false_negative_rate": 0.375,
           "detection_latency_seconds": {
-            "p50": 951,
-            "p90": 1823,
-            "max": 1932
+            "p50": 1800,
+            "p90": 2712,
+            "max": 2893
           }
         },
         "subtle_combination": {
           "label": "INCIDENT",
           "sessions": 20,
-          "alarm_rate": 0.05,
-          "reached_expected_level_rate": 0.05,
-          "exact_level_rate": 0.05,
-          "warning_latency_p50_seconds": 845,
+          "alarm_rate": 0.1,
+          "reached_expected_level_rate": 0.1,
+          "exact_level_rate": 0.1,
+          "warning_latency_p50_seconds": 864,
           "max_level_distribution": {
-            "NORMAL": 19,
-            "WARNING": 1
+            "NORMAL": 18,
+            "WARNING": 2
           }
         }
       },
       "anomaly_v1": {
         "at_warning": {
           "incidents": 160,
-          "normals": 200,
-          "true_positives": 120,
+          "normals": 220,
+          "true_positives": 100,
           "false_positives": 0,
           "precision": 1,
-          "recall": 0.75,
+          "recall": 0.625,
           "false_positive_rate": 0,
-          "false_negative_rate": 0.25,
+          "false_negative_rate": 0.375,
           "detection_latency_seconds": {
-            "p50": 915,
-            "p90": 1830,
-            "max": 1932
+            "p50": 962,
+            "p90": 1841,
+            "max": 1948
           }
         },
         "at_high_risk": {
           "incidents": 160,
-          "normals": 200,
-          "true_positives": 20,
+          "normals": 220,
+          "true_positives": 0,
           "false_positives": 0,
-          "precision": 1,
-          "recall": 0.125,
+          "precision": null,
+          "recall": 0,
           "false_positive_rate": 0,
-          "false_negative_rate": 0.875,
+          "false_negative_rate": 1,
           "detection_latency_seconds": {
-            "p50": 91,
-            "p90": 114,
-            "max": 119
+            "p50": null,
+            "p90": null,
+            "max": null
           }
         },
         "subtle_combination": {
@@ -1477,76 +1956,32 @@
       "hybrid": {
         "at_warning": {
           "incidents": 160,
-          "normals": 200,
+          "normals": 220,
           "true_positives": 160,
-          "false_positives": 8,
-          "precision": 0.9524,
+          "false_positives": 28,
+          "precision": 0.8511,
           "recall": 1,
-          "false_positive_rate": 0.04,
+          "false_positive_rate": 0.1273,
           "false_negative_rate": 0,
           "detection_latency_seconds": {
             "p50": 600,
-            "p90": 2311,
-            "max": 2398
+            "p90": 2293,
+            "max": 2409
           }
         },
         "at_high_risk": {
           "incidents": 160,
-          "normals": 200,
-          "true_positives": 141,
+          "normals": 220,
+          "true_positives": 100,
           "false_positives": 0,
           "precision": 1,
-          "recall": 0.8813,
+          "recall": 0.625,
           "false_positive_rate": 0,
-          "false_negative_rate": 0.1188,
+          "false_negative_rate": 0.375,
           "detection_latency_seconds": {
-            "p50": 955,
-            "p90": 1828,
-            "max": 2405
-          }
-        },
-        "subtle_combination": {
-          "label": "INCIDENT",
-          "sessions": 20,
-          "alarm_rate": 1,
-          "reached_expected_level_rate": 1,
-          "exact_level_rate": 0.95,
-          "warning_latency_p50_seconds": 2340,
-          "max_level_distribution": {
-            "HIGH_RISK": 1,
-            "WARNING": 19
-          }
-        }
-      },
-      "anomaly": {
-        "at_warning": {
-          "incidents": 160,
-          "normals": 200,
-          "true_positives": 140,
-          "false_positives": 0,
-          "precision": 1,
-          "recall": 0.875,
-          "false_positive_rate": 0,
-          "false_negative_rate": 0.125,
-          "detection_latency_seconds": {
-            "p50": 951,
-            "p90": 2317,
-            "max": 2405
-          }
-        },
-        "at_high_risk": {
-          "incidents": 160,
-          "normals": 200,
-          "true_positives": 20,
-          "false_positives": 0,
-          "precision": 1,
-          "recall": 0.125,
-          "false_positive_rate": 0,
-          "false_negative_rate": 0.875,
-          "detection_latency_seconds": {
-            "p50": 91,
-            "p90": 114,
-            "max": 119
+            "p50": 1800,
+            "p90": 2712,
+            "max": 2893
           }
         },
         "subtle_combination": {
@@ -1555,7 +1990,50 @@
           "alarm_rate": 1,
           "reached_expected_level_rate": 1,
           "exact_level_rate": 1,
-          "warning_latency_p50_seconds": 2346,
+          "warning_latency_p50_seconds": 2349,
+          "max_level_distribution": {
+            "WARNING": 20
+          }
+        }
+      },
+      "anomaly": {
+        "at_warning": {
+          "incidents": 160,
+          "normals": 220,
+          "true_positives": 120,
+          "false_positives": 20,
+          "precision": 0.8571,
+          "recall": 0.75,
+          "false_positive_rate": 0.0909,
+          "false_negative_rate": 0.25,
+          "detection_latency_seconds": {
+            "p50": 1007,
+            "p90": 2336,
+            "max": 2409
+          }
+        },
+        "at_high_risk": {
+          "incidents": 160,
+          "normals": 220,
+          "true_positives": 0,
+          "false_positives": 0,
+          "precision": null,
+          "recall": 0,
+          "false_positive_rate": 0,
+          "false_negative_rate": 1,
+          "detection_latency_seconds": {
+            "p50": null,
+            "p90": null,
+            "max": null
+          }
+        },
+        "subtle_combination": {
+          "label": "INCIDENT",
+          "sessions": 20,
+          "alarm_rate": 1,
+          "reached_expected_level_rate": 1,
+          "exact_level_rate": 1,
+          "warning_latency_p50_seconds": 2349,
           "max_level_distribution": {
             "WARNING": 20
           }
@@ -1566,76 +2044,76 @@
       "hybrid_v1": {
         "at_warning": {
           "incidents": 160,
-          "normals": 200,
-          "true_positives": 141,
+          "normals": 220,
+          "true_positives": 142,
           "false_positives": 8,
-          "precision": 0.9463,
-          "recall": 0.8813,
-          "false_positive_rate": 0.04,
-          "false_negative_rate": 0.1188,
+          "precision": 0.9467,
+          "recall": 0.8875,
+          "false_positive_rate": 0.0364,
+          "false_negative_rate": 0.1125,
           "detection_latency_seconds": {
             "p50": 600,
-            "p90": 1025,
-            "max": 1420
+            "p90": 1036,
+            "max": 1588
           }
         },
         "at_high_risk": {
           "incidents": 160,
-          "normals": 200,
-          "true_positives": 140,
+          "normals": 220,
+          "true_positives": 100,
           "false_positives": 0,
           "precision": 1,
-          "recall": 0.875,
+          "recall": 0.625,
           "false_positive_rate": 0,
-          "false_negative_rate": 0.125,
+          "false_negative_rate": 0.375,
           "detection_latency_seconds": {
-            "p50": 841,
-            "p90": 1815,
-            "max": 1900
+            "p50": 1800,
+            "p90": 2712,
+            "max": 2893
           }
         },
         "subtle_combination": {
           "label": "INCIDENT",
           "sessions": 20,
-          "alarm_rate": 0.05,
-          "reached_expected_level_rate": 0.05,
-          "exact_level_rate": 0.05,
-          "warning_latency_p50_seconds": 845,
+          "alarm_rate": 0.1,
+          "reached_expected_level_rate": 0.1,
+          "exact_level_rate": 0.1,
+          "warning_latency_p50_seconds": 864,
           "max_level_distribution": {
-            "NORMAL": 19,
-            "WARNING": 1
+            "NORMAL": 18,
+            "WARNING": 2
           }
         }
       },
       "anomaly_v1": {
         "at_warning": {
           "incidents": 160,
-          "normals": 200,
-          "true_positives": 120,
+          "normals": 220,
+          "true_positives": 100,
           "false_positives": 0,
           "precision": 1,
-          "recall": 0.75,
+          "recall": 0.625,
           "false_positive_rate": 0,
-          "false_negative_rate": 0.25,
+          "false_negative_rate": 0.375,
           "detection_latency_seconds": {
-            "p50": 809,
+            "p50": 852,
             "p90": 1818,
-            "max": 1900
+            "max": 1909
           }
         },
         "at_high_risk": {
           "incidents": 160,
-          "normals": 200,
-          "true_positives": 20,
+          "normals": 220,
+          "true_positives": 0,
           "false_positives": 0,
-          "precision": 1,
-          "recall": 0.125,
+          "precision": null,
+          "recall": 0,
           "false_positive_rate": 0,
-          "false_negative_rate": 0.875,
+          "false_negative_rate": 1,
           "detection_latency_seconds": {
-            "p50": 91,
-            "p90": 114,
-            "max": 119
+            "p50": null,
+            "p90": null,
+            "max": null
           }
         },
         "subtle_combination": {
@@ -1653,76 +2131,32 @@
       "hybrid": {
         "at_warning": {
           "incidents": 160,
-          "normals": 200,
+          "normals": 220,
           "true_positives": 160,
-          "false_positives": 8,
-          "precision": 0.9524,
+          "false_positives": 28,
+          "precision": 0.8511,
           "recall": 1,
-          "false_positive_rate": 0.04,
+          "false_positive_rate": 0.1273,
           "false_negative_rate": 0,
           "detection_latency_seconds": {
             "p50": 600,
-            "p90": 2311,
-            "max": 2398
+            "p90": 2293,
+            "max": 2409
           }
         },
         "at_high_risk": {
           "incidents": 160,
-          "normals": 200,
-          "true_positives": 141,
+          "normals": 220,
+          "true_positives": 100,
           "false_positives": 0,
           "precision": 1,
-          "recall": 0.8813,
+          "recall": 0.625,
           "false_positive_rate": 0,
-          "false_negative_rate": 0.1188,
+          "false_negative_rate": 0.375,
           "detection_latency_seconds": {
-            "p50": 841,
-            "p90": 1817,
-            "max": 2405
-          }
-        },
-        "subtle_combination": {
-          "label": "INCIDENT",
-          "sessions": 20,
-          "alarm_rate": 1,
-          "reached_expected_level_rate": 1,
-          "exact_level_rate": 0.95,
-          "warning_latency_p50_seconds": 2340,
-          "max_level_distribution": {
-            "HIGH_RISK": 1,
-            "WARNING": 19
-          }
-        }
-      },
-      "anomaly": {
-        "at_warning": {
-          "incidents": 160,
-          "normals": 200,
-          "true_positives": 140,
-          "false_positives": 0,
-          "precision": 1,
-          "recall": 0.875,
-          "false_positive_rate": 0,
-          "false_negative_rate": 0.125,
-          "detection_latency_seconds": {
-            "p50": 841,
-            "p90": 2317,
-            "max": 2405
-          }
-        },
-        "at_high_risk": {
-          "incidents": 160,
-          "normals": 200,
-          "true_positives": 20,
-          "false_positives": 0,
-          "precision": 1,
-          "recall": 0.125,
-          "false_positive_rate": 0,
-          "false_negative_rate": 0.875,
-          "detection_latency_seconds": {
-            "p50": 91,
-            "p90": 114,
-            "max": 119
+            "p50": 1800,
+            "p90": 2712,
+            "max": 2893
           }
         },
         "subtle_combination": {
@@ -1731,7 +2165,50 @@
           "alarm_rate": 1,
           "reached_expected_level_rate": 1,
           "exact_level_rate": 1,
-          "warning_latency_p50_seconds": 2346,
+          "warning_latency_p50_seconds": 2349,
+          "max_level_distribution": {
+            "WARNING": 20
+          }
+        }
+      },
+      "anomaly": {
+        "at_warning": {
+          "incidents": 160,
+          "normals": 220,
+          "true_positives": 120,
+          "false_positives": 20,
+          "precision": 0.8571,
+          "recall": 0.75,
+          "false_positive_rate": 0.0909,
+          "false_negative_rate": 0.25,
+          "detection_latency_seconds": {
+            "p50": 901,
+            "p90": 2336,
+            "max": 2409
+          }
+        },
+        "at_high_risk": {
+          "incidents": 160,
+          "normals": 220,
+          "true_positives": 0,
+          "false_positives": 0,
+          "precision": null,
+          "recall": 0,
+          "false_positive_rate": 0,
+          "false_negative_rate": 1,
+          "detection_latency_seconds": {
+            "p50": null,
+            "p90": null,
+            "max": null
+          }
+        },
+        "subtle_combination": {
+          "label": "INCIDENT",
+          "sessions": 20,
+          "alarm_rate": 1,
+          "reached_expected_level_rate": 1,
+          "exact_level_rate": 1,
+          "warning_latency_p50_seconds": 2349,
           "max_level_distribution": {
             "WARNING": 20
           }
@@ -1742,36 +2219,36 @@
   "anomaly_score_distribution": {
     "v1": {
       "normal_sessions": {
-        "count": 14154,
+        "count": 15472,
         "p50": 0,
         "p90": 0,
         "flagged_rate": 0
       },
       "incident_after_onset": {
-        "count": 3842,
-        "p50": 0.1817,
+        "count": 3836,
+        "p50": 0.1756,
         "p90": 0.9,
-        "flagged_rate": 0.2142
+        "flagged_rate": 0.2088
       }
     },
     "v2": {
       "normal_sessions": {
-        "count": 14154,
+        "count": 15472,
         "p50": 0,
         "p90": 0,
-        "flagged_rate": 0
+        "flagged_rate": 0.0015
       },
       "incident_after_onset": {
-        "count": 3842,
+        "count": 3836,
         "p50": 0.64,
         "p90": 0.9,
-        "flagged_rate": 0.24
+        "flagged_rate": 0.2357
       }
     }
   },
   "telemetry": {
-    "genuine_samples": 81246,
-    "injected_samples": 4462,
+    "genuine_samples": 86192,
+    "injected_samples": 4698,
     "genuine_rejection_rate": 0,
     "injected_rejection_rate": 1,
     "rejections_by_reason": {
@@ -1781,15 +2258,15 @@
       },
       "SEQUENCE_REPLAY": {
         "genuine": 0,
-        "injected": 4162
+        "injected": 4398
       }
     }
   },
   "geofence": {
-    "conclusive_truth_samples": 81186,
-    "state_accuracy": 0.9796,
-    "debounced_transitions": 480,
-    "truth_transitions": 480,
+    "conclusive_truth_samples": 86113,
+    "state_accuracy": 0.9773,
+    "debounced_transitions": 606,
+    "truth_transitions": 606,
     "indoor_jitter_excess_transitions_per_session": {
       "mean": 0,
       "max": 0
@@ -1818,7 +2295,7 @@
     },
     "SAFETY-R07": {
       "normal_sessions": 0,
-      "incident_sessions": 22
+      "incident_sessions": 20
     },
     "SAFETY-R08": {
       "normal_sessions": 0,

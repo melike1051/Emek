@@ -32,8 +32,16 @@ import { SafetyRepository, isPanicActive } from './safety.repository';
 /** İz özeti için okunan pencere ve örnek sınırı. */
 const TRACE_WINDOW_SECONDS = 60 * 60;
 const TRACE_SAMPLE_LIMIT = 240;
-/** İzleyicinin tek turda değerlendirdiği azami oturum. */
+/** Tek sahiplenmede alınan azami oturum. */
 const EVALUATION_BATCH_LIMIT = 25;
+/**
+ * Aynı anda değerlendirilen oturum. Her değerlendirme en fazla iki kısa DB
+ * transaction'ı ve bir AI çağrısı yapar; 5, havuzu (varsayılan 10) paniğe yer
+ * bırakacak kadar düşük tutar.
+ */
+const EVALUATION_CONCURRENCY = 5;
+/** İzleyici turu başına değerlendirme süresi üst sınırı. */
+const EVALUATION_BUDGET_MS = 20_000;
 
 export type EvaluationStatus = 'EVALUATED' | 'DISCARDED_SESSION_NOT_ACTIVE' | 'NOT_FOUND';
 
@@ -82,15 +90,40 @@ export class SafetyEvaluationService {
     @Inject(ANOMALY_CLIENT) private readonly anomaly: AnomalyClient,
   ) {}
 
-  /** Değerlendirmesi gelen oturumları sahiplenip sırayla değerlendirir. */
-  async evaluateDue(): Promise<EvaluationResult[]> {
-    const ids = await this.repository.claimDueSessions(
-      EVALUATION_BATCH_LIMIT,
-      this.config.env.SAFETY_EVALUATION_INTERVAL_SECONDS,
-    );
+  /**
+   * Değerlendirmesi gelen oturumları sahiplenip değerlendirir.
+   *
+   * Zaman bütçesi dolana ya da kuyruk boşalana kadar parti parti sahiplenir ve her
+   * partiyi sınırlı eşzamanlılıkla işler: tek parti/tur, AI servisi yavaşken tüm
+   * oturumların değerlendirmesini geciktiriyordu (Faz 8 review). Bir oturumun hatası
+   * diğerlerini durdurmaz; o oturum kira süresi dolunca yeniden sahiplenilir.
+   */
+  async evaluateDue(budgetMs = EVALUATION_BUDGET_MS): Promise<EvaluationResult[]> {
+    const deadline = Date.now() + budgetMs;
     const results: EvaluationResult[] = [];
-    for (const id of ids) {
-      results.push(await this.evaluate(id));
+
+    while (Date.now() < deadline) {
+      const ids = await this.repository.claimDueSessions(
+        EVALUATION_BATCH_LIMIT,
+        this.config.env.SAFETY_EVALUATION_INTERVAL_SECONDS,
+      );
+      if (ids.length === 0) {
+        break;
+      }
+      for (let index = 0; index < ids.length; index += EVALUATION_CONCURRENCY) {
+        const chunk = ids.slice(index, index + EVALUATION_CONCURRENCY);
+        const settled = await Promise.allSettled(chunk.map((id) => this.evaluate(id)));
+        settled.forEach((outcome, position) => {
+          if (outcome.status === 'fulfilled') {
+            results.push(outcome.value);
+            return;
+          }
+          this.metrics.failure('safety.monitor.failed', {
+            step: 'evaluation',
+            sessionId: chunk[position] ?? null,
+          });
+        });
+      }
     }
     return results;
   }
@@ -148,7 +181,11 @@ export class SafetyEvaluationService {
       findings,
       anomaly:
         anomaly.status === 'ASSESSED'
-          ? { score: anomaly.assessment.anomalyScore, quality: anomaly.assessment.quality }
+          ? {
+              score: anomaly.assessment.anomalyScore,
+              quality: anomaly.assessment.quality,
+              contributions: anomaly.assessment.contributions,
+            }
           : null,
       panicRaised: isPanicActive(session),
     });
@@ -222,7 +259,11 @@ export class SafetyEvaluationService {
     const previous = session.riskLevel;
     const panicActive = isPanicActive(session);
     const computed = panicActive ? 'EMERGENCY' : risk.level;
-    const applied = resolveAppliedLevel(previous, computed);
+    const floorActive =
+      session.riskFloor !== null &&
+      session.riskFloorUntil !== null &&
+      session.riskFloorUntil.getTime() > Date.now();
+    const applied = resolveAppliedLevel(previous, computed, floorActive ? session.riskFloor : null);
     const assessed = anomaly.status === 'ASSESSED' ? anomaly.assessment : null;
 
     const assessmentId = await this.repository.insertAssessment(client, {
@@ -318,6 +359,15 @@ export class SafetyEvaluationService {
           assessmentId,
         },
       });
+
+      // Yüksek risk: ham iz kanıttır; rutin retention ile silinmemeli (review M4).
+      if (escalated && riskRank(applied) >= riskRank('HIGH_RISK')) {
+        await this.repository.extendRetention(
+          client,
+          { sessionId: session.id },
+          this.config.env.SAFETY_EVIDENCE_RETENTION_DAYS,
+        );
+      }
 
       // Operatör alarmı: HIGH_RISK'e **yükselişte** kalıcı event. Bu bir bildirimdir;
       // geri dönüşsüz hiçbir işlem (askı, ödeme, hesap) yapılmaz — o operatör

@@ -366,9 +366,12 @@ Tasarım: [safety.md](../architecture/safety.md).
 ### `safety_sessions` — rezervasyona bağlı güvenlik oturumu
 
 - `booking_id` + denormalize `provider_id`/`customer_id` (her telemetride join yok).
-- Durum `safety_session_status`; **rezervasyon başına tek açık oturum**
-  (`uq_safety_sessions_open_booking`, `WHERE status <> 'CLOSED'`). Açma
-  `ON CONFLICT ... DO NOTHING` ile eşzamanlılığa dayanıklı.
+- Durum `safety_session_status`; **rezervasyon başına tek oturum** (tam unique
+  `uq_safety_sessions_booking`). Açma `ON CONFLICT (booking_id) DO NOTHING` ile
+  eşzamanlılığa dayanıklı; kapanan oturum yeniden açılmaz (kısmi index, kapalı oturumun
+  yanına ikinci bir oturum açılmasına izin veriyordu — Faz 8 review).
+- Operatör risk tabanı: `risk_floor` + `risk_floor_until` (CHECK: birlikte dolu ya da
+  birlikte boş).
 - Trigger `safety_session_status_guard`: durum geri gitmez, `CLOSED` terminaldir ve kapalı
   oturumun telemetri sayaçları değişemez. Geçiş tablosunun tamamı uygulamadadır.
 - Oturum politikası kopyalanır: `service_location` (geography), `geofence_radius_meters`,
@@ -388,8 +391,13 @@ Tasarım: [safety.md](../architecture/safety.md).
 
 - `PARTITION BY RANGE (server_received_at)` — anahtar **sunucu zamanı**; aylık partition +
   `DEFAULT` (partition unutulursa veri kaybolmaz). `safety_ensure_location_partition()`.
-- `captured_at` (istemci) + `server_received_at` (sunucu); `location` generated geography +
-  GIST; `distance_to_service_meters` ve tek örnek `geofence_state` ingest'te hesaplanır.
+- `captured_at` (istemci) + `server_received_at` (sunucu); `distance_to_service_meters` ve
+  tek örnek `geofence_state` ingest'te hesaplanır. Generated `location` kolonu ve GIST
+  index'i **yoktur**: hiçbir sorgu ham iz üzerinde uzamsal arama yapmıyor, her INSERT'e
+  yazma maliyeti ekliyordu (Faz 8 review). İz okumaları `session_id` + zaman alt sınırıyla
+  (partition budaması) yapılır.
+- Bu ay ve gelecek ayın partition'ı migration'da oluşturulur; uygulama açılışı ve bakım
+  turu da açar.
 - Sıra numarası tekilliği unique index ile **garanti edilemez** (partition anahtarı
   gerektirir); garanti oturum satırı kilidi + `last_sequence` koşulu.
 - `ON DELETE CASCADE` → oturum; retention satır silmedir.

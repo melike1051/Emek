@@ -64,6 +64,15 @@ export class SafetyMaintenanceService implements OnApplicationBootstrap, OnAppli
   ) {}
 
   onApplicationBootstrap(): void {
+    // Partition'lar izleyiciden bağımsız hazırlanır: izleyici kapalıyken de gelen
+    // örnekler DEFAULT'a düşmemeli (Faz 8 review). Hata açılışı engellemez.
+    void this.guard('partitions', async () => {
+      const now = new Date();
+      await this.repository.ensureLocationPartition(now);
+      await this.repository.ensureLocationPartition(
+        new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)),
+      );
+    });
     if (!this.config.env.SAFETY_MONITOR_ENABLED) {
       return;
     }

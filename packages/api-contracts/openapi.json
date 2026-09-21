@@ -1417,6 +1417,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloseSessionDto"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": ""
@@ -1566,6 +1576,10 @@
         "properties": {}
       },
       "OverrideRiskDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CloseSessionDto": {
         "type": "object",
         "properties": {}
       }

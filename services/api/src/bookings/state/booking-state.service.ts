@@ -28,7 +28,7 @@ export interface TransitionResult {
  * `bookings.status` başka hiçbir yerden UPDATE edilmez. Bu sınıf:
  * - geçişin izin tablosunda olduğunu doğrular,
  * - aktörün yetkili olduğunu doğrular,
- * - satırı kilitler (`FOR UPDATE`) ki eşzamanlı iki geçiş sıraya girsin,
+ * - satırı kilitler (`FOR NO KEY UPDATE`) ki eşzamanlı iki geçiş sıraya girsin,
  * - geçişi ve `booking_status_history` kaydını **aynı transaction'da** yazar,
  * - aynı hedefe tekrar çağrıldığında yan etki üretmez (idempotency).
  */
@@ -41,8 +41,12 @@ export class BookingStateService {
 
   async transition(client: PoolClient, request: TransitionRequest): Promise<TransitionResult> {
     // Kilit: eşzamanlı iki geçiş aynı satırı okuyup ikisi de geçerli sanamaz.
+    // `FOR NO KEY UPDATE`: geçişleri yine sıraya sokar ama çocuk tablolara (ör.
+    // `safety_events.booking_id`) FK ile yazanların `KEY SHARE` kilidini bloklamaz.
+    // `FOR UPDATE` bloklardı: oturum kilidini tutup olay yazan bir işlem (operatör
+    // kapatması, telemetri) ile oturumu bekleyen check-out kilitlenirdi (Faz 8 review).
     const current = await client.query<{ status: BookingStatus }>(
-      `SELECT status FROM bookings WHERE id = $1 FOR UPDATE`,
+      `SELECT status FROM bookings WHERE id = $1 FOR NO KEY UPDATE`,
       [request.bookingId],
     );
 
@@ -90,6 +94,23 @@ export class BookingStateService {
       [request.bookingId, from, request.to, request.actorUserId ?? null, request.reason ?? null],
     );
 
+    // Güvenlik oturumu booking'i **aynı transaction'da** izler (ADR-0019 §2).
+    // Burada olması "tek yol" ilkesinin sonucudur: ödeme, matching, operatör ve
+    // taraflar durumu hep bu metottan ilerletir; oturumu ayrı bir çağrıya bırakmak,
+    // bir yolun onu unutmasını mümkün kılardı (ör. check-out commit edilir ama
+    // telemetri kapısı açık kalır). Yalnızca veritabanı yazar, dış çağrı yapmaz.
+    //
+    // **Audit kaydından önce** çalışır — kilit sırası kuralı: satır kilitleri
+    // (booking → oturum) her zaman global audit zinciri kilidinden **önce** alınır.
+    // Ters sırada (booking → audit → oturum) değerlendirici, operatör kapatması ya da
+    // süre aşımı gibi "oturum → audit" yollarıyla deadlock oluşuyor ve check-in/out
+    // 500 alıyordu (Faz 8 review H1).
+    await this.safety.onBookingTransition(client, {
+      bookingId: request.bookingId,
+      to: request.to,
+      ...(request.actorUserId !== undefined ? { actorUserId: request.actorUserId } : {}),
+    });
+
     await this.audit.record(client, {
       action: AuditAction.BOOKING_STATUS_CHANGED,
       entityType: 'booking',
@@ -97,17 +118,6 @@ export class BookingStateService {
       ...(request.actorUserId !== undefined ? { actorUserId: request.actorUserId } : {}),
       oldValue: { status: from },
       newValue: { status: request.to, actor: request.actor },
-    });
-
-    // Güvenlik oturumu booking'i **aynı transaction'da** izler (ADR-0019 §2).
-    // Burada olması "tek yol" ilkesinin sonucudur: ödeme, matching, operatör ve
-    // taraflar durumu hep bu metottan ilerletir; oturumu ayrı bir çağrıya bırakmak,
-    // bir yolun onu unutmasını mümkün kılardı (ör. check-out commit edilir ama
-    // telemetri kapısı açık kalır). Yalnızca veritabanı yazar, dış çağrı yapmaz.
-    await this.safety.onBookingTransition(client, {
-      bookingId: request.bookingId,
-      to: request.to,
-      ...(request.actorUserId !== undefined ? { actorUserId: request.actorUserId } : {}),
     });
 
     return { from, to: request.to, alreadyInTargetState: false };

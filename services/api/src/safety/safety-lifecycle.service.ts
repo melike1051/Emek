@@ -8,11 +8,18 @@ import { ErrorCode } from '../common/errors/error-codes';
 import type { SafetyClosureReason, SafetySessionStatus } from './safety.constants';
 import { SafetyMetrics } from './safety-metrics';
 import { forwardPath, opensSession, safetyEffectForBooking } from './safety-session.state';
-import { SafetyRepository, type SafetySession, type SessionPolicy } from './safety.repository';
+import {
+  SafetyRepository,
+  isPanicActive,
+  type SafetySession,
+  type SessionPolicy,
+} from './safety.repository';
 
 interface StepOrigin {
   actorUserId?: string | undefined;
   byOperator?: boolean;
+  /** Operatörün gerekçesi (kapanışta zorunlu). */
+  note?: string;
 }
 
 const STEP_EVENT = {
@@ -71,12 +78,33 @@ export class SafetyLifecycleService {
     client: PoolClient,
     input: { bookingId: string; to: BookingStatus; actorUserId?: string },
   ): Promise<void> {
+    // Uyuşmazlık: ham iz kanıttır ve dosya açıkken rutin retention ile silinmemeli
+    // (ADR-0008 §5). Oturum check-out ile çoktan kapanmış olabilir; bu yüzden
+    // rezervasyonun **tüm** oturumları için uygulanır (Faz 8 review M4).
+    if (input.to === 'DISPUTED') {
+      await this.repository.extendRetention(
+        client,
+        { bookingId: input.bookingId },
+        this.config.env.SAFETY_EVIDENCE_RETENTION_DAYS,
+      );
+    }
+
     const effect = safetyEffectForBooking(input.to);
     if (effect === null) {
       return;
     }
 
     let session = await this.repository.lockOpenSessionByBooking(client, input.bookingId);
+
+    // Etkin acil durum varken oturumu kapatan bir booking geçişi reddedilir: kapanan
+    // oturum açık listeden düşer, panik artık çözülemez ve yeni panik kabul edilmez.
+    // Operatör kapatmasıyla aynı kural — önce acil durum çözülür (Faz 8 review M3).
+    if (session !== null && effect.target === 'CLOSED' && isPanicActive(session)) {
+      throw new BusinessException(ErrorCode.SAFETY_INVALID_SESSION_TRANSITION, {
+        clientMessage: 'Etkin bir acil durum kaydı var; önce acil durum çözülmeli.',
+        details: { emergencyActive: true },
+      });
+    }
 
     if (session === null) {
       if (!opensSession(effect)) {
@@ -115,6 +143,7 @@ export class SafetyLifecycleService {
     sessionId: string,
     reason: Extract<SafetyClosureReason, 'OPERATOR_CLOSED' | 'EXPIRED'>,
     actorUserId?: string,
+    note?: string,
   ): Promise<SafetySession> {
     const session = await this.repository.lockSession(client, sessionId);
     if (session === null) {
@@ -132,6 +161,7 @@ export class SafetyLifecycleService {
     await this.applyStep(client, session, 'CLOSED', reason, {
       actorUserId,
       byOperator: reason === 'OPERATOR_CLOSED' && actorUserId !== undefined,
+      ...(note !== undefined ? { note } : {}),
     });
     const closed = await this.repository.lockSession(client, sessionId);
     if (closed === null) {
@@ -185,6 +215,9 @@ export class SafetyLifecycleService {
     }
     if (step === 'CLOSED') {
       details.closureReason = closureReason ?? 'OPERATOR_CLOSED';
+      if (origin.note !== undefined) {
+        details.note = origin.note;
+      }
       details.telemetryCount = session.telemetryCount;
       details.rejectedCount = session.rejectedCount;
     }
@@ -219,7 +252,9 @@ export class SafetyLifecycleService {
         newValue: {
           bookingId: session.bookingId,
           status: step,
-          ...(step === 'CLOSED' ? { closureReason: details.closureReason } : {}),
+          ...(step === 'CLOSED'
+            ? { closureReason: details.closureReason, note: origin.note ?? null }
+            : {}),
         },
       });
     }

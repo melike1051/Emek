@@ -36,12 +36,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.safety.schema import AnomalyRequest, Contribution
+from app.safety.versions import MODEL_V1, MODEL_V2, MODEL_VERSION, MODEL_VERSIONS
 
-MODEL_V1 = "anomaly-deviation-v1"
-MODEL_V2 = "anomaly-deviation-v2"
-#: Kayıtlı sürümler; varsayılan en günceldir.
-MODEL_VERSIONS: tuple[str, ...] = (MODEL_V1, MODEL_V2)
-MODEL_VERSION = MODEL_V2
+__all__ = ["MODEL_V1", "MODEL_V2", "MODEL_VERSION", "MODEL_VERSIONS", "assess"]
 
 
 @dataclass(frozen=True)
@@ -137,10 +134,11 @@ def _history(request: AnomalyRequest) -> tuple[dict[str, float], list[str]]:
     """v2 oturum geçmişi özellikleri."""
     deviations: dict[str, float] = {}
     unavailable: list[str] = []
-    pairs = (
-        ("repeated_gaps", request.recent_long_gap_count),
-        ("repeated_exits", request.recent_exit_count if request.session_status == "ACTIVE" else 0),
-    )
+    pairs: list[tuple[str, int | None]] = [("repeated_gaps", request.recent_long_gap_count)]
+    # Varışta "çıkış" kavramı yoktur: özellik hiç eklenmez (0 olarak eklemek, her
+    # zaman "ölçülmüş" bir özellikle kaliteyi yapay olarak şişirirdi).
+    if request.session_status == "ACTIVE":
+        pairs.append(("repeated_exits", request.recent_exit_count))
     for name, count in pairs:
         if count is None:
             unavailable.append(name)

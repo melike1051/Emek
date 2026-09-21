@@ -54,6 +54,8 @@ export interface SafetySession {
   lastEvaluatedAt: Date | null;
   activeRules: string[];
   anomalyFlagged: boolean;
+  riskFloor: RiskLevel | null;
+  riskFloorUntil: Date | null;
   panicRaisedAt: Date | null;
   panicCount: number;
   emergencyResolvedAt: Date | null;
@@ -104,6 +106,8 @@ interface SessionRow {
   last_evaluated_at: Date | null;
   active_rules: string[];
   anomaly_flagged: boolean;
+  risk_floor: RiskLevel | null;
+  risk_floor_until: Date | null;
   panic_raised_at: Date | null;
   panic_count: number;
   emergency_resolved_at: Date | null;
@@ -130,7 +134,8 @@ const SELECT_SESSION = `
          telemetry_count, rejected_count, integrity_rejection_count, mock_location_count,
          scheduled_start, scheduled_end, monitoring_started_at, activated_at,
          closed_at, closure_reason, next_evaluation_at, last_evaluated_at,
-         active_rules, anomaly_flagged, panic_raised_at, panic_count, emergency_resolved_at,
+         active_rules, anomaly_flagged, risk_floor, risk_floor_until,
+         panic_raised_at, panic_count, emergency_resolved_at,
          retention_expires_at, location_purged_at, created_at
     FROM safety_sessions
 `;
@@ -183,6 +188,8 @@ function toSession(row: SessionRow): SafetySession {
     lastEvaluatedAt: row.last_evaluated_at,
     activeRules: row.active_rules,
     anomalyFlagged: row.anomaly_flagged,
+    riskFloor: row.risk_floor,
+    riskFloorUntil: row.risk_floor_until,
     panicRaisedAt: row.panic_raised_at,
     panicCount: Number(row.panic_count),
     emergencyResolvedAt: row.emergency_resolved_at,
@@ -263,10 +270,12 @@ export class SafetyRepository {
   constructor(private readonly uow: UnitOfWork) {}
 
   /**
-   * Rezervasyondan oturum açar; açık oturum zaten varsa hiçbir şey yapmaz.
+   * Rezervasyondan oturum açar; rezervasyonun oturumu (açık **ya da kapalı**) zaten
+   * varsa hiçbir şey yapmaz ve açık oturumu (varsa) döndürür.
    *
-   * `ON CONFLICT ... DO NOTHING` kısmi unique index'e dayanır: eşzamanlı iki açma
-   * denemesinden yalnızca biri satır ekler, diğeri sessizce mevcut oturumu bulur.
+   * `ON CONFLICT ... DO NOTHING` rezervasyon başına tek oturum index'ine dayanır:
+   * eşzamanlı iki açma denemesinden yalnızca biri satır ekler. Kapanmış oturum
+   * **yeniden açılmaz** — operatörün kapatma kararı sonraki bir geçişle geri alınamaz.
    * Uygulama tarafında "önce var mı diye bak" kontrolü tek başına yarışa açıktı.
    *
    * Hizmet noktası ve zaman penceresi rezervasyondan **kopyalanır**: adres sonradan
@@ -291,7 +300,7 @@ export class SafetyRepository {
          FROM bookings b
          JOIN addresses a ON a.id = b.address_id
         WHERE b.id = $1 AND b.provider_id IS NOT NULL
-       ON CONFLICT (booking_id) WHERE status <> 'CLOSED' DO NOTHING
+       ON CONFLICT (booking_id) DO NOTHING
        RETURNING id`,
       [
         bookingId,
@@ -724,7 +733,11 @@ export class SafetyRepository {
   ): Promise<{ raisedAt: Date; panicNumber: number } | null> {
     const result = await client.query<{ panic_raised_at: Date; panic_count: number }>(
       `UPDATE safety_sessions
-          SET panic_raised_at = now(),
+          -- clock_timestamp(): bölüm başlangıcı, bu transaction'dan önce yazılmış
+          -- olayların **sonrası** olmalı. now() transaction başlangıcıdır; kilit
+          -- beklerken önceki bölüme ait olaylar ondan sonraya düşebilir ve yeni
+          -- bölümdeki gerçek bir panik "tekrar" sanılırdı (Faz 8 review M1).
+          SET panic_raised_at = clock_timestamp(),
               panic_count = panic_count + 1,
               emergency_resolved_at = NULL,
               risk_level = 'EMERGENCY',
@@ -743,19 +756,133 @@ export class SafetyRepository {
   }
 
   /**
+   * Etkin panik varken **diğer tarafın** paniği: bölüm aynı kalır (başlangıç zamanı
+   * ve çözüm durumu değişmez), yalnızca panik sayacı artar — olay tekillik anahtarı.
+   */
+  async addPanicRaiser(
+    client: PoolClient,
+    sessionId: string,
+  ): Promise<{ raisedAt: Date; panicNumber: number } | null> {
+    const result = await client.query<{ panic_count: number }>(
+      `UPDATE safety_sessions
+          SET panic_count = panic_count + 1
+        WHERE id = $1 AND panic_raised_at IS NOT NULL AND emergency_resolved_at IS NULL
+       RETURNING panic_count`,
+      [sessionId],
+    );
+    const row = result.rows[0];
+    return row === undefined
+      ? null
+      : { raisedAt: new Date(), panicNumber: Number(row.panic_count) };
+  }
+
+  /** Kişinin, verilen andan beri (etkin bölüm) kaydettiği panik olayı. */
+  async findPanicByActor(
+    client: PoolClient,
+    sessionId: string,
+    userId: string,
+    since: Date,
+  ): Promise<{
+    id: string;
+    bookingId: string;
+    occurredAt: Date;
+    bookingHoldApplied: boolean;
+  } | null> {
+    const rows = await client.query<{
+      id: string;
+      booking_id: string;
+      occurred_at: Date;
+      details: Record<string, unknown>;
+    }>(
+      `SELECT id, booking_id, occurred_at, details FROM safety_events
+        WHERE session_id = $1 AND event_type = 'PANIC_RAISED'
+          AND actor_user_id = $2 AND occurred_at >= $3
+        ORDER BY seq
+        LIMIT 1`,
+      [sessionId, userId, since],
+    );
+    const row = rows.rows[0];
+    if (row === undefined) {
+      return null;
+    }
+    // Aynı bölümde askıyı gerçekten kim uyguladıysa onun kaydı doğrudur; tekrar
+    // yanıtı "askı uygulandı mı" sorusunu bölüm düzeyinde yanıtlar.
+    const hold = await client.query<{ applied: boolean }>(
+      `SELECT bool_or((details->>'bookingHoldApplied')::boolean) AS applied
+         FROM safety_events
+        WHERE session_id = $1 AND event_type = 'PANIC_RAISED' AND occurred_at >= $2`,
+      [sessionId, since],
+    );
+    return {
+      id: row.id,
+      bookingId: row.booking_id,
+      occurredAt: row.occurred_at,
+      bookingHoldApplied: hold.rows[0]?.applied === true,
+    };
+  }
+
+  /** Görüntüleyen kişi etkin paniği kendisi mi başlattı (katılımcı görünümü için). */
+  async hasActivePanicBy(sessionId: string, userId: string): Promise<boolean> {
+    const rows = await this.uow.query<{ found: boolean }>(
+      `SELECT EXISTS (
+         SELECT 1 FROM safety_events e
+           JOIN safety_sessions s ON s.id = e.session_id
+          WHERE e.session_id = $1 AND e.event_type = 'PANIC_RAISED'
+            AND e.actor_user_id = $2
+            AND s.panic_raised_at IS NOT NULL AND s.emergency_resolved_at IS NULL
+            AND e.occurred_at >= s.panic_raised_at
+       ) AS found`,
+      [sessionId, userId],
+    );
+    return rows[0]?.found === true;
+  }
+
+  /**
+   * Kanıt saklama süresini uzatır (uyuşmazlık, yüksek risk, panik).
+   * Ham iz henüz silinmemiş oturumlar için; süre yalnızca **uzar**, kısalmaz.
+   */
+  async extendRetention(
+    client: PoolClient,
+    target: { sessionId: string } | { bookingId: string },
+    days: number,
+  ): Promise<void> {
+    const [column, value] =
+      'sessionId' in target ? ['id', target.sessionId] : ['booking_id', target.bookingId];
+    await client.query(
+      `UPDATE safety_sessions
+          SET retention_expires_at = GREATEST(
+                retention_expires_at, now() + make_interval(days => $2::int)
+              )
+        WHERE ${column} = $1 AND location_purged_at IS NULL`,
+      [value, days],
+    );
+  }
+
+  /**
    * Operatörün risk kararı. `EMERGENCY`'den aşağı inmek etkin paniği **çözer**;
    * panik kaydı silinmez (append-only olay kalır), yalnızca etkinliği biter.
    */
-  async overrideRisk(client: PoolClient, sessionId: string, level: RiskLevel): Promise<void> {
+  async overrideRisk(
+    client: PoolClient,
+    sessionId: string,
+    level: RiskLevel,
+    floorMinutes: number,
+  ): Promise<void> {
     await client.query(
       `UPDATE safety_sessions
           SET risk_level = $2::safety_risk_level,
               emergency_resolved_at = CASE
                 WHEN $2::text <> 'EMERGENCY' AND panic_raised_at IS NOT NULL
                      AND emergency_resolved_at IS NULL THEN now()
-                ELSE emergency_resolved_at END
+                ELSE emergency_resolved_at END,
+              -- NORMAL'e indirmek "bu oturumda sorun yok" demektir: taban kalkar.
+              -- Diğer seviyeler süreli tabandır (bkz. kolon açıklaması).
+              risk_floor = CASE WHEN $2::text = 'NORMAL' THEN NULL
+                                ELSE $2::safety_risk_level END,
+              risk_floor_until = CASE WHEN $2::text = 'NORMAL' THEN NULL
+                                      ELSE now() + make_interval(mins => $3::int) END
         WHERE id = $1`,
-      [sessionId, level],
+      [sessionId, level, floorMinutes],
     );
   }
 
@@ -845,11 +972,15 @@ export class SafetyRepository {
       distance_to_service_meters: number;
       geofence_state: GeofenceState;
     }>(
-      `SELECT sequence_number::text, captured_at, server_received_at, latitude, longitude,
-              accuracy_meters, is_mock_location, distance_to_service_meters, geofence_state
-         FROM location_events
-        WHERE session_id = $1
-        ORDER BY server_received_at DESC, sequence_number DESC
+      `SELECT le.sequence_number::text, le.captured_at, le.server_received_at, le.latitude,
+              le.longitude, le.accuracy_meters, le.is_mock_location,
+              le.distance_to_service_meters, le.geofence_state
+         FROM location_events le
+         JOIN safety_sessions s ON s.id = le.session_id
+        WHERE le.session_id = $1
+          -- Oturum açılmadan önce örnek olamaz: alt sınır partition budamasına izin verir.
+          AND le.server_received_at >= s.created_at
+        ORDER BY le.server_received_at DESC, le.sequence_number DESC
         LIMIT $2`,
       [sessionId, limit],
     );

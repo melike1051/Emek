@@ -37,6 +37,7 @@ export class SafetyOperatorService {
     actorUserId: string;
     riskLevel: RiskLevel;
     reason: string;
+    floorMinutes: number;
   }): Promise<SafetySession> {
     return this.uow.withTransaction(async (client) => {
       const session = await this.repository.lockSession(client, input.sessionId);
@@ -48,7 +49,7 @@ export class SafetyOperatorService {
       }
 
       const resolvesPanic = isPanicActive(session) && input.riskLevel !== 'EMERGENCY';
-      await this.repository.overrideRisk(client, session.id, input.riskLevel);
+      await this.repository.overrideRisk(client, session.id, input.riskLevel, input.floorMinutes);
 
       await this.repository.insertEvent(client, {
         sessionId: session.id,
@@ -62,6 +63,7 @@ export class SafetyOperatorService {
           to: input.riskLevel,
           reason: input.reason,
           resolvesPanic,
+          floorMinutes: input.riskLevel === 'NORMAL' ? null : input.floorMinutes,
         },
       });
 
@@ -82,17 +84,56 @@ export class SafetyOperatorService {
     });
   }
 
-  async close(input: { sessionId: string; actorUserId: string }): Promise<SafetySession> {
-    return this.uow.withTransaction((client) =>
-      this.lifecycle.close(client, input.sessionId, 'OPERATOR_CLOSED', input.actorUserId),
-    );
+  /**
+   * Operatör kapatması. Etkin acil durum varken kapatılamaz: kapanış oturumu açık
+   * listeden düşürür ve iki tarafın da yeni panik basmasını engeller. Acil durum önce
+   * `/risk` ile (gerekçeyle) çözülmelidir — iki ayrı, ayrı ayrı audit'li karar.
+   */
+  async close(input: {
+    sessionId: string;
+    actorUserId: string;
+    reason: string;
+  }): Promise<SafetySession> {
+    return this.uow.withTransaction(async (client) => {
+      const session = await this.repository.lockSession(client, input.sessionId);
+      if (session !== null && isPanicActive(session)) {
+        throw new BusinessException(ErrorCode.SAFETY_INVALID_SESSION_TRANSITION, {
+          clientMessage: 'Etkin acil durum var; önce acil durumu çözün.',
+          details: { emergencyActive: true },
+        });
+      }
+      return this.lifecycle.close(
+        client,
+        input.sessionId,
+        'OPERATOR_CLOSED',
+        input.actorUserId,
+        input.reason,
+      );
+    });
   }
 
   /** Ham iz — audit'li okuma. Retention sonrasında boş döner. */
-  async readLocations(input: { sessionId: string; actorUserId: string; limit: number }) {
+  async readLocations(input: {
+    sessionId: string;
+    actorUserId: string;
+    limit: number;
+    reason: string;
+    breakGlass: boolean;
+  }) {
     const session = await this.repository.findById(input.sessionId);
     if (session === null) {
       throw new BusinessException(ErrorCode.SAFETY_SESSION_NOT_FOUND);
+    }
+
+    // Amaçla sınırlılık: ham iz yalnızca gerekçesi olan oturumlarda okunur (risk
+    // yükselmiş ya da panik olmuş). Diğerleri için açık "cam kırma" beyanı gerekir ve
+    // audit'te ayrıca işaretlenir (review bulgusu M5).
+    const justified = session.riskLevel !== 'NORMAL' || session.panicCount > 0;
+    if (!justified && !input.breakGlass) {
+      throw new BusinessException(ErrorCode.FORBIDDEN, {
+        clientMessage: 'Bu oturumda risk kaydı yok; ham iz için cam kırma beyanı gerekir.',
+        details: { breakGlassRequired: true },
+      });
     }
 
     const limit = Math.min(Math.max(1, input.limit), OPERATOR_LOCATION_LIMIT);
@@ -104,7 +145,13 @@ export class SafetyOperatorService {
         entityType: 'safety_session',
         entityId: session.id,
         actorUserId: input.actorUserId,
-        newValue: { returned: locations.length, limit },
+        newValue: {
+          returned: locations.length,
+          limit,
+          reason: input.reason,
+          breakGlass: !justified,
+          riskLevel: session.riskLevel,
+        },
       }),
     );
 

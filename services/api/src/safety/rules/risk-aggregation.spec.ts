@@ -2,6 +2,7 @@ import {
   ANOMALY_FLAG_THRESHOLD,
   ANOMALY_MIN_QUALITY,
   aggregateRisk,
+  independentAnomalyScore,
   resolveAppliedLevel,
 } from './risk-aggregation';
 import type { RuleFinding } from './safety-signals';
@@ -10,7 +11,14 @@ function finding(ruleId: string, severity: RuleFinding['severity']): RuleFinding
   return { ruleId, ruleVersion: 'v1', severity, evidence: {} };
 }
 
-const strongAnomaly = { score: 0.95, quality: 1 };
+const strongAnomaly = {
+  score: 0.95,
+  quality: 1,
+  contributions: [
+    { feature: 'moving_away', contribution: 0.7 },
+    { feature: 'repeated_exits', contribution: 0.8 },
+  ],
+};
 
 /**
  * Risk toplama (ADR-0008 §4): deterministik, belgelenmiş, tek zayıf sinyal asla
@@ -91,10 +99,52 @@ describe('aggregateRisk', () => {
     expect(outcome).toMatchObject({ level: 'HIGH_RISK', corroborated: true, determinedBy: 'RULE' });
   });
 
+  it('aynı sinyalden gelen skor kendi kuralını doğrulayamaz (v2)', () => {
+    // 18 dk'lık tek telemetri boşluğu: R03 WARNING ve skorun tamamı telemetry_gap.
+    const outcome = aggregateRisk({
+      findings: [finding('SAFETY-R03', 'WARNING')],
+      anomaly: {
+        score: 0.81,
+        quality: 1,
+        contributions: [{ feature: 'telemetry_gap', contribution: 0.81 }],
+      },
+      panicRaised: false,
+    });
+
+    expect(outcome.level).toBe('WARNING');
+    expect(outcome.corroborated).toBe(false);
+    expect(outcome.anomalyFlagged).toBe(true);
+  });
+
+  it('bağımsız ailedeki kanıt eşiği geçmiyorsa doğrulama yok', () => {
+    expect(
+      independentAnomalyScore(
+        {
+          score: 0.9,
+          quality: 1,
+          contributions: [
+            { feature: 'telemetry_gap', contribution: 0.8 },
+            { feature: 'duration_ratio', contribution: 0.3 },
+          ],
+        },
+        ['TELEMETRY'],
+      ),
+    ).toBeCloseTo(0.3, 5);
+  });
+
+  it('ailesi bilinmeyen katkı bağımsız kanıt sayılmaz', () => {
+    expect(
+      independentAnomalyScore(
+        { score: 0.9, quality: 1, contributions: [{ feature: 'mystery', contribution: 0.9 }] },
+        [],
+      ),
+    ).toBe(0);
+  });
+
   it('düşük kaliteli skor hiç sayılmaz', () => {
     const outcome = aggregateRisk({
       findings: [],
-      anomaly: { score: 0.99, quality: ANOMALY_MIN_QUALITY - 0.01 },
+      anomaly: { score: 0.99, quality: ANOMALY_MIN_QUALITY - 0.01, contributions: [] },
       panicRaised: false,
     });
 
@@ -106,7 +156,7 @@ describe('aggregateRisk', () => {
     expect(
       aggregateRisk({
         findings: [],
-        anomaly: { score: ANOMALY_FLAG_THRESHOLD - 0.01, quality: 1 },
+        anomaly: { score: ANOMALY_FLAG_THRESHOLD - 0.01, quality: 1, contributions: [] },
         panicRaised: false,
       }).level,
     ).toBe('NORMAL');
@@ -121,7 +171,7 @@ describe('aggregateRisk', () => {
         // Programlama hatası simülasyonu: kural EMERGENCY üretse bile kesilir.
         finding('SAFETY-R04', 'EMERGENCY'),
       ],
-      anomaly: { score: 1, quality: 1 },
+      anomaly: { score: 1, quality: 1, contributions: [] },
       panicRaised: false,
     });
 
@@ -149,6 +199,11 @@ describe('aggregateRisk', () => {
 describe('resolveAppliedLevel', () => {
   it('EMERGENCY otomatik olarak düşmez', () => {
     expect(resolveAppliedLevel('EMERGENCY', 'NORMAL')).toBe('EMERGENCY');
+  });
+
+  it('operatör tabanı otomatik düşüşü engeller ama yükselişi engellemez', () => {
+    expect(resolveAppliedLevel('HIGH_RISK', 'NORMAL', 'HIGH_RISK')).toBe('HIGH_RISK');
+    expect(resolveAppliedLevel('WARNING', 'HIGH_RISK', 'WARNING')).toBe('HIGH_RISK');
   });
 
   it('diğer seviyeler yükselir ve düşer (de-escalation)', () => {

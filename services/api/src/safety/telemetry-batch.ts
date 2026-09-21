@@ -36,6 +36,8 @@ export interface AcceptedSample {
   distanceMeters: number;
   /** Bu tek örneğin gözlemi (debounce öncesi). */
   observation: GeofenceState;
+  /** Bu örnek işlendikten sonraki kabul edilmiş (debounce edilmiş) durum. */
+  debouncedState: GeofenceState;
 }
 
 export interface GeofenceTransition {
@@ -140,7 +142,12 @@ export function processBatch(
     if (sample.isMockLocation) {
       outcome.mockLocations += 1;
     }
-    outcome.accepted.push({ sample, distanceMeters: distance, observation });
+    outcome.accepted.push({
+      sample,
+      distanceMeters: distance,
+      observation,
+      debouncedState: debounce.current,
+    });
     outcome.results.push({ sequence: sample.sequence, status: 'ACCEPTED', reason: null });
   }
 

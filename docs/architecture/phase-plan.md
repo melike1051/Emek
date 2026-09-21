@@ -472,7 +472,7 @@ zaman diliminde çözülüyor.
 
 ---
 
-## Faz 8 — Safety
+## Faz 8 — Safety ✅
 
 **Kapsam:** `safety_sessions`, `location_events` (partition + retention, `captured_at` +
 `server_received_at` + oturum bazlı monoton sıra numarası + mock-location sinyali), `safety_events`;
@@ -484,6 +484,66 @@ risk seviyeleri; deterministik panic flow (Faz 2'de kurulan outbox garantisiyle)
 oturum dışı telemetri reddediliyor (T-23); sahte/replay/geri tarihli telemetri reddediliyor (T-33);
 retention job gerçekten siliyor (T-24); false positive oranı ölçüldü (T-22);
 `SAFETY_HOLD` settlement'ı bloklıyor (T-11).
+
+**Sonuç (2026-09-22).** Tasarım: [ADR-0019](adr/0019-safety-domain.md),
+[safety.md](safety.md), [tehdit modeli](../security/safety-threat-model.md), deney:
+[EXP-004](../research/experiments/exp-004-safety-anomaly.md).
+
+| Exit kriteri                                     | Durum                                                                                                                                                                                                        |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Panik ML/dış servisler down iken çalışır (T-20)  | ✅ integration: AI erişilemez, anomali çağrısı 0, Redis'li guard yok, bildirim hatasında panik kalıcı                                                                                                        |
+| Panik p95 hedefi (T-20)                          | ⚠️ **Ölçüldü, hedef henüz yok.** Sayısal SLO tanımlı değil (ADR-0008 "SLO'ya bağlanır" diyor). Yerel ölçüm: sıralı p95 13,4 ms; 10 eşzamanlı p95 ~330 ms, havuzdan bağımsız (R-54). SLO Faz 14'te sabitlenir |
+| Oturum dışı telemetri reddi (T-23)               | ✅ `PRE_SERVICE`/`CLOSED`/yabancı oturum                                                                                                                                                                     |
+| Sahte/replay/geri tarihli telemetri reddi (T-33) | ✅ replay, gelecek/bayat, saat gerilemesi, imkânsız hız; mock-location kayda geçer                                                                                                                           |
+| Retention gerçekten siler (T-24)                 | ✅ ham iz silinir, olay/özet kalır; açık oturum silinmez; kanıt süresine uzatma (panik/DISPUTED/HIGH_RISK)                                                                                                   |
+| False positive oranı ölçüldü (T-22)              | ✅ EXP-004 (**sentetik**): kurallar FPR 0,036, hibrit 0,064                                                                                                                                                  |
+| `SAFETY_HOLD` settlement'ı bloklar (T-11)        | ✅ Faz 5 testi + panik aynı transaction'da askı uygular                                                                                                                                                      |
+
+**Doğrulama:** core unit 286, AI 249, integration 334 (16 suite; safety 51), lint/format/
+typecheck/build temiz, `npm audit` 0, migration down/up temiz (dev + test), sözleşme
+yeniden üretildi ve contract testi safety yollarını pozitif doğruluyor, EXP-004 iki koşuda
+bayt düzeyinde aynı. Bilinen: "Jest did not exit" uyarısı `health-dependencies`,
+`route-coverage`, `openapi-contract` suite'lerinde — Faz 7 commit'inde de aynen var,
+Faz 8 regresyonu değil.
+
+**Bağımsız review (10 alan: domain/DB/eşzamanlılık, güvenlik, AI/deney, mimari/performans/
+regresyon, …) — bulgular ve çözümler:**
+
+| Bulgu                                                                                                                                                                  | Önem       | Çözüm                                                                                                         |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------- |
+| Kimliksiz IP bazlı Redis kovası: Cloud Run arkasında tek kova, kimliksiz sel tüm sağlayıcıların telemetrisini kesebiliyordu                                            | HIGH       | Global guard safety uçlarından kaldırıldı (Faz 7 guard'ı geri alındı); kimlik sonrası kullanıcı başı 60/dk    |
+| Etkin panik karşı tarafa görünüyordu (tehdit kaynağı "yakalandığını" görür)                                                                                            | HIGH       | Panik yalnızca başlatana döner; `SAFETY_HOLD` görünürlüğü R-70                                                |
+| Deadlock: booking geçişi audit kilidini oturum kilidinden önce alıyordu                                                                                                | HIGH       | Safety kancası audit'ten önce; kilit sırası booking → oturum → audit                                          |
+| Deadlock: booking `FOR UPDATE`, oturum kilidini tutan işlemin `safety_events` FK `KEY SHARE`'ini bloklıyordu (operatör kapatması ↔ check-out; testle yeniden üretildi) | HIGH       | Booking kilitleri `FOR NO KEY UPDATE` (booking-state, payments, disputes, panik); 5 turluk eşzamanlılık testi |
+| AI kesintisinde izleyici turu oturum × 1,5 sn uzuyordu                                                                                                                 | MEDIUM     | Devre kesici (5 hata → 30 sn), 20 sn bütçeli, 5 eşzamanlı tur, oturum başına yalıtım                          |
+| Kısmi unique index kapalı oturumun yanına ikinci oturuma izin veriyordu                                                                                                | MEDIUM     | Tam unique; kapalı oturum yeniden açılmaz                                                                     |
+| Karşı tarafın paniği ilk (belki sahte) paniğe yutuluyordu                                                                                                              | MEDIUM     | Kişi başı idempotensi; doğrulayıcı panik ayrı kayıt + alarm + askı yeniden uygulama                           |
+| `PRE_SERVICE`'te panik rezervasyonu ucuza askıya alıyordu                                                                                                              | MEDIUM     | Reddedilir                                                                                                    |
+| Etkin panik varken oturum (operatör ya da booking geçişiyle) kapatılabiliyordu                                                                                         | MEDIUM     | 409; önce acil durum çözülür                                                                                  |
+| Operatör kararı bir sonraki izleyici turunda sessizce geri alınıyordu                                                                                                  | MEDIUM     | Süreli risk tabanı                                                                                            |
+| DISPUTED/HIGH_RISK oturumlarının ham izi rutin retention'la silinebiliyordu                                                                                            | MEDIUM     | Kanıt süresine uzatma                                                                                         |
+| Ham iz okuması amaç sınırı olmadan açıktı                                                                                                                              | MEDIUM     | Gerekçe zorunlu; risksiz oturumda "cam kırma" + audit                                                         |
+| Aynı sinyal kendi kuralını "doğruluyordu" (`risk-agg-v1`)                                                                                                              | MEDIUM     | `risk-agg-v2`: bağımsız anomali skoru                                                                         |
+| v2 FPR = 0 üreteç gereğiydi; yalnız-model kolları panikten kredi alıyordu                                                                                              | MEDIUM     | N11 ailesi + ayrık tohum; panik hariç metrikler                                                               |
+| Kullanılmayan GIST index + generated kolon; partition'lar yalnızca izleyiciyle açılıyordu                                                                              | MEDIUM     | Kaldırıldı; partition migration + açılış + bakım turunda                                                      |
+| 408/429/5xx yanlış sınıflanıyordu; varışta `repeated_exits`                                                                                                            | LOW/MEDIUM | Düzeltildi                                                                                                    |
+| AI config domain modülüne bağımlıydı                                                                                                                                   | LOW        | `app/safety/versions.py`                                                                                      |
+| OpenAPI contract testi safety yollarının **yokluğunu** doğruluyordu                                                                                                    | LOW        | Pozitif kontrol + yeniden üretim                                                                              |
+
+Bilinçli olarak kabul edilen/ertelenen: R-54 (eşzamanlı panik kuyruğu), R-66 (süreç içi
+sınır), R-70 (`SAFETY_HOLD` görünürlüğü), R-71 (v2 FP bedeli), R-72 (OpenAPI şemaları
+boş, proje geneli), R-73 (sıra numarası tüketme), R-74 (ödeme yan etkileri audit
+kilidinden sonra).
+
+**Önceki fazlara uyumluluk düzeltmeleri (yalnızca Faz 8'in gerektirdiği):**
+`BookingStateService` safety kancası (aynı transaction), booking satır kilidi
+`FOR NO KEY UPDATE` (Faz 4/5 dört nokta), `advanceBySystemWithin` çıkarımı, safety uçları
+için Redis IP guard'ının kaldırılması (guard Faz 7 hâline döndü), log redaksiyonuna
+koordinat anahtarları.
+
+**Faz 8'de yapılan şema değişiklikleri:** `safety_sessions`, `location_events`
+(aylık partition + DEFAULT), `safety_events` (append-only, `seq`), `safety_risk_assessments`
+(append-only); tek migration `20260922100000_safety`.
 
 ---
 

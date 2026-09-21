@@ -83,6 +83,10 @@ export class AuditService {
     // atandığı için kilidi trigger içinde almak geç kalır; burada, aynı transaction'da
     // alınır ve transaction bitince otomatik bırakılır. Audit yazımı düşük hacimlidir,
     // serileştirme kabul edilebilir bir bedeldir.
+    //
+    // Kilit sırası kuralı (Faz 8): bu kilit transaction'daki **son** kilit olmalıdır.
+    // Audit yazdıktan sonra bir satır kilidi (booking, oturum, ödeme) almak, o satırı
+    // önce kilitleyip sonra audit yazan başka bir yolla deadlock üretir.
     await client.query(`SELECT pg_advisory_xact_lock(hashtext('emek.audit_logs.chain'))`);
 
     await client.query(

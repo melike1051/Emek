@@ -82,8 +82,14 @@ export interface AnomalyAssessment {
 export const ANOMALY_UNAVAILABLE_REASONS = [
   'TIMEOUT',
   'TRANSPORT',
+  /** 5xx: servis hata döndürdü (işletme durumu). */
+  'SERVER_ERROR',
+  /** 2xx ama JSON değil ya da şemaya uymuyor. */
   'INVALID_RESPONSE',
+  /** 4xx (408/429 hariç): sözleşme ayrışması ya da servis anahtarı hatası. */
   'CONTRACT_MISMATCH',
+  /** Art arda altyapı hatası sonrası çağrı yapılmadı (devre kesici açık). */
+  'CIRCUIT_OPEN',
 ] as const;
 export type AnomalyUnavailableReason = (typeof ANOMALY_UNAVAILABLE_REASONS)[number];
 

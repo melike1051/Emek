@@ -159,6 +159,11 @@ export const NORMAL_FAMILIES: Knobs[] = [
   'N08_device_sleep_buffered',
   'N09_clock_skew_minor',
   'N10_traffic_detour',
+  // Review bulgusu (Faz 8): v2'nin geçmiş özellikleri tekrara bakar; hiçbir normal
+  // ailede zararsız tekrar olmadığı için FPR = 0 üreteç gereğiydi. Bu aile, tek tek
+  // olağan olan kısa boşluk ve çıkışların **tekrarını** normal davranış olarak içerir
+  // (asansör/bodrum ölü bölgesi, araca iki kez gitmek).
+  'N11_benign_repeats',
 ].map((family) => ({ family, label: 'NORMAL', expectedLevel: 'NORMAL' }));
 
 export const INCIDENT_FAMILIES: Knobs[] = [
@@ -272,6 +277,20 @@ export function generateScenario(knobs: Knobs, index: number, rng: Rng): Scenari
     case 'N08_device_sleep_buffered': {
       const from = within(0.2, 0.7);
       silences.push({ from, to: from + uniform(rng, 6, 12) * MINUTE, buffered: true });
+      break;
+    }
+    case 'N11_benign_repeats': {
+      const repeats = 2 + Math.floor(rng() * 2);
+      for (let k = 0; k < repeats; k += 1) {
+        const from = within(0.1 + k * 0.25, 0.2 + k * 0.25);
+        silences.push({ from, to: from + uniform(rng, 5.5, 8) * MINUTE, buffered: false });
+        const exit = from + uniform(rng, 12, 16) * MINUTE;
+        excursions.push({
+          from: exit,
+          to: exit + uniform(rng, 2, 4) * MINUTE,
+          where: offset(SERVICE, 250, 0),
+        });
+      }
       break;
     }
     case 'N09_clock_skew_minor':

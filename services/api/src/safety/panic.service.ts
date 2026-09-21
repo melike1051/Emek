@@ -125,19 +125,43 @@ export class PanicService {
     client: PoolClient,
     input: { sessionId: string; userId: string; category: PanicCategory | null },
   ): Promise<PanicResult & { raisedBy: 'PROVIDER' | 'CUSTOMER' }> {
-    // Oturumun rezervasyonunu kilit almadan öğren; sonra booking → oturum sırasıyla kilitle.
-    const lookup = await client.query<{ booking_id: string }>(
-      `SELECT booking_id FROM safety_sessions
+    // Kilitsiz ön okuma: rezervasyon (kilit sırası için) ve aynı kişinin etkin
+    // paniği. Tekrar basış kilit almadan döner: aksi hâlde yüzlerce eşzamanlı tekrar
+    // aynı satır kilidinde havuz bağlantısı tutup başkalarının paniğini bekletirdi.
+    const lookup = await client.query<{
+      booking_id: string;
+      provider_id: string;
+      status: string;
+      panic_raised_at: Date | null;
+      emergency_resolved_at: Date | null;
+    }>(
+      `SELECT booking_id, provider_id, status, panic_raised_at, emergency_resolved_at
+         FROM safety_sessions
         WHERE id = $1 AND (provider_id = $2 OR customer_id = $2)`,
       [input.sessionId, input.userId],
     );
-    const bookingId = lookup.rows[0]?.booking_id;
-    if (bookingId === undefined) {
+    const preview = lookup.rows[0];
+    if (preview === undefined) {
       // Taraf olmayan ile var olmayan oturum aynı yanıtı alır.
       throw new BusinessException(ErrorCode.SAFETY_SESSION_NOT_FOUND);
     }
-    await client.query(`SELECT id FROM bookings WHERE id = $1 FOR UPDATE`, [bookingId]);
+    const raisedBy = preview.provider_id === input.userId ? 'PROVIDER' : 'CUSTOMER';
 
+    const early = await this.findOwnActivePanic(client, input.sessionId, input.userId, {
+      panicRaisedAt: preview.panic_raised_at,
+      emergencyResolvedAt: preview.emergency_resolved_at,
+    });
+    if (early !== null) {
+      return { ...early, raisedBy };
+    }
+    // Kabul etmeyen oturum da kilitsiz reddedilir; kilit altında yeniden kontrol edilir.
+    this.assertAccepting(preview.status);
+
+    // Kilit sırası booking → oturum; booking geçişleri (check-out) de aynı sırayı izler.
+    // `FOR NO KEY UPDATE`: booking-state ile aynı kip (FK yazımlarını bloklamaz).
+    await client.query(`SELECT id FROM bookings WHERE id = $1 FOR NO KEY UPDATE`, [
+      preview.booking_id,
+    ]);
     const session = await this.repository.lockParticipantSession(
       client,
       input.sessionId,
@@ -147,45 +171,34 @@ export class PanicService {
     if (session === null) {
       throw new BusinessException(ErrorCode.SAFETY_SESSION_NOT_FOUND);
     }
-    const raisedBy = session.providerId === input.userId ? 'PROVIDER' : 'CUSTOMER';
 
-    if (isPanicActive(session) && session.panicRaisedAt !== null) {
-      // Etkin panik: tekrar basış yan etki üretmez (çift tıklama, ağ yeniden denemesi,
-      // iki tarafın aynı anda basması).
-      const existing = await client.query<{ id: string; details: Record<string, unknown> }>(
-        `SELECT id, details FROM safety_events
-          WHERE session_id = $1 AND event_type = 'PANIC_RAISED'
-            AND (details->>'panicNumber')::int = $2`,
-        [session.id, session.panicCount],
-      );
-      const row = existing.rows[0];
-      return {
-        sessionId: session.id,
-        bookingId: session.bookingId,
-        eventId: row?.id ?? '',
-        raisedAt: session.panicRaisedAt,
-        duplicate: true,
-        bookingHoldApplied: row?.details.bookingHoldApplied === true,
-        raisedBy,
-      };
+    // Kilit altında tekrar: ön okuma ile kilit arasında aynı kişinin eşzamanlı isteği
+    // kaydedilmiş olabilir.
+    const own = await this.findOwnActivePanic(client, session.id, input.userId, session);
+    if (own !== null) {
+      return { ...own, raisedBy };
     }
 
-    if (session.status === 'CLOSED') {
-      // Kapanmış oturum (check-out sonrası) acil durum kanalı değildir; istemci
-      // bu durumda kullanıcıyı doğrudan 112'ye yönlendirir (R-59).
-      throw new BusinessException(ErrorCode.SAFETY_SESSION_ALREADY_CLOSED);
-    }
+    this.assertAccepting(session.status);
 
-    const marked = await this.repository.markPanic(
-      client,
-      session.id,
-      this.config.env.SAFETY_EVIDENCE_RETENTION_DAYS,
-    );
+    // Diğer tarafın etkin paniği varken basılan panik **yutulmaz**: ayrı bir kayıt
+    // ve ayrı bir alarm olur. Aksi hâlde kötü niyetli tarafın önce bastığı sahte
+    // panik, gerçek tehlikedeki kişinin paniğini görünmez kılardı (review bulgusu).
+    const corroborating = isPanicActive(session);
+    const marked = corroborating
+      ? await this.repository.addPanicRaiser(client, session.id)
+      : await this.repository.markPanic(
+          client,
+          session.id,
+          this.config.env.SAFETY_EVIDENCE_RETENTION_DAYS,
+        );
     if (marked === null) {
-      // Kilit altında olamaz: etkin panik yukarıda yakalandı.
       throw new Error('panik oturuma işlenemedi');
     }
 
+    // Askı her panikte istenir: "risk bitti" ile "hizmet devam edebilir" ayrı
+    // kararlardır; operatör askıyı kaldırıp riski çözmemiş olabilir. Rezervasyon
+    // zaten askıdaysa yeni geçiş olmaz ve `applied` false döner (review M2/L1).
     const hold = await this.applyBookingHold(client, session.bookingId);
 
     const event = await this.repository.insertEvent(client, {
@@ -199,9 +212,11 @@ export class PanicService {
         panicNumber: marked.panicNumber,
         raisedBy,
         category: input.category,
+        corroborating,
         previousRiskLevel: session.riskLevel,
         sessionStatus: session.status,
         bookingHoldApplied: hold.applied,
+        bookingOnHold: hold.onHold,
         ...(hold.errorCode !== null ? { bookingHoldError: hold.errorCode } : {}),
       },
     });
@@ -216,6 +231,7 @@ export class PanicService {
         riskLevel: 'EMERGENCY',
         bookingId: session.bookingId,
         eventId: event.id,
+        corroborating,
         bookingHoldApplied: hold.applied,
       },
     });
@@ -235,6 +251,7 @@ export class PanicService {
         eventId: event.id,
         raisedBy,
         category: input.category,
+        corroborating,
       },
     });
 
@@ -242,10 +259,63 @@ export class PanicService {
       sessionId: session.id,
       bookingId: session.bookingId,
       eventId: event.id,
-      raisedAt: marked.raisedAt,
+      raisedAt: corroborating ? event.occurredAt : marked.raisedAt,
       duplicate: false,
       bookingHoldApplied: hold.applied,
       raisedBy,
+    };
+  }
+
+  /**
+   * Panik yalnızca varış ve aktif hizmette kabul edilir.
+   *
+   * `PRE_SERVICE`: randevu planlandı ama sağlayıcı yola çıkmadı; taraflar fiziksel
+   * olarak birlikte değildir ve burada panik kabul etmek günler önceden rezervasyonu
+   * askıya alıp ödemeyi dondurmanın ucuz bir yolu olurdu. `CLOSED`: kapanmış oturum
+   * acil durum kanalı değildir. İki durumda da istemci kullanıcıyı 112'ye yönlendirir.
+   */
+  private assertAccepting(status: string): void {
+    if (status === 'CLOSED') {
+      throw new BusinessException(ErrorCode.SAFETY_SESSION_ALREADY_CLOSED);
+    }
+    if (status !== 'ARRIVAL_MONITORING' && status !== 'ACTIVE') {
+      throw new BusinessException(ErrorCode.SAFETY_SESSION_NOT_ACTIVE, {
+        clientMessage: "Hizmet henüz başlamadı. Acil durumda 112'yi arayın.",
+      });
+    }
+  }
+
+  /**
+   * Bu kişinin **etkin** panik bölümündeki kaydı (varsa).
+   *
+   * Tekrar basış aynı kişiye göre değerlendirilir: aynı kişi → yan etkisiz tekrar;
+   * diğer taraf → yeni, doğrulayıcı kayıt.
+   */
+  private async findOwnActivePanic(
+    client: PoolClient,
+    sessionId: string,
+    userId: string,
+    state: { panicRaisedAt: Date | null; emergencyResolvedAt: Date | null },
+  ): Promise<Omit<PanicResult, 'raisedBy'> | null> {
+    if (state.panicRaisedAt === null || state.emergencyResolvedAt !== null) {
+      return null;
+    }
+    const existing = await this.repository.findPanicByActor(
+      client,
+      sessionId,
+      userId,
+      state.panicRaisedAt,
+    );
+    if (existing === null) {
+      return null;
+    }
+    return {
+      sessionId,
+      bookingId: existing.bookingId,
+      eventId: existing.id,
+      raisedAt: existing.occurredAt,
+      duplicate: true,
+      bookingHoldApplied: existing.bookingHoldApplied,
     };
   }
 
@@ -259,7 +329,15 @@ export class PanicService {
   private async applyBookingHold(
     client: PoolClient,
     bookingId: string,
-  ): Promise<{ applied: boolean; errorCode: string | null }> {
+  ): Promise<{ applied: boolean; onHold: boolean; errorCode: string | null }> {
+    const current = await client.query<{ status: string }>(
+      `SELECT status FROM bookings WHERE id = $1`,
+      [bookingId],
+    );
+    if (current.rows[0]?.status === 'SAFETY_HOLD') {
+      return { applied: false, onHold: true, errorCode: null };
+    }
+
     await client.query('SAVEPOINT panic_booking_hold');
     try {
       await this.bookings.advanceBySystemWithin(client, {
@@ -268,12 +346,12 @@ export class PanicService {
         reason: 'PANIC',
       });
       await client.query('RELEASE SAVEPOINT panic_booking_hold');
-      return { applied: true, errorCode: null };
+      return { applied: true, onHold: true, errorCode: null };
     } catch (error) {
       await client.query('ROLLBACK TO SAVEPOINT panic_booking_hold');
       const code = error instanceof BusinessException ? error.code : 'UNEXPECTED';
       this.logger.warn({ bookingId, code }, 'panik: rezervasyon askıya alınamadı');
-      return { applied: false, errorCode: code };
+      return { applied: false, onHold: false, errorCode: code };
     }
   }
 

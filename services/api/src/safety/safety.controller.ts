@@ -13,6 +13,7 @@ import { CurrentUser, Roles, type AuthenticatedUser } from '../auth/auth.decorat
 import { BusinessException } from '../common/errors/business.exception';
 import { ErrorCode } from '../common/errors/error-codes';
 import { RateLimit } from '../common/ratelimit/rate-limit.decorator';
+import { ParticipantRateLimiter } from './participant-rate-limiter';
 import {
   EvaluationResponseDto,
   OperatorLocationQueryDto,
@@ -20,6 +21,7 @@ import {
   OperatorSessionDetailDto,
   OperatorSessionQueryDto,
   OperatorSessionSummaryDto,
+  CloseSessionDto,
   OverrideRiskDto,
   PanicDto,
   PanicResponseDto,
@@ -32,6 +34,17 @@ import { SafetyEvaluationService } from './safety-evaluation.service';
 import { SafetyOperatorService } from './safety-operator.service';
 import { SafetyRepository } from './safety.repository';
 import { TelemetryService } from './telemetry.service';
+
+/**
+ * Telemetri için kullanıcı başına, kimlik doğrulandıktan sonra uygulanan sınır (bkz.
+ * ParticipantRateLimiter): 30 sn aralıkla beklenen ~2 istek/dk'nın çok üstünde;
+ * tampon boşaltma ve yeniden denemeye yer bırakır.
+ *
+ * Panikte sınır **yoktur**: sıkıntıdaki birinin 21. basışı 429 almamalı. Tekrar ve
+ * reddedilen basışlar kilitsiz döner (satır kilidi ya da yazma yok); kabul edilen
+ * panik kişi ve bölüm başına tekildir.
+ */
+const TELEMETRY_PER_USER_PER_MINUTE = 60;
 
 /** Operatör görünümünde döndürülen en fazla değerlendirme/olay/oturum. */
 const OPERATOR_HISTORY_LIMIT = 100;
@@ -53,7 +66,16 @@ export class SafetyController {
     private readonly panic: PanicService,
     private readonly evaluation: SafetyEvaluationService,
     private readonly operator: SafetyOperatorService,
+    private readonly limiter: ParticipantRateLimiter,
   ) {}
+
+  private limit(key: string, limit: number): void {
+    if (!this.limiter.consume(key, limit, 60)) {
+      throw new BusinessException(ErrorCode.RATE_LIMITED, {
+        details: { retryAfterSeconds: 60 },
+      });
+    }
+  }
 
   /** Rezervasyonun güvenlik oturumu — yalnızca taraflara, dar görünüm. */
   @Get('bookings/:id/safety-session')
@@ -65,24 +87,30 @@ export class SafetyController {
     if (session === null) {
       throw new BusinessException(ErrorCode.SAFETY_SESSION_NOT_FOUND);
     }
-    return SafetySessionParticipantDto.from(session, user.id);
+    // Etkin panik yalnızca onu başlatan kişiye gösterilir: tehdit altındaki
+    // sağlayıcının paniğini tehdidin kaynağı olabilecek karşı tarafa bildirmek
+    // tehlikeyi artırabilirdi (review bulgusu H2).
+    const raisedByViewer = await this.repository.hasActivePanicBy(session.id, user.id);
+    return SafetySessionParticipantDto.from(session, user.id, raisedByViewer);
   }
 
   /**
    * Konum telemetrisi — yalnızca oturumun sağlayıcısı.
    *
-   * Oran sınırı **fail-open**'dır: Redis kesintisinde telemetriyi reddetmek her
-   * aktif oturumda sahte "telemetri kesildi" alarmı üretirdi. Kalıcı koruma oturum
-   * başına sıra numarası ve asgari aralıktır (veritabanında, kilit altında).
+   * Global (IP, kimlik öncesi) oran sınırı **bilinçli olarak yok**: Cloud Run
+   * arkasında tek bir IP kovası, kimliksiz bir saldırganın tüm sağlayıcıların
+   * telemetrisini kesmesine izin verirdi (review bulgusu H1). Sınır kullanıcı
+   * başınadır ve Redis'e bağlı değildir; kalıcı koruma oturum başına sıra numarası ve
+   * asgari aralıktır (veritabanında, kilit altında).
    */
   @Post('safety/sessions/:id/telemetry')
   @HttpCode(HttpStatus.OK)
-  @RateLimit({ name: 'safety-telemetry', limit: 120, windowSeconds: 60, failOpen: true })
   async submitTelemetry(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) sessionId: string,
     @Body() dto: TelemetryBatchDto,
   ): Promise<TelemetryIngestResponseDto> {
+    this.limit(`telemetry:${user.id}`, TELEMETRY_PER_USER_PER_MINUTE);
     const result = await this.telemetry.ingest({
       sessionId,
       userId: user.id,
@@ -103,9 +131,10 @@ export class SafetyController {
   /**
    * Panik — oturumun **iki tarafı** da basabilir.
    *
-   * Bilinçli olarak `@RateLimit` **yoktur**: oran sınırı Redis'e bağlıdır ve
-   * fail-closed'dır; Redis kesintisi paniği bloklamamalı (ADR-0008 §3). Spam
-   * koruması oturum başına etkin panik tekilliğidir: tekrar basış yan etki üretmez.
+   * Bilinçli olarak oran sınırı **yoktur**: Redis'li guard fail-closed'dır ve
+   * Redis kesintisi paniği bloklamamalı (ADR-0008 §3); süreç içi sınır ise sıkıntıdaki
+   * kullanıcının tekrar basışını reddederdi. Spam koruması: aynı kişinin tekrarı ve
+   * kabul edilmeyen durumlar kilitsiz ve yazmasız döner.
    */
   @Post('safety/sessions/:id/panic')
   @HttpCode(HttpStatus.CREATED)
@@ -162,6 +191,8 @@ export class SafetyController {
       sessionId,
       actorUserId: user.id,
       limit: query.limit ?? 200,
+      reason: query.reason,
+      breakGlass: query.breakGlass === 'true',
     });
     return {
       sessionId: session.id,
@@ -188,6 +219,7 @@ export class SafetyController {
       actorUserId: user.id,
       riskLevel: dto.riskLevel,
       reason: dto.reason,
+      floorMinutes: dto.floorMinutes ?? 120,
     });
     return OperatorSessionSummaryDto.from(session);
   }
@@ -198,8 +230,13 @@ export class SafetyController {
   async close(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) sessionId: string,
+    @Body() dto: CloseSessionDto,
   ): Promise<OperatorSessionSummaryDto> {
-    const session = await this.operator.close({ sessionId, actorUserId: user.id });
+    const session = await this.operator.close({
+      sessionId,
+      actorUserId: user.id,
+      reason: dto.reason,
+    });
     return OperatorSessionSummaryDto.from(session);
   }
 

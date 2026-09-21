@@ -16,16 +16,28 @@ import type { RuleFinding } from './safety-signals';
  *    ("geç kalacak" + "uzaklaşıyor") tek davranışın iki yüzüdür ve kendi kendini
  *    doğrulayamaz. Tek bir zayıf sinyal asla tek başına yükselmez.
  * 3. **Anomali skoru destekleyicidir.** Model tek başına en fazla `WARNING`
- *    üretebilir; bir kural uyarısıyla **birlikte** ikinci bağımsız kanıt sayılır
- *    (ve `HIGH_RISK`'e taşıyabilir). Düşük kaliteli (az özellikle hesaplanmış) skor
- *    hiç sayılmaz.
+ *    üretebilir. Bir kural uyarısıyla birlikte `HIGH_RISK`'e taşıyabilmesi için
+ *    skorun, uyarı veren ailelerin katkıları çıkarıldıktan sonra da eşiği geçmesi
+ *    gerekir (v2): aynı gözlem kendi kendini doğrulayamaz. Düşük kaliteli skor hiç
+ *    sayılmaz.
  * 4. **`EMERGENCY` yalnızca panikten gelir.** Hiçbir kural ve model kombinasyonu
  *    otomatik acil durum ilan edemez: acil durum insanın beyanı ya da operatörün
  *    kararıdır. `HIGH_RISK` operatöre alarm üretir; geri dönüşsüz hiçbir işlem yapmaz.
  */
 
 /** Toplama politikasının sürümü; kural kümesinden bağımsız sürümlenir. */
-export const RISK_AGGREGATION_VERSION = 'risk-agg-v1';
+export const RISK_AGGREGATION_VERSION = 'risk-agg-v2';
+
+/**
+ * Sürüm geçmişi:
+ * - `risk-agg-v1`: bayraklı anomali skoru, **her** kural uyarısının ikinci kanıtı
+ *   sayılıyordu. Faz 8 review'u gösterdi ki skor aynı sinyalden geldiğinde (ör. tek
+ *   bir 18 dk'lık telemetri boşluğu hem R03'ü hem `telemetry_gap` özelliğini
+ *   tetikler) bu "doğrulama" değil, aynı kanıtın iki kez sayılmasıdır ve R02/R03'ün
+ *   HIGH_RISK eşiklerini sessizce ~18 dk'ya indiriyordu.
+ * - `risk-agg-v2`: anomali yalnızca, uyarı veren ailelere ait özellik katkıları
+ *   **çıkarıldıktan sonra** hâlâ bayrak eşiğini geçiyorsa bağımsız kanıt sayılır.
+ */
 
 /** Anomali skorunun "işaretli" sayılması için gereken eşik. */
 export const ANOMALY_FLAG_THRESHOLD = 0.8;
@@ -49,6 +61,52 @@ export const ANOMALY_MAX_LEVEL: RiskLevel = 'WARNING';
 export interface AnomalySignal {
   score: number;
   quality: number;
+  /**
+   * Özellik katkıları. `anomaly-deviation-*` modellerinde skor bu katkıların
+   * noisy-OR birleşimidir: `1 − Π(1 − cᵢ)` (AI servisi sözleşmesi). Boşsa model
+   * yalnızca tek başına sinyal olabilir, doğrulayıcı olamaz.
+   */
+  contributions: readonly { feature: string; contribution: number }[];
+}
+
+/**
+ * Model özelliğinin ölçtüğü sinyal ailesi — kural aileleriyle aynı küme.
+ * Bilinmeyen özellik hiçbir aileye bağlanamaz; bağımsız kanıt sayılmaz.
+ */
+const FEATURE_FAMILY: Record<string, string> = {
+  telemetry_gap: 'TELEMETRY',
+  repeated_gaps: 'TELEMETRY',
+  integrity_rate: 'INTEGRITY',
+  mock_rate: 'INTEGRITY',
+  arrival_delay: 'ARRIVAL',
+  moving_away: 'ARRIVAL',
+  projected_lateness: 'ARRIVAL',
+  stalled: 'ACTIVITY',
+  duration_ratio: 'DURATION',
+  outside_dwell: 'LOCATION',
+  repeated_exits: 'LOCATION',
+};
+
+/**
+ * Uyarı veren kural ailelerinin **dışındaki** kanıtla modelin skoru.
+ *
+ * Aynı gözlemi iki kez saymamak için katkılar aile bazında ayıklanır ve kalanlar
+ * noisy-OR ile yeniden birleştirilir. Ailesi bilinmeyen katkı da çıkarılır
+ * (bağımsızlığı gösterilemeyen kanıt bağımsız sayılmaz).
+ */
+export function independentAnomalyScore(
+  anomaly: AnomalySignal,
+  warningFamilies: readonly string[],
+): number {
+  let survival = 1;
+  for (const item of anomaly.contributions) {
+    const family = FEATURE_FAMILY[item.feature];
+    if (family === undefined || warningFamilies.includes(family)) {
+      continue;
+    }
+    survival *= 1 - Math.min(1, Math.max(0, item.contribution));
+  }
+  return 1 - survival;
 }
 
 export interface RiskInput {
@@ -56,6 +114,11 @@ export interface RiskInput {
   anomaly: AnomalySignal | null;
   /** Kullanıcı paniği — deterministik ve koşulsuz. */
   panicRaised: boolean;
+  /**
+   * Bayrak eşiği. Üretimde **her zaman** varsayılandır; parametre yalnızca EXP-004
+   * duyarlılık analizinin aynı politikayı farklı eşikle çalıştırabilmesi içindir.
+   */
+  flagThreshold?: number;
 }
 
 export type RiskDeterminant = 'USER' | 'RULE' | 'ML' | 'NONE';
@@ -74,16 +137,16 @@ export interface RiskOutcome {
   warningFamilies: string[];
 }
 
-export function isAnomalyFlagged(anomaly: AnomalySignal | null): boolean {
-  return (
-    anomaly !== null &&
-    anomaly.quality >= ANOMALY_MIN_QUALITY &&
-    anomaly.score >= ANOMALY_FLAG_THRESHOLD
-  );
+export function isAnomalyFlagged(
+  anomaly: AnomalySignal | null,
+  threshold: number = ANOMALY_FLAG_THRESHOLD,
+): boolean {
+  return anomaly !== null && anomaly.quality >= ANOMALY_MIN_QUALITY && anomaly.score >= threshold;
 }
 
 export function aggregateRisk(input: RiskInput): RiskOutcome {
-  const anomalyFlagged = isAnomalyFlagged(input.anomaly);
+  const threshold = input.flagThreshold ?? ANOMALY_FLAG_THRESHOLD;
+  const anomalyFlagged = isAnomalyFlagged(input.anomaly, threshold);
 
   if (input.panicRaised) {
     return {
@@ -127,7 +190,13 @@ export function aggregateRisk(input: RiskInput): RiskOutcome {
     if (level === 'NORMAL') {
       level = ANOMALY_MAX_LEVEL;
       anomalyContributed = true;
-    } else if (level === 'WARNING' && warningFamilies.length >= 1) {
+    } else if (
+      level === 'WARNING' &&
+      warningFamilies.length >= 1 &&
+      input.anomaly !== null &&
+      independentAnomalyScore(input.anomaly, warningFamilies) >= threshold
+    ) {
+      // Yalnızca uyarı veren ailelerden **bağımsız** kanıt ikinci kanıttır.
       level = 'HIGH_RISK';
       corroborated = true;
       anomalyContributed = true;
@@ -157,9 +226,15 @@ export function aggregateRisk(input: RiskInput): RiskOutcome {
  * Aksi hâlde sağlayıcı paniğe bastıktan sonra telefonunu cebine koyup hareket
  * ettiğinde sistem "her şey yolunda" der ve alarm sessizce kapanırdı.
  */
-export function resolveAppliedLevel(current: RiskLevel, computed: RiskLevel): RiskLevel {
+export function resolveAppliedLevel(
+  current: RiskLevel,
+  computed: RiskLevel,
+  floor: RiskLevel | null = null,
+): RiskLevel {
   if (current === 'EMERGENCY') {
     return 'EMERGENCY';
   }
-  return computed;
+  // Operatörün süreli tabanı: otomatik değerlendirme operatör kararının altına
+  // inemez, üstüne çıkabilir (Faz 8 review M5).
+  return floor === null ? computed : maxRisk(computed, floor);
 }

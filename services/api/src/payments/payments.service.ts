@@ -409,7 +409,7 @@ export class PaymentsService {
       // "ödenmiş" bilgisi booking'e başka bir yoldan yazılabilse, hiç para çıkmadan
       // mutabakatlanmış bir rezervasyon üretilebilirdi.
       const bookingStatus = await client.query<{ status: BookingStatus }>(
-        `SELECT status FROM bookings WHERE id = $1 FOR UPDATE`,
+        `SELECT status FROM bookings WHERE id = $1 FOR NO KEY UPDATE`,
         [locked.bookingId],
       );
       if (bookingStatus.rows[0]?.status === 'COMPLETED') {

@@ -13,7 +13,7 @@ from typing import Literal
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from app.safety.model import MODEL_VERSION, MODEL_VERSIONS
+from app.safety.versions import MODEL_VERSION, MODEL_VERSIONS
 
 Environment = Literal["development", "test", "staging", "production"]
 LogLevel = Literal["critical", "error", "warning", "info", "debug"]

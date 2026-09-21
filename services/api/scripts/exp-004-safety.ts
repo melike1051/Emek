@@ -64,6 +64,7 @@ import {
 } from './exp-004/world';
 
 const SEED = 20260922;
+const HOLDOUT_SEED = 1729;
 const PER_FAMILY = 20;
 const TICK_SECONDS = 120;
 const TRACE_WINDOW_SECONDS = 3600;
@@ -279,7 +280,9 @@ function simulate(scenario: Scenario): Simulated {
           continue;
         }
         result.geofence.conclusiveTruth += 1;
-        const decided = state.geofence.current;
+        // Örnek anındaki durum (paket sonundaki değil): tamponlanmış 20'lik bir
+        // pakette ilk örnekler son duruma göre yargılanmasın (review bulgusu).
+        const decided = accepted.debouncedState;
         if (
           (truth === 'IN' && decided === 'INSIDE') ||
           (truth === 'OUT' && decided === 'OUTSIDE')
@@ -366,6 +369,7 @@ interface ModelOutput {
   model_version: string;
   anomaly_score: number;
   quality: number;
+  contributions: { feature: string; contribution: number }[];
   route: { available: boolean; provider: string | null; eta_seconds: number | null } | null;
 }
 
@@ -469,23 +473,27 @@ function evaluateArms(
     const findings = evaluateRules(withRoute(tick.signals, route), DEFAULT_RULE_THRESHOLDS);
     findings.forEach((finding) => triggered.add(finding.ruleId));
 
-    // Duyarlılık kolu: eşik yalnızca **değerlendirmede** kaydırılır; toplama
-    // politikası aynı kalır. Skor, kaydırılmış eşiği varsayılan eşiğe eşleyecek
-    // biçimde ölçeklenir (tekdüze dönüşüm: sıralama korunur, kesim noktası değişir).
-    const scaled = (output: ModelOutput) => ({
-      score: Math.min(1, (output.anomaly_score * ANOMALY_FLAG_THRESHOLD) / flagThreshold),
+    // Duyarlılık kolu: aynı toplama politikası, yalnızca bayrak eşiği farklı
+    // (`flagThreshold`; üretim her zaman varsayılanı kullanır).
+    const signal = (output: ModelOutput) => ({
+      score: output.anomaly_score,
       quality: output.quality,
+      contributions: output.contributions,
     });
     const panicRaised = tick.panicRaised;
-    const onlyModel = (anomaly: { score: number; quality: number }): RiskLevel =>
-      panicRaised ? 'EMERGENCY' : isAnomalyFlagged(anomaly) ? 'WARNING' : 'NORMAL';
+    // Yalnız-model kolları **modeli** ölçer: panik (deterministik yol) bu kollara
+    // kredi yazmaz; aksi hâlde panik oturumları modelin başarısı gibi görünürdü.
+    const onlyModel = (output: ModelOutput): RiskLevel =>
+      isAnomalyFlagged(signal(output), flagThreshold) ? 'WARNING' : 'NORMAL';
+    const hybrid = (output: ModelOutput): RiskLevel =>
+      aggregateRisk({ findings, anomaly: signal(output), panicRaised, flagThreshold }).level;
 
     const computed: Record<Arm, RiskLevel> = {
       rules: aggregateRisk({ findings, anomaly: null, panicRaised }).level,
-      hybrid_v1: aggregateRisk({ findings, anomaly: scaled(v1), panicRaised }).level,
-      anomaly_v1: onlyModel(scaled(v1)),
-      hybrid: aggregateRisk({ findings, anomaly: scaled(v2), panicRaised }).level,
-      anomaly: onlyModel(scaled(v2)),
+      hybrid_v1: hybrid(v1),
+      anomaly_v1: onlyModel(v1),
+      hybrid: hybrid(v2),
+      anomaly: onlyModel(v2),
     };
 
     const afterOnset = onset === null || tick.at.getTime() >= onset;
@@ -607,17 +615,15 @@ function distribution(values: number[]) {
   };
 }
 
-async function main(): Promise<void> {
-  const scenarios = generateScenarios(SEED, PER_FAMILY);
-  const simulated = scenarios.map(simulate);
+/** Bir tohum için tüm hat: üretim → simülasyon → iki model sürümüyle skorlama. */
+function runSeed(seed: number) {
+  const simulated = generateScenarios(seed, PER_FAMILY).map(simulate);
   const allTicks = simulated.flatMap((item) => item.ticks);
   const allFeatures = allTicks.map((tick) => tick.features);
-
   const outputs: ModelSeries = {
     v1: score(allFeatures, MODEL_V1),
     v2: score(allFeatures, MODEL_V2),
   };
-
   const outcomesAt = (threshold: number): ScenarioOutcome[] => {
     let offset = 0;
     return simulated.map((item) => {
@@ -629,7 +635,37 @@ async function main(): Promise<void> {
       return evaluateArms(item, slice, threshold);
     });
   };
+  return { simulated, allTicks, outputs, outcomesAt };
+}
+
+async function main(): Promise<void> {
+  const { simulated, allTicks, outputs, outcomesAt } = runSeed(SEED);
+
+  // Ayrık tohum: aynı kod ve parametrelerle, deney tasarımı sırasında hiç
+  // bakılmamış ikinci bir üretim. Birincil sonuçların tek bir tohuma özgü olup
+  // olmadığının kaba kontrolüdür (review bulgusu; R-63'ü çözmez).
+  const holdoutOutcomes = runSeed(HOLDOUT_SEED).outcomesAt(ANOMALY_FLAG_THRESHOLD);
+  const holdout = {
+    seed: HOLDOUT_SEED,
+    arms: Object.fromEntries(
+      ARMS.map((arm) => [
+        arm,
+        {
+          at_warning: armMetrics(holdoutOutcomes, arm, 'WARNING'),
+          at_high_risk: armMetrics(holdoutOutcomes, arm, 'HIGH_RISK'),
+          alarm_rate_by_family: Object.fromEntries(
+            Object.entries(byFamily(holdoutOutcomes, arm)).map(([family, value]) => [
+              family,
+              value.alarm_rate,
+            ]),
+          ),
+        },
+      ]),
+    ),
+  };
+
   const outcomes = outcomesAt(ANOMALY_FLAG_THRESHOLD);
+  const withoutPanic = outcomes.filter((outcome) => outcome.family !== 'I07_panic');
 
   // Duyarlılık analizi: varsayılan değiştirilmez; ayrı kol olarak raporlanır
   // (EXP-002 ile aynı ilke — "iyi görünen eşiği seçip varsayılan yapmak" yok).
@@ -763,6 +799,10 @@ async function main(): Promise<void> {
         {
           at_warning: armMetrics(outcomes, arm, 'WARNING'),
           at_high_risk: armMetrics(outcomes, arm, 'HIGH_RISK'),
+          // Panik deterministik yoldur; modelin ve kuralların katkısını panik
+          // oturumları olmadan da görmek için (review bulgusu).
+          at_warning_excluding_panic: armMetrics(withoutPanic, arm, 'WARNING'),
+          at_high_risk_excluding_panic: armMetrics(withoutPanic, arm, 'HIGH_RISK'),
           pre_onset_alarm_sessions: outcomes.filter(
             (outcome) => outcome.label === 'INCIDENT' && outcome.preOnsetAlarm[arm],
           ).length,
@@ -770,6 +810,7 @@ async function main(): Promise<void> {
         },
       ]),
     ),
+    holdout_seed: holdout,
     anomaly_threshold_sensitivity: sensitivity,
     anomaly_score_distribution: {
       v1: scoreSplit(outputs.v1),

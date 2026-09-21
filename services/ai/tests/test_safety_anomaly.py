@@ -279,14 +279,29 @@ def test_single_gap_or_exit_is_not_a_deviation() -> None:
 
 
 def test_exits_are_not_counted_during_arrival() -> None:
-    """Varışta "çıkış" kavramı yoktur (henüz içeri girilmedi)."""
+    """Varışta "çıkış" kavramı yoktur: özellik hiç yoktur, kaliteyi şişirmez."""
     result = model.assess(_arrival(recent_long_gap_count=0, recent_exit_count=5), 600)
 
-    assert all(
-        item.contribution == 0.0
-        for item in result.contributions
-        if item.feature == "repeated_exits"
-    )
+    assert all(item.feature != "repeated_exits" for item in result.contributions)
+    assert "repeated_exits" not in result.unavailable
+
+
+@pytest.mark.parametrize(
+    "request_",
+    [
+        _active(geofence_state="OUTSIDE", geofence_state_seconds=900, seconds_since_telemetry=700),
+        _active(recent_long_gap_count=2, recent_exit_count=3, elapsed_active_seconds=10_000),
+        _arrival(arrival_delay_seconds=1200, distance_trend_meters=1800),
+    ],
+)
+def test_score_is_noisy_or_of_contributions(request_: AnomalyRequest) -> None:
+    """Core'un bağımsız kanıt hesabı bu sözleşmeye dayanır (risk-agg-v2)."""
+    result = model.assess(request_, 900)
+
+    survival = 1.0
+    for item in result.contributions:
+        survival *= 1.0 - item.contribution
+    assert result.score == pytest.approx(1.0 - survival, abs=5e-4)
 
 
 def test_unknown_model_version_is_rejected() -> None:

@@ -109,10 +109,27 @@ describe('HttpAnomalyClient', () => {
     ).resolves.toEqual({ status: 'UNAVAILABLE', reason: 'CONTRACT_MISMATCH' });
   });
 
-  it('5xx işletme hatasıdır', async () => {
+  it('5xx işletme hatasıdır (SERVER_ERROR), bozuk yanıttan ayrı', async () => {
     await expect(
       clientWith(jest.fn().mockResolvedValue(jsonResponse({}, 503))).assess(features),
-    ).resolves.toEqual({ status: 'UNAVAILABLE', reason: 'INVALID_RESPONSE' });
+    ).resolves.toEqual({ status: 'UNAVAILABLE', reason: 'SERVER_ERROR' });
+  });
+
+  it('408 ve 429 sözleşme hatası sayılmaz', async () => {
+    await expect(
+      clientWith(jest.fn().mockResolvedValue(jsonResponse({}, 408))).assess(features),
+    ).resolves.toEqual({ status: 'UNAVAILABLE', reason: 'TIMEOUT' });
+    await expect(
+      clientWith(jest.fn().mockResolvedValue(jsonResponse({}, 429))).assess(features),
+    ).resolves.toEqual({ status: 'UNAVAILABLE', reason: 'TRANSPORT' });
+  });
+
+  it('sayaçlar AI şemasının tavanında kırpılır', async () => {
+    const fetchMock = jest.fn().mockResolvedValue(jsonResponse(validBody));
+    await clientWith(fetchMock).assess({ ...features, rejectedCount: 5_000_000 });
+
+    const body = JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string);
+    expect(body.rejected_count).toBe(1_000_000);
   });
 
   it('zaman aşımı TIMEOUT olarak sınıflanır', async () => {
@@ -135,6 +152,44 @@ describe('HttpAnomalyClient', () => {
     await expect(
       clientWith(jest.fn().mockRejectedValue(new Error('ECONNREFUSED'))).assess(features),
     ).resolves.toEqual({ status: 'UNAVAILABLE', reason: 'TRANSPORT' });
+  });
+});
+
+describe('HttpAnomalyClient devre kesici', () => {
+  const config = {
+    env: { AI_SERVICE_URL: 'http://ai.local', SAFETY_ANOMALY_TIMEOUT_MS: 50 },
+  } as never;
+  const logger = { warn: jest.fn(), error: jest.fn() } as never;
+  const features = {} as never;
+
+  it('art arda 5 altyapı hatasından sonra 30 sn çağrı yapmaz, sonra yeniden dener', async () => {
+    const fetchMock = jest.fn().mockRejectedValue(new Error('ECONNREFUSED'));
+    global.fetch = fetchMock;
+    const client = new HttpAnomalyClient(config, logger);
+    const start = 1_000_000;
+
+    for (let index = 0; index < 5; index += 1) {
+      await client.assess(features, start);
+    }
+    await expect(client.assess(features, start + 1000)).resolves.toEqual({
+      status: 'UNAVAILABLE',
+      reason: 'CIRCUIT_OPEN',
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+
+    await client.assess(features, start + 31_000);
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+  });
+
+  it('sözleşme hatası (4xx) devreyi açmaz', async () => {
+    const fetchMock = jest.fn().mockImplementation(async () => new Response('{}', { status: 422 }));
+    global.fetch = fetchMock;
+    const client = new HttpAnomalyClient(config, logger);
+
+    for (let index = 0; index < 8; index += 1) {
+      await client.assess(features, 1_000_000);
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(8);
   });
 });
 

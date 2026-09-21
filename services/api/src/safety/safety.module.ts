@@ -4,6 +4,7 @@ import { ANOMALY_CLIENT } from './anomaly.port';
 import { EMERGENCY_NOTIFIER, LoggingEmergencyNotifier } from './emergency-notifier.port';
 import { HttpAnomalyClient } from './http-anomaly.client';
 import { PanicService } from './panic.service';
+import { ParticipantRateLimiter } from './participant-rate-limiter';
 import { SafetyCoreModule } from './safety-core.module';
 import { SafetyEvaluationService } from './safety-evaluation.service';
 import { SafetyMaintenanceService } from './safety-maintenance.service';
@@ -25,6 +26,7 @@ import { TelemetryService } from './telemetry.service';
   providers: [
     TelemetryService,
     PanicService,
+    ParticipantRateLimiter,
     SafetyEvaluationService,
     SafetyOperatorService,
     SafetyMaintenanceService,

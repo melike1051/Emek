@@ -32,6 +32,7 @@ import {
 const OUTPUT = resolve(__dirname, '../../../docs/research/experiments/exp-004-latency.json');
 const SESSIONS = 30;
 const PARALLEL_PANICS = 10;
+const PARALLEL_ROUNDS = 3;
 
 function quantile(values: number[], q: number): number {
   const sorted = [...values].sort((a, b) => a - b);
@@ -62,7 +63,6 @@ async function main(): Promise<void> {
 
   // Yapılandırma modül yüklenirken değil, uygulama kurulurken okunur (AppConfigModule
   // factory'si); ortamı burada ayarlamak yeterlidir.
-  const app = await createTestApp();
   const pool = createPool();
   const redis = createRedis();
   try {
@@ -70,64 +70,70 @@ async function main(): Promise<void> {
     await clearRateLimits(redis);
     await ensureCatalog(pool);
 
-    const fx = safetyFixtures(
-      () => app,
-      () => pool,
-    );
-
-    const prepared = [];
-    for (let index = 0; index < SESSIONS + PARALLEL_PANICS; index += 1) {
-      // Hazırlık aynı IP'den çok sayıda kayıt/rezervasyon ister; oran sınırı sayaçları
-      // ölçüm dışı hazırlıkta temizlenir (integration testleriyle aynı yaklaşım).
-      await clearRateLimits(redis);
-      const fixture = await fx.setup(`lat-${index}`, 'CHECKED_IN');
-      const session = await fx.sessionOf(fixture.bookingId);
-      prepared.push({ fixture, sessionId: session.id as string });
-    }
-
-    await clearRateLimits(redis);
-    const telemetry: number[] = [];
-    const evaluation: number[] = [];
-    const panic: number[] = [];
-    const evaluationService = app.get(SafetyEvaluationService);
-
-    for (const { fixture, sessionId } of prepared.slice(0, SESSIONS)) {
-      const body = fx.batch(
-        1,
-        fx.clock(-110, 6),
-        Array.from({ length: 10 }, () => ({})),
+    // --- A: sıralı ölçümler, varsayılan havuz (DATABASE_POOL_MAX=10) ---
+    process.env.DATABASE_POOL_MAX = '10';
+    const app = await createTestApp();
+    let sequential;
+    const parallelByPool: Record<string, ReturnType<typeof summary>> = {};
+    try {
+      const fx = safetyFixtures(
+        () => app,
+        () => pool,
       );
-      let started = performance.now();
-      await fx.send(sessionId, fixture.providerToken, body).expect(200);
-      telemetry.push(performance.now() - started);
+      const prepared = await prepare(fx, redis, 'seq', SESSIONS);
+      const telemetry: number[] = [];
+      const evaluation: number[] = [];
+      const panic: number[] = [];
+      const evaluationService = app.get(SafetyEvaluationService);
 
-      started = performance.now();
-      await evaluationService.evaluate(sessionId);
-      evaluation.push(performance.now() - started);
+      for (const { fixture, sessionId } of prepared) {
+        const body = fx.batch(
+          1,
+          fx.clock(-110, 6),
+          Array.from({ length: 10 }, () => ({})),
+        );
+        let started = performance.now();
+        await fx.send(sessionId, fixture.providerToken, body).expect(200);
+        telemetry.push(performance.now() - started);
 
-      started = performance.now();
-      await fx
-        .http()
-        .post(`/api/v1/safety/sessions/${sessionId}/panic`)
-        .set('authorization', fixture.providerToken)
-        .send({})
-        .expect(201);
-      panic.push(performance.now() - started);
-    }
+        started = performance.now();
+        await evaluationService.evaluate(sessionId);
+        evaluation.push(performance.now() - started);
 
-    // Eşzamanlı panik: farklı oturumlarda aynı anda basılan paniklerin gecikmesi.
-    const parallel = await Promise.all(
-      prepared.slice(SESSIONS).map(async ({ fixture, sessionId }) => {
-        const started = performance.now();
+        started = performance.now();
         await fx
           .http()
           .post(`/api/v1/safety/sessions/${sessionId}/panic`)
           .set('authorization', fixture.providerToken)
           .send({})
           .expect(201);
-        return performance.now() - started;
-      }),
-    );
+        panic.push(performance.now() - started);
+      }
+      sequential = {
+        telemetry_batch_10_samples_http: summary(telemetry),
+        evaluation_service_call_ai_down: summary(evaluation),
+        panic_http_sequential: summary(panic),
+      };
+      parallelByPool['pool_10'] = await parallelPanics(fx, redis, 'p10');
+    } finally {
+      await app.close();
+    }
+
+    // --- B: aynı eşzamanlı panik ölçümü, büyük havuz (R-54 karıştırıcısı) ---
+    // Havuz 10 iken 10 eşzamanlı istek, havuz beklemesiyle global audit kilidinin
+    // etkisini ayıramaz. Havuz 20'de bekleme kalkar; gecikme hâlâ seri artıyorsa
+    // neden kilittir.
+    process.env.DATABASE_POOL_MAX = '20';
+    const wide = await createTestApp();
+    try {
+      const fx = safetyFixtures(
+        () => wide,
+        () => pool,
+      );
+      parallelByPool['pool_20'] = await parallelPanics(fx, redis, 'p20');
+    } finally {
+      await wide.close();
+    }
 
     const payload = {
       experiment: 'EXP-004-latency',
@@ -136,12 +142,15 @@ async function main(): Promise<void> {
         platform: `${platform()} ${release()}`,
         cpu: cpus()[0]?.model ?? 'unknown',
         node: process.version,
-        anomaly_service: 'erişilemez (127.0.0.1:9) — bozulmuş mod ölçülür',
+        anomaly_service:
+          'erişilemez (127.0.0.1:9) — bozulmuş mod ölçülür; 5 ardışık hatadan sonra devre ' +
+          'kesici açılır ve sonraki değerlendirmeler ağ beklemeden tamamlanır',
       },
-      telemetry_batch_10_samples_http: summary(telemetry),
-      evaluation_service_call_ai_down: summary(evaluation),
-      panic_http_sequential: summary(panic),
-      panic_http_parallel_distinct_sessions: summary(parallel),
+      ...sequential,
+      panic_http_parallel_distinct_sessions: {
+        note: `${PARALLEL_ROUNDS} tur × ${PARALLEL_PANICS} eşzamanlı panik (her tur ayrı oturumlar)`,
+        ...parallelByPool,
+      },
     };
 
     const config = await resolveConfig(OUTPUT);
@@ -152,10 +161,52 @@ async function main(): Promise<void> {
     );
     process.stdout.write(`EXP-004 gecikme ölçümü yazıldı: ${OUTPUT}\n`);
   } finally {
-    await app.close();
     await pool.end();
     redis.disconnect();
   }
+}
+
+type Fixtures = ReturnType<typeof safetyFixtures>;
+
+async function prepare(
+  fx: Fixtures,
+  redis: ReturnType<typeof createRedis>,
+  tag: string,
+  count: number,
+) {
+  const prepared = [];
+  for (let index = 0; index < count; index += 1) {
+    // Hazırlık aynı IP'den çok sayıda kayıt/rezervasyon ister; oran sınırı sayaçları
+    // ölçüm dışı hazırlıkta temizlenir (integration testleriyle aynı yaklaşım).
+    await clearRateLimits(redis);
+    const fixture = await fx.setup(`lat-${tag}-${index}`, 'CHECKED_IN');
+    const session = await fx.sessionOf(fixture.bookingId);
+    prepared.push({ fixture, sessionId: session.id as string });
+  }
+  await clearRateLimits(redis);
+  return prepared;
+}
+
+/** Farklı oturumlarda aynı anda basılan paniklerin gecikmesi; birkaç tur. */
+async function parallelPanics(fx: Fixtures, redis: ReturnType<typeof createRedis>, tag: string) {
+  const all: number[] = [];
+  for (let round = 0; round < PARALLEL_ROUNDS; round += 1) {
+    const prepared = await prepare(fx, redis, `${tag}-${round}`, PARALLEL_PANICS);
+    const latencies = await Promise.all(
+      prepared.map(async ({ fixture, sessionId }) => {
+        const started = performance.now();
+        await fx
+          .http()
+          .post(`/api/v1/safety/sessions/${sessionId}/panic`)
+          .set('authorization', fixture.providerToken)
+          .send({})
+          .expect(201);
+        return performance.now() - started;
+      }),
+    );
+    all.push(...latencies);
+  }
+  return summary(all);
 }
 
 void main().catch((error: unknown) => {

@@ -139,8 +139,8 @@ export class PanicResponseDto {
  * anomali skoru, geofence durumu ve hizmet noktası koordinatı **yoktur**. İç risk
  * mantığını taraflara açmak hem oyunlaştırmaya (kuralı atlatmayı öğrenmek) hem de
  * "sistem beni şüpheli sayıyor" türünden haksız bir etiketlemeye yol açardı.
- * Taraf yalnızca şunu bilir: izleme açık mı, ne sıklıkla konum beklenir, acil
- * durum kaydı etkin mi.
+ * Taraf yalnızca şunu bilir: izleme açık mı, ne sıklıkla konum beklenir ve
+ * **kendi** başlattığı acil durum kaydı etkin mi. Karşı tarafın paniği gösterilmez.
  */
 export class SafetySessionParticipantDto {
   sessionId!: string;
@@ -155,7 +155,11 @@ export class SafetySessionParticipantDto {
   panicRaisedAt!: string | null;
   closedAt!: string | null;
 
-  static from(session: SafetySession, viewerId: string): SafetySessionParticipantDto {
+  static from(
+    session: SafetySession,
+    viewerId: string,
+    raisedByViewer: boolean,
+  ): SafetySessionParticipantDto {
     const accepting = session.status === 'ARRIVAL_MONITORING' || session.status === 'ACTIVE';
     const isProvider = session.providerId === viewerId;
     return {
@@ -167,8 +171,9 @@ export class SafetySessionParticipantDto {
       telemetryIntervalSeconds: session.telemetryIntervalSeconds,
       // Yalnızca sağlayıcıya anlamlı: uygulama yeniden başladığında sırayı buradan sürdürür.
       lastSequence: isProvider ? session.lastSequence : 0,
-      emergencyActive: isPanicActive(session),
-      panicRaisedAt: session.panicRaisedAt?.toISOString() ?? null,
+      // Yalnızca paniği başlatan kişi görür (bkz. controller).
+      emergencyActive: raisedByViewer && isPanicActive(session),
+      panicRaisedAt: raisedByViewer ? (session.panicRaisedAt?.toISOString() ?? null) : null,
       closedAt: session.closedAt?.toISOString() ?? null,
     };
   }
@@ -189,6 +194,28 @@ export class OperatorLocationQueryDto {
   @Min(1)
   @Max(500)
   limit?: number;
+
+  /** Erişim amacı — zorunlu ve audit'e yazılır (amaçla sınırlılık). */
+  @IsString()
+  @MinLength(5)
+  @MaxLength(500)
+  reason!: string;
+
+  /**
+   * "Cam kırma": risk `NORMAL` ve hiç panik olmamış bir oturumun ham izini okumak
+   * için açık beyan. Audit'te ayrıca işaretlenir.
+   */
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  breakGlass?: 'true' | 'false';
+}
+
+export class CloseSessionDto {
+  /** Gerekçe zorunlu: gerekçesiz kapanış denetlenemez ve alarmı sessizce kapatabilirdi. */
+  @IsString()
+  @MinLength(5)
+  @MaxLength(500)
+  reason!: string;
 }
 
 export class OverrideRiskDto {
@@ -200,6 +227,17 @@ export class OverrideRiskDto {
   @MinLength(5)
   @MaxLength(500)
   reason!: string;
+
+  /**
+   * Operatör kararının **taban** olarak geçerli kalacağı süre (dakika). Bu süre
+   * boyunca otomatik değerlendirme seviyeyi bunun altına indiremez. `NORMAL`'de
+   * yok sayılır (taban kalkar). Varsayılan 120.
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(5)
+  @Max(1440)
+  floorMinutes?: number;
 }
 
 /** Operatör özeti — koordinat içermez; ham iz ayrı ve audit'li uçtadır. */

@@ -2,6 +2,7 @@ import type { INestApplication } from '@nestjs/common';
 import type Redis from 'ioredis';
 import type { Pool } from 'pg';
 import request from 'supertest';
+import { BookingsService } from '../src/bookings/bookings.service';
 import { UnitOfWork } from '../src/common/database/unit-of-work';
 import {
   ANOMALY_CLIENT,
@@ -45,10 +46,13 @@ describe('safety (integration)', () => {
   let redis: Redis;
 
   // --- Dış sınır stub'ları ---
-  const unreachable = new HttpAnomalyClient(
-    { env: { AI_SERVICE_URL: 'http://127.0.0.1:9', SAFETY_ANOMALY_TIMEOUT_MS: 300 } } as never,
-    { warn: () => undefined, error: () => undefined } as never,
-  );
+  // Her test için yeni istemci: gerçek istemcinin devre kesicisi testler arası taşınmasın.
+  const unreachableClient = (): HttpAnomalyClient =>
+    new HttpAnomalyClient(
+      { env: { AI_SERVICE_URL: 'http://127.0.0.1:9', SAFETY_ANOMALY_TIMEOUT_MS: 300 } } as never,
+      { warn: () => undefined, error: () => undefined } as never,
+    );
+  let unreachable = unreachableClient();
   const anomaly = {
     calls: 0,
     impl: (features: AnomalyFeatures): Promise<AnomalyOutcome> => unreachable.assess(features),
@@ -85,6 +89,7 @@ describe('safety (integration)', () => {
     await clearRateLimits(redis);
     await ensureCatalog(pool);
     anomaly.calls = 0;
+    unreachable = unreachableClient();
     anomaly.impl = (features) => unreachable.assess(features);
     notifier.alerts = [];
     notifier.fail = false;
@@ -97,6 +102,21 @@ describe('safety (integration)', () => {
   });
 
   const http = (): request.Agent => request(app.getHttpServer());
+
+  /**
+   * Commit sonrası arka planda çalışan bildirimi bekler. Tek bir `setImmediate`
+   * yetmez: bildirim birkaç mikro görev ve G/Ç sonra çağrılır (yarış testin
+   * kendisini ölçerdi).
+   */
+  async function waitFor(condition: () => boolean, timeoutMs = 2000): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (!condition()) {
+      if (Date.now() > deadline) {
+        throw new Error('koşul zaman aşımına uğradı');
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
 
   const { register, grant, setup, advance, sessionOf, events, clock, batch, send } = safetyFixtures(
     () => app,
@@ -502,10 +522,22 @@ describe('safety (integration)', () => {
       expect(stored.rows[0]).toEqual({ n: 5, d: 5 });
     });
 
-    it('telemetri ucu oran sınırı uygular', async () => {
-      const fixture = await setup('ratelimit', 'SCHEDULED');
+    it('telemetri sınırı kullanıcı başınadır ve kimliksiz sel başkasını kesemez (review H1)', async () => {
+      const fixture = await setup('ratelimit', 'PROVIDER_ARRIVING');
+      const session = await sessionOf(fixture.bookingId);
+
+      // Kimliksiz sel: hepsi 401, hiçbiri paylaşılan bir kovayı tüketmez.
+      for (let index = 0; index < 150; index += 1) {
+        await http()
+          .post(`${PREFIX}/safety/sessions/00000000-0000-4000-8000-000000000000/telemetry`)
+          .send(batch(1, clock(), [{}]))
+          .expect(401);
+      }
+      await send(session.id as string, fixture.providerToken, batch(1, clock(), [{}])).expect(200);
+
+      // Aynı kullanıcı kendi sınırını aşarsa yalnızca kendisi 429 alır.
       const statuses: number[] = [];
-      for (let index = 0; index < 121; index += 1) {
+      for (let index = 0; index < 60; index += 1) {
         const response = await send(
           '00000000-0000-4000-8000-000000000000',
           fixture.providerToken,
@@ -513,9 +545,8 @@ describe('safety (integration)', () => {
         );
         statuses.push(response.status);
       }
-
-      expect(statuses.slice(0, 120).every((status) => status === 404)).toBe(true);
-      expect(statuses[120]).toBe(429);
+      expect(statuses.slice(0, 59).every((status) => status === 404)).toBe(true);
+      expect(statuses[59]).toBe(429);
     });
   });
 
@@ -612,7 +643,7 @@ describe('safety (integration)', () => {
         anomaly_available: false,
         anomaly_unavailable_reason: 'TRANSPORT',
         ruleset_version: 'safety-rules-v2',
-        aggregation_version: 'risk-agg-v1',
+        aggregation_version: 'risk-agg-v2',
       });
       expect(assessment.rows[0].unavailable_signals).toEqual(
         expect.arrayContaining(['anomaly', 'route']),
@@ -632,6 +663,10 @@ describe('safety (integration)', () => {
 
       expect(silent.riskLevel).toBe('HIGH_RISK');
       expect(silent.findings.map((finding) => finding.ruleId)).toEqual(['SAFETY-R03']);
+      // Yüksek riske yükseliş ham izi kanıt süresine uzatır (review M4).
+      expect(
+        new Date((await sessionOf(fixture.bookingId)).retention_expires_at as string).getTime(),
+      ).toBeGreaterThan(Date.now() + 300 * 24 * 3600 * 1000);
       expect(await auditActionsSince(pool, auditBefore)).toContain('SAFETY_RISK_CHANGED');
       const alerts = await pool.query(
         `SELECT payload FROM outbox WHERE event_type = 'SafetyAlertRaised'`,
@@ -802,33 +837,44 @@ describe('safety (integration)', () => {
       );
       expect(outbox.rows[0].payload).toMatchObject({ severity: 'EMERGENCY', source: 'PANIC' });
 
-      await new Promise((resolve) => setImmediate(resolve));
+      await waitFor(() => notifier.alerts.length >= 1);
       expect(notifier.alerts).toHaveLength(1);
       // Panik yolu anomali modeline hiç gitmez.
       expect(anomaly.calls).toBe(0);
     });
 
-    it('tekrar basış ve diğer tarafın basışı yan etki üretmez (idempotent)', async () => {
+    it('aynı kişinin tekrar basışı yan etkisizdir; diğer tarafın paniği ayrı kayıttır (review M1)', async () => {
       const fixture = await setup('panic-dup', 'PROVIDER_ARRIVING');
       const session = await sessionOf(fixture.bookingId);
 
       const first = await panic(session.id as string, fixture.providerToken).expect(201);
       const second = await panic(session.id as string, fixture.providerToken).expect(201);
       const customer = await panic(session.id as string, fixture.customerToken).expect(201);
+      const customerAgain = await panic(session.id as string, fixture.customerToken).expect(201);
 
       expect(second.body).toMatchObject({ duplicate: true, eventId: first.body.eventId });
-      expect(customer.body.duplicate).toBe(true);
-      const count = await pool.query(
-        `SELECT count(*)::int AS n FROM safety_events WHERE event_type = 'PANIC_RAISED'`,
+      // Karşı tarafın paniği yutulmaz: yeni kayıt, yeni alarm, ikinci askı yok.
+      expect(customer.body).toMatchObject({ duplicate: false, bookingHoldApplied: false });
+      expect(customerAgain.body).toMatchObject({ duplicate: true, eventId: customer.body.eventId });
+
+      const recorded = (await events(session.id as string)).filter(
+        (event) => event.event_type === 'PANIC_RAISED',
       );
-      expect(count.rows[0].n).toBe(1);
+      expect(recorded.map((event) => event.details.raisedBy)).toEqual(['PROVIDER', 'CUSTOMER']);
+      expect(recorded.map((event) => event.details.corroborating)).toEqual([false, true]);
       const outbox = await pool.query(
         `SELECT count(*)::int AS n FROM outbox WHERE event_type = 'SafetyAlertRaised'`,
       );
-      expect(outbox.rows[0].n).toBe(1);
+      expect(outbox.rows[0].n).toBe(2);
+      const history = await pool.query(
+        `SELECT count(*)::int AS n FROM booking_status_history
+          WHERE booking_id = $1 AND to_status = 'SAFETY_HOLD'`,
+        [fixture.bookingId],
+      );
+      expect(history.rows[0].n).toBe(1);
     });
 
-    it('eşzamanlı panik istekleri tek olay üretir', async () => {
+    it('eşzamanlı panik istekleri kişi başına tek olay üretir', async () => {
       const fixture = await setup('panic-parallel', 'CHECKED_IN');
       const session = await sessionOf(fixture.bookingId);
 
@@ -842,11 +888,31 @@ describe('safety (integration)', () => {
       );
 
       expect(responses.every((response) => response.status === 201)).toBe(true);
-      expect(responses.filter((response) => response.body.duplicate === false)).toHaveLength(1);
+      expect(responses.filter((response) => response.body.duplicate === false)).toHaveLength(2);
       const count = await pool.query(
         `SELECT count(*)::int AS n FROM safety_events WHERE event_type = 'PANIC_RAISED'`,
       );
-      expect(count.rows[0].n).toBe(1);
+      expect(count.rows[0].n).toBe(2);
+    });
+
+    it('panik yalnızca başlatana görünür; karşı taraf görmez (review H2)', async () => {
+      const fixture = await setup('panic-visibility', 'CHECKED_IN');
+      const session = await sessionOf(fixture.bookingId);
+
+      await panic(session.id as string, fixture.providerToken, { category: 'THREAT' }).expect(201);
+
+      const provider = await http()
+        .get(`${PREFIX}/bookings/${fixture.bookingId}/safety-session`)
+        .set('authorization', fixture.providerToken)
+        .expect(200);
+      const customer = await http()
+        .get(`${PREFIX}/bookings/${fixture.bookingId}/safety-session`)
+        .set('authorization', fixture.customerToken)
+        .expect(200);
+
+      expect(provider.body).toMatchObject({ emergencyActive: true });
+      expect(provider.body.panicRaisedAt).not.toBeNull();
+      expect(customer.body).toMatchObject({ emergencyActive: false, panicRaisedAt: null });
     });
 
     it('yetkisiz panik: üçüncü kişi 404, kimliksiz 401; hiçbir şey yazılmaz', async () => {
@@ -892,21 +958,28 @@ describe('safety (integration)', () => {
       notifier.fail = true;
 
       await panic(session.id as string, fixture.providerToken).expect(201);
-      await new Promise((resolve) => setImmediate(resolve));
+      await waitFor(() => notifier.alerts.length >= 1);
 
       expect(notifier.alerts).toHaveLength(1);
       expect((await sessionOf(fixture.bookingId)).risk_level).toBe('EMERGENCY');
     });
 
-    it('varış sırasındaki (PRE_SERVICE/ARRIVAL) panik de rezervasyonu askıya alır', async () => {
-      const fixture = await setup('panic-pre', 'SCHEDULED');
-      const session = await sessionOf(fixture.bookingId);
+    it('randevu öncesi (PRE_SERVICE) panik reddedilir; varış sırasındaki panik askıya alır (review M2)', async () => {
+      const early = await setup('panic-pre', 'SCHEDULED');
+      const earlySession = await sessionOf(early.bookingId);
 
-      const response = await panic(session.id as string, fixture.customerToken).expect(201);
+      const rejected = await panic(earlySession.id as string, early.customerToken);
+      expect(rejected.status).toBe(409);
+      expect(rejected.body.error.code).toBe('SAFETY_SESSION_NOT_ACTIVE');
+      expect((await sessionOf(early.bookingId)).panic_raised_at).toBeNull();
+
+      const arriving = await setup('panic-arrival', 'PROVIDER_ARRIVING');
+      const session = await sessionOf(arriving.bookingId);
+      const response = await panic(session.id as string, arriving.customerToken).expect(201);
 
       expect(response.body.bookingHoldApplied).toBe(true);
       const booking = await pool.query(`SELECT status FROM bookings WHERE id = $1`, [
-        fixture.bookingId,
+        arriving.bookingId,
       ]);
       expect(booking.rows[0].status).toBe('SAFETY_HOLD');
     });
@@ -965,6 +1038,70 @@ describe('safety (integration)', () => {
         expect(updated.status).toBe('CLOSED');
       }
     });
+
+    it('askı kaldırılıp acil durum sürerken karşı tarafın paniği askıyı yeniden uygular (review M2)', async () => {
+      const fixture = await setup('panic-reapply', 'IN_PROGRESS');
+      const session = await sessionOf(fixture.bookingId);
+      const adminId = await register('sf-admin-reapply');
+      await grant(adminId, 'ADMIN');
+      const admin = bearer('sf-admin-reapply');
+
+      await panic(session.id as string, fixture.providerToken).expect(201);
+      // Operatör askıyı kaldırır ama acil durumu henüz çözmez.
+      await http()
+        .post(`${PREFIX}/bookings/${fixture.bookingId}/transitions`)
+        .set('authorization', admin)
+        .send({ to: 'IN_PROGRESS' })
+        .expect(201);
+
+      const second = await panic(session.id as string, fixture.customerToken).expect(201);
+      expect(second.body).toMatchObject({ duplicate: false, bookingHoldApplied: true });
+      const booking = await pool.query(`SELECT status FROM bookings WHERE id = $1`, [
+        fixture.bookingId,
+      ]);
+      expect(booking.rows[0].status).toBe('SAFETY_HOLD');
+      const corroborating = (await events(session.id as string)).filter(
+        (event) => event.event_type === 'PANIC_RAISED',
+      );
+      expect(corroborating.map((event) => event.details.raisedBy)).toEqual([
+        'PROVIDER',
+        'CUSTOMER',
+      ]);
+    });
+
+    it('etkin acil durum varken rezervasyonu kapatan geçiş reddedilir (review M3)', async () => {
+      const fixture = await setup('panic-cancel', 'CHECKED_IN');
+      const session = await sessionOf(fixture.bookingId);
+      const adminId = await register('sf-admin-cancel');
+      await grant(adminId, 'ADMIN');
+      const admin = bearer('sf-admin-cancel');
+      await panic(session.id as string, fixture.providerToken).expect(201);
+
+      await http()
+        .post(`${PREFIX}/bookings/${fixture.bookingId}/cancel`)
+        .set('authorization', admin)
+        .send({ reason: 'operatör iptali' })
+        .expect(409);
+      // Geçiş geri alındı: rezervasyon askıda, oturum açık.
+      const booking = await pool.query(`SELECT status FROM bookings WHERE id = $1`, [
+        fixture.bookingId,
+      ]);
+      expect(booking.rows[0].status).toBe('SAFETY_HOLD');
+      expect((await sessionOf(fixture.bookingId)).status).toBe('ACTIVE');
+
+      // Acil durum çözüldükten sonra aynı karar uygulanabilir.
+      await http()
+        .post(`${PREFIX}/safety/operator/sessions/${session.id}/risk`)
+        .set('authorization', admin)
+        .send({ riskLevel: 'WARNING', reason: 'taraflarla görüşüldü, iptal edilecek' })
+        .expect(200);
+      await http()
+        .post(`${PREFIX}/bookings/${fixture.bookingId}/cancel`)
+        .set('authorization', admin)
+        .send({ reason: 'operatör iptali' })
+        .expect(201);
+      expect((await sessionOf(fixture.bookingId)).status).toBe('CLOSED');
+    });
   });
 
   // ------------------------------------------------------------------
@@ -988,7 +1125,7 @@ describe('safety (integration)', () => {
         .set('authorization', support)
         .expect(200);
       await http()
-        .get(`${PREFIX}/safety/operator/sessions/${session.id}/locations`)
+        .get(`${PREFIX}/safety/operator/sessions/${session.id}/locations?reason=inceleme`)
         .set('authorization', support)
         .expect(403);
       await http()
@@ -1005,7 +1142,7 @@ describe('safety (integration)', () => {
       }
     });
 
-    it("ham iz yalnızca ADMIN'e açıktır ve her okuma audit'lenir", async () => {
+    it("ham iz yalnızca ADMIN'e, gerekçeyle açıktır; risksiz oturumda cam kırma gerekir (review M5)", async () => {
       const fixture = await setup('locations', 'PROVIDER_ARRIVING');
       const session = await sessionOf(fixture.bookingId);
       await send(session.id as string, fixture.providerToken, batch(1, clock(), [{}, {}])).expect(
@@ -1013,15 +1150,31 @@ describe('safety (integration)', () => {
       );
       const adminId = await register('sf-admin-loc');
       await grant(adminId, 'ADMIN');
-      const auditBefore = await currentAuditMaxId(pool);
+      const admin = bearer('sf-admin-loc');
+      const url = `${PREFIX}/safety/operator/sessions/${session.id}/locations`;
 
+      await http().get(`${url}?limit=10`).set('authorization', admin).expect(400);
+      const denied = await http()
+        .get(`${url}?limit=10&reason=rutin%20kontrol`)
+        .set('authorization', admin)
+        .expect(403);
+      expect(denied.body.error.details).toMatchObject({ breakGlassRequired: true });
+
+      const auditBefore = await currentAuditMaxId(pool);
       const response = await http()
-        .get(`${PREFIX}/safety/operator/sessions/${session.id}/locations?limit=10`)
-        .set('authorization', bearer('sf-admin-loc'))
+        .get(`${url}?limit=10&reason=musteri%20sikayeti%20inceleme&breakGlass=true`)
+        .set('authorization', admin)
         .expect(200);
 
       expect(response.body.locations).toHaveLength(2);
       expect(await auditActionsSince(pool, auditBefore)).toEqual(['SAFETY_LOCATION_ACCESSED']);
+      const audit = await pool.query(`SELECT new_value FROM audit_logs WHERE id > $1 ORDER BY id`, [
+        auditBefore,
+      ]);
+      expect(audit.rows[0].new_value).toMatchObject({
+        reason: 'musteri sikayeti inceleme',
+        breakGlass: true,
+      });
     });
 
     it("risk kararı gerekçe ister ve audit'lenir; operatör kapatması OPERATOR kaynaklıdır", async () => {
@@ -1045,9 +1198,15 @@ describe('safety (integration)', () => {
         .expect(200);
       expect(await auditActionsSince(pool, auditBefore)).toEqual(['SAFETY_RISK_OVERRIDDEN']);
 
+      await http()
+        .post(`${PREFIX}/safety/operator/sessions/${session.id}/close`)
+        .set('authorization', admin)
+        .send({})
+        .expect(400);
       const closed = await http()
         .post(`${PREFIX}/safety/operator/sessions/${session.id}/close`)
         .set('authorization', admin)
+        .send({ reason: 'yanlış açılmış oturum' })
         .expect(200);
       expect(closed.body).toMatchObject({ status: 'CLOSED', closureReason: 'OPERATOR_CLOSED' });
       const closing = (await events(session.id as string)).find(
@@ -1055,10 +1214,89 @@ describe('safety (integration)', () => {
       );
       expect(closing?.source).toBe('OPERATOR');
 
+      expect(closing?.details).toMatchObject({ note: 'yanlış açılmış oturum' });
+
       await http()
         .post(`${PREFIX}/safety/operator/sessions/${session.id}/close`)
         .set('authorization', admin)
+        .send({ reason: 'ikinci deneme' })
         .expect(409);
+    });
+
+    it('etkin acil durum varken operatör oturumu kapatamaz (review M3)', async () => {
+      const fixture = await setup('close-emergency', 'CHECKED_IN');
+      const session = await sessionOf(fixture.bookingId);
+      const adminId = await register('sf-admin-close');
+      await grant(adminId, 'ADMIN');
+      const admin = bearer('sf-admin-close');
+      await http()
+        .post(`${PREFIX}/safety/sessions/${session.id}/panic`)
+        .set('authorization', fixture.providerToken)
+        .send({})
+        .expect(201);
+
+      const refused = await http()
+        .post(`${PREFIX}/safety/operator/sessions/${session.id}/close`)
+        .set('authorization', admin)
+        .send({ reason: 'kapatma denemesi' })
+        .expect(409);
+      expect(refused.body.error.details).toMatchObject({ emergencyActive: true });
+      expect((await sessionOf(fixture.bookingId)).status).toBe('ACTIVE');
+    });
+
+    it('operatör risk tabanı süresi boyunca değerlendirmeyle düşmez, süre dolunca düşer (review M5)', async () => {
+      const fixture = await setup('floor', 'CHECKED_IN');
+      const session = await sessionOf(fixture.bookingId);
+      const sessionId = session.id as string;
+      const adminId = await register('sf-admin-floor');
+      await grant(adminId, 'ADMIN');
+      const admin = bearer('sf-admin-floor');
+
+      await http()
+        .post(`${PREFIX}/safety/operator/sessions/${sessionId}/risk`)
+        .set('authorization', admin)
+        .send({ riskLevel: 'HIGH_RISK', reason: 'müşteri endişe bildirdi', floorMinutes: 30 })
+        .expect(200);
+      const floored = await sessionOf(fixture.bookingId);
+      expect(floored.risk_floor).toBe('HIGH_RISK');
+
+      // Kurallar sessiz: taban korunur.
+      const kept = await app.get(SafetyEvaluationService).evaluate(sessionId);
+      expect(kept.riskLevel).toBe('HIGH_RISK');
+
+      // Taban süresi dolar: değerlendirme hesaplanan seviyeye döner.
+      await pool.query(
+        `UPDATE safety_sessions SET risk_floor_until = now() - interval '1 minute' WHERE id = $1`,
+        [sessionId],
+      );
+      const released = await app.get(SafetyEvaluationService).evaluate(sessionId);
+      expect(released.riskLevel).toBe('NORMAL');
+    });
+
+    it('operatör kapatması ile check-out eşzamanlı çalışınca deadlock olmaz (review H1)', async () => {
+      const adminId = await register('sf-admin-dl');
+      await grant(adminId, 'ADMIN');
+      const admin = bearer('sf-admin-dl');
+
+      for (let round = 0; round < 5; round += 1) {
+        const fixture = await setup(`deadlock-${round}`, 'IN_PROGRESS');
+        const session = await sessionOf(fixture.bookingId);
+        const [close, checkout] = await Promise.all([
+          http()
+            .post(`${PREFIX}/safety/operator/sessions/${session.id}/close`)
+            .set('authorization', admin)
+            .send({ reason: 'eşzamanlılık testi' }),
+          http()
+            .post(`${PREFIX}/bookings/${fixture.bookingId}/transitions`)
+            .set('authorization', fixture.providerToken)
+            .send({ to: 'CHECKED_OUT' }),
+        ]);
+
+        // Sonuç sıraya bağlıdır ama hiçbiri 500 (deadlock) değildir.
+        expect([200, 409]).toContain(close.status);
+        expect(checkout.status).toBe(201);
+        expect((await sessionOf(fixture.bookingId)).status).toBe('CLOSED');
+      }
     });
   });
 
@@ -1107,6 +1345,33 @@ describe('safety (integration)', () => {
         sessions: 0,
         rows: 0,
       });
+    });
+
+    it('uyuşmazlığa giden rezervasyonun ham izi kanıt süresine uzatılır (review M4)', async () => {
+      const fixture = await setup('retention-dispute', 'CHECKED_IN');
+      const adminId = await register('sf-admin-dispute');
+      await grant(adminId, 'ADMIN');
+      const before = await sessionOf(fixture.bookingId);
+      expect(new Date(before.retention_expires_at as string).getTime()).toBeLessThan(
+        Date.now() + 60 * 24 * 3600 * 1000,
+      );
+
+      // Askı ve askıdan uyuşmazlığa geçiş HTTP'de ayrı uçlardan geçer; burada doğrudan
+      // servis üzerinden (aynı durum makinesi, aynı hook) sürülür.
+      const bookings = app.get(BookingsService);
+      await bookings.advanceBySystem({ bookingId: fixture.bookingId, to: 'SAFETY_HOLD' });
+      await bookings.transition({
+        bookingId: fixture.bookingId,
+        to: 'DISPUTED',
+        userId: adminId,
+        roles: ['ADMIN'],
+      });
+
+      const after = await sessionOf(fixture.bookingId);
+      expect(after.status).toBe('CLOSED');
+      expect(new Date(after.retention_expires_at as string).getTime()).toBeGreaterThan(
+        Date.now() + 300 * 24 * 3600 * 1000,
+      );
     });
 
     it('açık oturumun ham izi silinmez', async () => {

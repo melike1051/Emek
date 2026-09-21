@@ -104,7 +104,13 @@ class RouteEstimateOut(BaseModel):
 
 
 class AnomalyResponse(BaseModel):
-    """Model çıktısı. Karar değildir; core'un risk toplamasına girdi olur."""
+    """Model çıktısı. Karar değildir; core'un risk toplamasına girdi olur.
+
+    **Sözleşme:** ``anomaly_score = 1 − Π(1 − contributionᵢ)`` (4 hanede yuvarlanmış).
+    Core bunu, kural uyarısıyla **aynı aileden** gelen katkıları çıkarıp modelin
+    bağımsız kanıtını yeniden hesaplamak için kullanır (risk-agg-v2). Bu eşitliği
+    bozan bir model sürümü sözleşme değişikliğidir.
+    """
 
     model_config = ConfigDict(frozen=True)
 

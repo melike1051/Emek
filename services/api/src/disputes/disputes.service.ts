@@ -245,7 +245,7 @@ export class DisputesService {
       // Rezervasyon uyuşmazlıktan çıkar: operatör kararı hangi yöne olursa olsun
       // rezervasyonun `DISPUTED` durumunda kalması, ödemeyi sonsuza kadar bloklardı.
       const booking = await client.query<{ status: BookingStatus }>(
-        `SELECT status FROM bookings WHERE id = $1 FOR UPDATE`,
+        `SELECT status FROM bookings WHERE id = $1 FOR NO KEY UPDATE`,
         [row.booking_id],
       );
       if (booking.rows[0]?.status === 'DISPUTED') {

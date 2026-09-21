@@ -55,13 +55,6 @@ export class RateLimitGuard implements CanActivate {
         await this.redis.expire(redisKey, options.windowSeconds);
       }
     } catch (error) {
-      if (options.failOpen === true) {
-        this.logger.warn(
-          { err: error, limit: options.name },
-          'Oran sınırı sayacı okunamadı; uç fail-open, istek geçirildi',
-        );
-        return true;
-      }
       this.logger.error(
         { err: error, limit: options.name },
         'Oran sınırı sayacı okunamadı; istek fail-closed reddedildi',

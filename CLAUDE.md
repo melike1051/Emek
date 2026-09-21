@@ -166,7 +166,7 @@ Bu yapıyı değiştirmek gerekirse önce `docs/architecture/adr/` altında ADR 
 | 5   | Payment & Digital Proof: adapter, webhook idempotency, documents, disputes                                                                                      | ✅ tamamlandı |
 | 6   | Python AI/NLP: structured extraction, versiyonlama, evaluation dataset                                                                                          |               |
 | 7   | Matching & Optimization: retrieval, constraints, scoring, OR-Tools, explainability, benchmark                                                                   |               |
-| 8   | Safety: sessions, geofence, telemetry, rules + anomaly, panic flow                                                                                              |               |
+| 8   | Safety: sessions, geofence, telemetry, rules + anomaly, panic flow                                                                                              | ✅ tamamlandı |
 | 9   | Event-driven: Pub/Sub, contracts, retries, DLQ, idempotency                                                                                                     |               |
 | 10  | Admin/Operations API                                                                                                                                            |               |
 | 11  | Analytics: BigQuery pipeline, metrikler                                                                                                                         |               |
@@ -206,7 +206,7 @@ ADR-0015), Python 3.12 + uv. Build `tsc` iledir; `@nestjs/cli` kullanılmaz.
 | Dosya                                       | İçerik                                                         |
 | ------------------------------------------- | -------------------------------------------------------------- |
 | `docs/architecture/initial-assessment.md`   | Mevcut durum, boşluk analizi, anti-hedefler                    |
-| `docs/architecture/adr/`                    | Architecture Decision Record'lar (0001-0017)                   |
+| `docs/architecture/adr/`                    | Architecture Decision Record'lar (0001-0019)                   |
 | `docs/api/error-codes.md`                   | Business error kodları                                         |
 | `docs/architecture/local-development.md`    | Kurulum, komutlar, sorun giderme                               |
 | `docs/database/schema.md`                   | Şema, invariant'lar, migration kuralları                       |

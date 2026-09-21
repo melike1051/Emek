@@ -11,6 +11,9 @@ import type {
   RouteEstimate,
 } from './anomaly.port';
 
+const CIRCUIT_FAILURE_THRESHOLD = 5;
+const CIRCUIT_OPEN_MS = 30_000;
+
 /**
  * AI servisine HTTP ile bağlanan anomali istemcisi.
  *
@@ -29,7 +32,40 @@ export class HttpAnomalyClient implements AnomalyClient {
     @Inject(ROOT_LOGGER) private readonly logger: Logger,
   ) {}
 
-  async assess(features: AnomalyFeatures): Promise<AnomalyOutcome> {
+  /**
+   * Basit devre kesici. Servis düştüğünde her değerlendirme 1,5 sn zaman aşımı
+   * bekleseydi, izleyici turu oturum sayısıyla doğrusal uzar ve telemetri kesintisi
+   * gibi kurallar gecikirdi (Faz 8 review). Art arda altyapı hatasından sonra bir
+   * süre çağrı yapılmaz; süre dolunca tek bir deneme yapılır (yarı açık).
+   * Sözleşme hataları (4xx) devreyi açmaz: onlar kesinti değil, hatadır.
+   */
+  private consecutiveFailures = 0;
+  private openUntil = 0;
+
+  async assess(features: AnomalyFeatures, now: number = Date.now()): Promise<AnomalyOutcome> {
+    if (now < this.openUntil) {
+      return { status: 'UNAVAILABLE', reason: 'CIRCUIT_OPEN' };
+    }
+    const outcome = await this.call(features);
+    if (
+      outcome.status === 'UNAVAILABLE' &&
+      (outcome.reason === 'TIMEOUT' ||
+        outcome.reason === 'TRANSPORT' ||
+        outcome.reason === 'SERVER_ERROR')
+    ) {
+      this.consecutiveFailures += 1;
+      if (this.consecutiveFailures >= CIRCUIT_FAILURE_THRESHOLD) {
+        this.openUntil = now + CIRCUIT_OPEN_MS;
+        this.consecutiveFailures = 0;
+        this.logger.warn({ openMs: CIRCUIT_OPEN_MS }, 'anomali servisi devre kesicisi açıldı');
+      }
+    } else {
+      this.consecutiveFailures = 0;
+    }
+    return outcome;
+  }
+
+  private async call(features: AnomalyFeatures): Promise<AnomalyOutcome> {
     const controller = new AbortController();
     const timeout = setTimeout(() => {
       controller.abort();
@@ -49,16 +85,27 @@ export class HttpAnomalyClient implements AnomalyClient {
       });
 
       if (!response.ok) {
+        // 408 ve 429 işletme durumudur (yavaşlık/yük), sözleşme hatası değil: onları
+        // CONTRACT_MISMATCH saymak, geçici bir yükü "şemalar ayrıştı" alarmına çevirirdi.
+        if (response.status === 408) {
+          this.logger.warn({ status: response.status }, 'anomali servisi zaman aşımı bildirdi');
+          return { status: 'UNAVAILABLE', reason: 'TIMEOUT' };
+        }
+        if (response.status === 429) {
+          this.logger.warn({ status: response.status }, 'anomali servisi isteği sınırladı');
+          return { status: 'UNAVAILABLE', reason: 'TRANSPORT' };
+        }
         if (response.status >= 400 && response.status < 500) {
-          // Model isteği **anlamadı**: şemalar ayrışmış. Kesinti değil, hata.
+          // Model isteği **anlamadı** (şemalar ayrışmış) ya da servis anahtarı yanlış
+          // (401/403): kesinti değil, yapılandırma/sözleşme hatası.
           this.logger.error(
             { status: response.status },
-            'anomali servisi isteği reddetti: sözleşme uyuşmazlığı',
+            'anomali servisi isteği reddetti: sözleşme veya yapılandırma hatası',
           );
           return { status: 'UNAVAILABLE', reason: 'CONTRACT_MISMATCH' };
         }
         this.logger.warn({ status: response.status }, 'anomali servisi hata döndürdü');
-        return { status: 'UNAVAILABLE', reason: 'INVALID_RESPONSE' };
+        return { status: 'UNAVAILABLE', reason: 'SERVER_ERROR' };
       }
 
       // Gövde JSON değilse bu bir taşıma hatası değil, bozuk yanıttır: ayrı
@@ -92,6 +139,17 @@ export class HttpAnomalyClient implements AnomalyClient {
   }
 }
 
+/**
+ * AI şemasının sayaç tavanı. Sayaçlar kırpılır: kendi oturumunda sayacı şişiren bir
+ * istemci (ör. sürekli geleceğe tarihli örnek), aksi hâlde model isteğini 422'ye
+ * düşürüp o oturumda anomali skorunu kalıcı olarak kapatabilirdi (review bulgusu L2).
+ */
+const WIRE_COUNT_CAP = 1_000_000;
+
+function cap(value: number): number {
+  return Math.min(Math.max(0, value), WIRE_COUNT_CAP);
+}
+
 export function toWire(features: AnomalyFeatures): Record<string, unknown> {
   return {
     session_status: features.sessionStatus,
@@ -102,10 +160,10 @@ export function toWire(features: AnomalyFeatures): Record<string, unknown> {
     geofence_state: features.geofenceState,
     geofence_state_seconds: features.geofenceStateSeconds,
     seconds_since_telemetry: features.secondsSinceTelemetry,
-    telemetry_count: features.telemetryCount,
-    rejected_count: features.rejectedCount,
-    integrity_rejection_count: features.integrityRejectionCount,
-    mock_location_count: features.mockLocationCount,
+    telemetry_count: cap(features.telemetryCount),
+    rejected_count: cap(features.rejectedCount),
+    integrity_rejection_count: cap(features.integrityRejectionCount),
+    mock_location_count: cap(features.mockLocationCount),
     last_distance_meters: features.lastDistanceMeters,
     recent_movement_meters: features.recentMovementMeters,
     recent_window_seconds: features.recentWindowSeconds,
