@@ -1235,6 +1235,216 @@
         },
         "tags": ["Matching"]
       }
+    },
+    "/api/v1/bookings/{id}/safety-session": {
+      "get": {
+        "operationId": "SafetyController_sessionForBooking",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Safety"]
+      }
+    },
+    "/api/v1/safety/sessions/{id}/telemetry": {
+      "post": {
+        "operationId": "SafetyController_submitTelemetry",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TelemetryBatchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Safety"]
+      }
+    },
+    "/api/v1/safety/sessions/{id}/panic": {
+      "post": {
+        "operationId": "SafetyController_raisePanic",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PanicDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": ["Safety"]
+      }
+    },
+    "/api/v1/safety/operator/sessions": {
+      "get": {
+        "operationId": "SafetyController_listOpen",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Safety"]
+      }
+    },
+    "/api/v1/safety/operator/sessions/{id}": {
+      "get": {
+        "operationId": "SafetyController_detail",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Safety"]
+      }
+    },
+    "/api/v1/safety/operator/sessions/{id}/locations": {
+      "get": {
+        "operationId": "SafetyController_locations",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Safety"]
+      }
+    },
+    "/api/v1/safety/operator/sessions/{id}/risk": {
+      "post": {
+        "operationId": "SafetyController_overrideRisk",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OverrideRiskDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Safety"]
+      }
+    },
+    "/api/v1/safety/operator/sessions/{id}/close": {
+      "post": {
+        "operationId": "SafetyController_close",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Safety"]
+      }
+    },
+    "/api/v1/safety/operator/sessions/{id}/evaluate": {
+      "post": {
+        "operationId": "SafetyController_evaluate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Safety"]
+      }
     }
   },
   "info": {
@@ -1344,6 +1554,18 @@
         "properties": {}
       },
       "MatchBatchDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "TelemetryBatchDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "PanicDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "OverrideRiskDto": {
         "type": "object",
         "properties": {}
       }

@@ -13,6 +13,8 @@ from typing import Literal
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.safety.model import MODEL_VERSION, MODEL_VERSIONS
+
 Environment = Literal["development", "test", "staging", "production"]
 LogLevel = Literal["critical", "error", "warning", "info", "debug"]
 
@@ -50,6 +52,13 @@ class Settings(BaseSettings):
     matching_algorithm_version: str = Field(default="matching-v1", min_length=1, max_length=64)
     matching_weights_version: str = Field(default="weights-v1", min_length=1, max_length=64)
     optimization_objective_version: str = Field(default="objective-v1", min_length=1, max_length=64)
+
+    # Güvenlik anomali modelinin sürümü (ADR-0012, ADR-0019). Her değerlendirme
+    # kaydı bu etiketi taşır; model ya da referans aralıkları değişirse sürüm artar.
+    # Kayıtlı sürümlerden biri olmak zorundadır (aşağıdaki doğrulama) ve seçilen
+    # sürüm **gerçekten** o modeli çalıştırır: etiketi değiştirip modeli
+    # değiştirmemek, kaydı yalan söyler hâle getirirdi.
+    anomaly_model_version: str = Field(default=MODEL_VERSION, min_length=1, max_length=64)
 
     # Optimizasyon zaman limiti. Aşıldığında çözüm **atılmaz**: o ana kadarki en iyi
     # uygun çözüm kullanılır, hiç çözüm yoksa deterministik sıralamaya düşülür (T-16).
@@ -100,6 +109,15 @@ class Settings(BaseSettings):
         geriye kayar.
         """
         return datetime.now(UTC).astimezone(self.service_timezone).date()
+
+    @model_validator(mode="after")
+    def _anomaly_version_matches_model(self) -> Settings:
+        if self.anomaly_model_version not in MODEL_VERSIONS:
+            raise ValueError(
+                f"AI_ANOMALY_MODEL_VERSION ({self.anomaly_model_version}) kayıtlı bir modelle "
+                f"({', '.join(MODEL_VERSIONS)}) eşleşmiyor: sürüm etiketi modeli tanımlamalı"
+            )
+        return self
 
     @model_validator(mode="after")
     def _production_requires_service_key(self) -> Settings:

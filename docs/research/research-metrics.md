@@ -93,6 +93,22 @@ varsayılan yapmak §"metric shopping" yasağına girer.
 | Panic flow completion | panic isteğinin kayıt + alert + hold zincirini tamamlama oranı (hedef: %100) ve p95 gecikme |
 | Rule vs ML katkısı    | her sinyal kaynağının tespitteki payı                                                       |
 
+### 2.4.1 Faz 8 ölçüm durumu ([EXP-004](experiments/exp-004-safety-anomaly.md), **sentetik**)
+
+| Metrik                                  | Sonuç (sentetik, 360 oturum)                                                            |
+| --------------------------------------- | --------------------------------------------------------------------------------------- |
+| Recall / FPR @WARNING — yalnız kurallar | 0.881 / 0.04 (tek FP kaynağı cihaz uykusu, R-55)                                        |
+| Recall / FPR @WARNING — hibrit (v2)     | 1.000 / 0.04 — ince bileşim (I06) yalnızca v2 model ile yakalanıyor (döngüsellik: R-63) |
+| Recall @HIGH_RISK — kurallar → hibrit   | 0.638 → 0.756, FPR 0 → 0                                                                |
+| Tespit gecikmesi p50 / p90 (hibrit)     | 600 / 3514 sn (120 sn çözünürlük)                                                       |
+| Telemetri: gerçek / enjekte ret oranı   | < 0.0001 / 1.0                                                                          |
+| Geofence durum doğruluğu                | 0.980; jitter ailesinde fazla geçiş 0                                                   |
+| Panik zinciri tamamlama                 | 20/20 (simülasyon); gerçek yol integration testleriyle doğrulandı                       |
+| Panik gecikmesi (yerel, tek istemci)    | sıralı p95 13.8 ms; 10 eşzamanlı p95 369.6 ms (R-54)                                    |
+
+Her üretim değerlendirmesi `safety_risk_assessments`'a kural seti, toplama ve model
+sürümüyle yazılır (alarm üretmeyenler dâhil): FPR'nin paydası gerçek veride de ölçülebilir.
+
 ### 2.5 Platform
 
 | Metrik                     | Hedef (başlangıç)                     |

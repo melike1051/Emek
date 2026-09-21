@@ -70,11 +70,21 @@ işaretli olanlar); domain kodları kendi fazında, ilgili modülle birlikte ekl
 | `MATCHING_NO_CANDIDATE`             | 409  | Hard constraint'leri geçen aday yok                             | 7 ✅ |
 | `MATCHING_RUN_NOT_FOUND`            | 404  | Bu talep için karar kaydı yok                                   | 7 ✅ |
 | `PROVIDER_SERVICE_ALREADY_ADDED`    | 409  | Sağlayıcı bu hizmeti zaten beyan etmiş                          | 7 ✅ |
-| `SAFETY_SESSION_NOT_ACTIVE`         | 409  | Aktif hizmet oturumu yok; telemetri kabul edilmez               | 8    |
-| `TELEMETRY_REJECTED`                | 422  | Zaman sapması, sıra numarası veya bütünlük kontrolü başarısız   | 8    |
+| `SAFETY_SESSION_NOT_FOUND`          | 404  | Oturum yok **ya da** çağıranın tarafı olduğu bir oturum değil   | 8 ✅ |
+| `SAFETY_SESSION_NOT_ACTIVE`         | 409  | Oturum telemetri kabul etmiyor (sağlayıcı henüz yola çıkmadı)   | 8 ✅ |
+| `SAFETY_SESSION_ALREADY_CLOSED`     | 409  | Oturum kapalı: telemetri/panik/operatör kararı kabul edilmez    | 8 ✅ |
+| `SAFETY_INVALID_SESSION_TRANSITION` | 409  | Oturum bu duruma geçirilemez                                    | 8 ✅ |
 | `SERVICE_DEGRADED`                  | 503  | Bağımlı servis erişilemez; kısmi/fallback sonuç mümkün          | 1 ✅ |
 | `INTERNAL_ERROR`                    | 500  | Beklenmeyen hata; iç detay sızdırılmaz                          | 1 ✅ |
 | `IDEMPOTENCY_KEY_REUSED`            | 409  | Aynı idempotency key farklı içerikle kullanıldı                 | 4    |
+
+**Telemetri reddi bir hata kodu değildir (Faz 8 kararı).** Faz 0 planı `TELEMETRY_REJECTED`
+(422) öngörüyordu; uygulanmadı. Telemetri paketi (≤ 20 örnek) kısmen kabul edilebilir ve
+tamponlanmış bir paketteki tek bozuk örnek geri kalanını düşürmemelidir. Bu yüzden istek 200
+döner ve her örnek için `ACCEPTED`/`REJECTED` + kapalı küme bir neden taşır
+(`SEQUENCE_REPLAY`, `CLOCK_SKEW_FUTURE`, `CLOCK_SKEW_STALE`, `CAPTURED_BEFORE_SESSION`,
+`CLOCK_REGRESSION`, `TOO_FREQUENT`, `IMPOSSIBLE_SPEED`). İsteğin tamamı yalnızca oturum
+bulunamadığında/aktif değilken ya da doğrulama hatasında reddedilir.
 
 ## Kurallar
 

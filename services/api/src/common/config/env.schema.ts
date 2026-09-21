@@ -122,6 +122,81 @@ export const envSchema = z
     MATCHING_CANDIDATE_LIMIT: z.coerce.number().int().min(1).max(200).default(50),
     /** Tek toplu çalıştırmada birlikte çözülecek en fazla talep. */
     MATCHING_BATCH_LIMIT: z.coerce.number().int().min(1).max(100).default(25),
+
+    // --- Safety (ADR-0008, ADR-0019, Faz 8) ---
+    /**
+     * Anomali modeli çağrısının zaman aşımı.
+     *
+     * Matching'den **kısadır** ve bu bilinçlidir: anomali skoru destekleyici bir
+     * sinyaldir; güvenlik kararını geciktirmeye değmez. Süre dolduğunda
+     * değerlendirme deterministik kurallarla tamamlanır. Panik bu çağrıyı hiç yapmaz.
+     */
+    SAFETY_ANOMALY_TIMEOUT_MS: z.coerce.number().int().min(100).max(10000).default(1500),
+    /**
+     * Geofence yarıçapı (metre) — oturum açılırken başlangıç değeri olarak kullanılır.
+     *
+     * Tek evrensel yarıçap yoktur; bu yalnızca başlangıç değeridir ve oturuma
+     * kopyalanır ki karar yeniden üretilebilsin. Kırsal adres ile apartman dairesi
+     * aynı toleransı taşımaz (R-56).
+     */
+    SAFETY_GEOFENCE_RADIUS_METERS: z.coerce.number().int().min(25).max(5000).default(150),
+    /** Bu doğruluğun üstündeki örnekler geofence kararına girmez (`INSUFFICIENT_ACCURACY`). */
+    SAFETY_GEOFENCE_ACCURACY_LIMIT_METERS: z.coerce.number().int().min(10).max(2000).default(100),
+    /** Bir geofence durumunun kabul edilmesi için gereken ardışık kesin gözlem sayısı. */
+    SAFETY_GEOFENCE_DEBOUNCE_SAMPLES: z.coerce.number().int().min(1).max(10).default(3),
+    /** İstemcinin telemetri göndermesi beklenen aralık (saniye); oturuma kopyalanır. */
+    SAFETY_TELEMETRY_INTERVAL_SECONDS: z.coerce.number().int().min(5).max(600).default(30),
+    /**
+     * İstemci saatinin sunucu saatinden **ileride** olabileceği azami sapma (saniye).
+     *
+     * Sunucu zamanı yetkilidir (ADR-0008 §7); bu sınır geleceğe tarihli kayıt
+     * yazmayı engeller.
+     */
+    SAFETY_TELEMETRY_MAX_SKEW_SECONDS: z.coerce.number().int().min(10).max(900).default(120),
+    /**
+     * Kabul edilen en eski örnek yaşı (saniye).
+     *
+     * Cihaz uykuya geçip tamponladığı örnekleri sonradan gönderebilir (gecikmeli
+     * telemetri). Bu pencere içindeki örnekler kabul edilir; daha eskiler bayattır.
+     */
+    SAFETY_TELEMETRY_MAX_AGE_SECONDS: z.coerce.number().int().min(60).max(3600).default(900),
+    /**
+     * Fiziksel olarak mümkün kabul edilen azami hız (m/sn).
+     *
+     * Varsayılan 60 m/sn ≈ 216 km/sa: şehir içi ulaşımın çok üstünde ama uçak
+     * yolculuğunun altında. Doğruluk daireleri düşüldükten sonra bunu aşan sıçrama
+     * sahte veya bozuk konumdur.
+     */
+    SAFETY_MAX_SPEED_MPS: z.coerce.number().int().min(10).max(400).default(60),
+    /** Aynı oturum için iki risk değerlendirmesi arasındaki asgari süre (saniye). */
+    SAFETY_EVALUATION_INTERVAL_SECONDS: z.coerce.number().int().min(10).max(3600).default(120),
+    /**
+     * Arka plan izleyicisi (değerlendirme + oturum süresi + retention) açık mı.
+     *
+     * Integration testlerinde kapatılır: zamanlayıcının test verisini kendi
+     * başına değiştirmesi, testlerin ölçtüğü şeyi belirsizleştirirdi. Testler
+     * aynı işleri servis üzerinden açıkça tetikler.
+     */
+    SAFETY_MONITOR_ENABLED: z
+      .enum(['true', 'false'])
+      .default('true')
+      .transform((value) => value === 'true'),
+    /** İzleyici turları arasındaki süre (saniye). */
+    SAFETY_MONITOR_INTERVAL_SECONDS: z.coerce.number().int().min(5).max(600).default(30),
+    /**
+     * Ham konum kaydının saklanma süresi (gün), planlanan bitişten itibaren.
+     *
+     * ADR-0008 §5'teki öneri 30 gün. TODO(legal): süre hukuk görüşüyle
+     * doğrulanacak (A-04).
+     */
+    SAFETY_LOCATION_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(30),
+    /**
+     * Panik/acil durum oturumlarında ham konum kaydının kanıt olarak saklanma süresi (gün).
+     *
+     * TODO(legal): acil durum ve olası adli süreç için saklama süresi hukuk görüşüyle
+     * belirlenecek (A-04, R-58). Varsayılan bir **öneridir**, hukuki gereklilik değil.
+     */
+    SAFETY_EVIDENCE_RETENTION_DAYS: z.coerce.number().int().min(30).max(3650).default(365),
     /**
      * AI servisine giden isteklerin taşıdığı paylaşılan sır.
      *

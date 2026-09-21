@@ -3,6 +3,7 @@ import type { PoolClient } from 'pg';
 import { AuditAction, AuditService } from '../../common/audit/audit.service';
 import { BusinessException } from '../../common/errors/business.exception';
 import { ErrorCode } from '../../common/errors/error-codes';
+import { SafetyLifecycleService } from '../../safety/safety-lifecycle.service';
 import type { BookingStatus } from './booking-status';
 import { findTransition, isActorAllowed, type TransitionActor } from './transitions';
 
@@ -33,7 +34,10 @@ export interface TransitionResult {
  */
 @Injectable()
 export class BookingStateService {
-  constructor(private readonly audit: AuditService) {}
+  constructor(
+    private readonly audit: AuditService,
+    private readonly safety: SafetyLifecycleService,
+  ) {}
 
   async transition(client: PoolClient, request: TransitionRequest): Promise<TransitionResult> {
     // Kilit: eşzamanlı iki geçiş aynı satırı okuyup ikisi de geçerli sanamaz.
@@ -93,6 +97,17 @@ export class BookingStateService {
       ...(request.actorUserId !== undefined ? { actorUserId: request.actorUserId } : {}),
       oldValue: { status: from },
       newValue: { status: request.to, actor: request.actor },
+    });
+
+    // Güvenlik oturumu booking'i **aynı transaction'da** izler (ADR-0019 §2).
+    // Burada olması "tek yol" ilkesinin sonucudur: ödeme, matching, operatör ve
+    // taraflar durumu hep bu metottan ilerletir; oturumu ayrı bir çağrıya bırakmak,
+    // bir yolun onu unutmasını mümkün kılardı (ör. check-out commit edilir ama
+    // telemetri kapısı açık kalır). Yalnızca veritabanı yazar, dış çağrı yapmaz.
+    await this.safety.onBookingTransition(client, {
+      bookingId: request.bookingId,
+      to: request.to,
+      ...(request.actorUserId !== undefined ? { actorUserId: request.actorUserId } : {}),
     });
 
     return { from, to: request.to, alreadyInTargetState: false };

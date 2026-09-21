@@ -35,20 +35,22 @@ npm run infra:up:events
 
 ## Günlük komutlar
 
-| Komut                                                            | Ne yapar                                                    |
-| ---------------------------------------------------------------- | ----------------------------------------------------------- |
-| `npm run infra:up` / `infra:down`                                | Yerel altyapıyı başlatır/durdurur                           |
-| `npm run infra:reset`                                            | Altyapıyı **veri hacmiyle birlikte** siler (yalnızca yerel) |
-| `npm run migrate:up` / `migrate:down`                            | Şemayı ileri/geri alır                                      |
-| `npm run dev --workspace=@emek/api`                              | Core API'yi watch modunda çalıştırır                        |
-| `npm run lint` / `format` / `typecheck` / `build`                | Tüm workspace'lerde                                         |
-| `npm test`                                                       | Unit testler (altyapı gerekmez)                             |
-| `npm run test:integration`                                       | Integration testler (**altyapı gerekir**)                   |
-| `cd services/ai && uv run fastapi dev app/main.py`               | AI servisini çalıştırır                                     |
-| `cd services/ai && uv run pytest`                                | AI servisi testleri                                         |
-| `cd services/ai && uv run ruff check . && uv run mypy app`       | AI lint + typecheck                                         |
-| `cd services/ai && uv run python -m app.evaluation.run`          | NLP deneyi (EXP-001) + kalibrasyon (EXP-003) — JSON çıktı   |
-| `cd services/ai && uv run python -m app.evaluation.matching.run` | Matching benchmark'ı (EXP-002) — JSON çıktı                 |
+| Komut                                                            | Ne yapar                                                           |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `npm run infra:up` / `infra:down`                                | Yerel altyapıyı başlatır/durdurur                                  |
+| `npm run infra:reset`                                            | Altyapıyı **veri hacmiyle birlikte** siler (yalnızca yerel)        |
+| `npm run migrate:up` / `migrate:down`                            | Şemayı ileri/geri alır                                             |
+| `npm run dev --workspace=@emek/api`                              | Core API'yi watch modunda çalıştırır                               |
+| `npm run lint` / `format` / `typecheck` / `build`                | Tüm workspace'lerde                                                |
+| `npm test`                                                       | Unit testler (altyapı gerekmez)                                    |
+| `npm run test:integration`                                       | Integration testler (**altyapı gerekir**)                          |
+| `cd services/ai && uv run fastapi dev app/main.py`               | AI servisini çalıştırır                                            |
+| `cd services/ai && uv run pytest`                                | AI servisi testleri                                                |
+| `cd services/ai && uv run ruff check . && uv run mypy app`       | AI lint + typecheck                                                |
+| `cd services/ai && uv run python -m app.evaluation.run`          | NLP deneyi (EXP-001) + kalibrasyon (EXP-003) — JSON çıktı          |
+| `cd services/ai && uv run python -m app.evaluation.matching.run` | Matching benchmark'ı (EXP-002) — JSON çıktı                        |
+| `npm run exp:safety --workspace=@emek/api`                       | Safety deneyi (EXP-004) — core + AI modeli, JSON dosyaya yazar     |
+| `npm run exp:safety:latency --workspace=@emek/api`               | Safety gecikme ölçümü (**test DB'sini sıfırlar**, altyapı gerekir) |
 
 ## Servis adresleri
 
@@ -101,5 +103,22 @@ cd services/ai
 uv run python -m app.evaluation.matching.run > ../../docs/research/experiments/exp-002-matching-baseline-vs-optimized.json
 ```
 
+Safety deneyi (EXP-004) iki servisi birlikte kullanır: senaryolar core'un saf
+fonksiyonlarından geçer, anomali skorları AI servisinin modelinden alınır. Çıktıyı
+doğrudan `docs/research/experiments/exp-004-safety-anomaly.json` dosyasına yazar:
+
+```bash
+npm run exp:safety --workspace=@emek/api
+npm run exp:safety:latency --workspace=@emek/api   # yerel altyapı açık olmalı; emek_test'i sıfırlar
+```
+
 Benchmark tohumları sabittir (`SCENARIOS`), bu yüzden aynı kod aynı sayıları üretir.
 Sayı değiştiyse **algoritma değişmiştir** — ya rapor ya sürüm etiketi güncellenmeli.
+
+## Safety izleyicisi (Faz 8)
+
+API süreci bir arka plan izleyicisi çalıştırır (değerlendirmesi gelen oturumlar, süresi
+dolan oturumlar, retention, aylık `location_events` partition'ı). Yerelde kapatmak için
+`SAFETY_MONITOR_ENABLED=false`; integration testleri onu zaten kapatır. AI servisi
+çalışmıyorsa değerlendirme kurallarla devam eder ve `safety.anomaly.unavailable` metrik
+logu üretir — bu bir hata değil, beklenen bozulmuş moddur.

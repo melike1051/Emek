@@ -42,6 +42,23 @@ doğrulanmalıdır**. Doğrulama gerektiren noktalar `TODO(legal)` ile işaretli
   (`server_received_at`), oturum başına monoton sıra numarası replay'i engeller, mock-location
   sinyali kayda geçer. "Dijital ispat" tamper-**evident**'tır, tamper-proof değildir (ADR-0008 §7-8).
 
+**Faz 8 uygulaması** ([safety.md](../architecture/safety.md), [tehdit modeli](safety-threat-model.md)):
+
+| Veri                                  | Sınıf | Nerede                                     | Saklama / minimizasyon                                                       |
+| ------------------------------------- | ----- | ------------------------------------------ | ---------------------------------------------------------------------------- |
+| Ham konum örneği                      | S1    | `location_events` (aylık partition)        | planlanan bitiş + 30 gün (`TODO(legal)`), sonra **silinir**                  |
+| Panik oturumunun ham konumu           | S1    | aynı                                       | en az panik + 365 gün kanıt süresi (`TODO(legal)`, R-58)                     |
+| Oturumun son konumu                   | S1    | `safety_sessions.last_*`                   | ham konumla birlikte NULL'lanır                                              |
+| Hizmet noktası (oturum kopyası)       | S1    | `safety_sessions.service_location`         | retention'da ~1 km'ye yuvarlanır                                             |
+| Güvenlik olayı / risk değerlendirmesi | S2    | `safety_events`, `safety_risk_assessments` | append-only kanıt; **koordinat içermez** (mesafe, süre, sayaç, kural kanıtı) |
+| Müşteri konumu                        | —     | **toplanmaz**                              | —                                                                            |
+
+- Koordinat anahtarları (`latitude`, `longitude`, `lat`, `lon`, `lng`) log redaksiyon listesindedir.
+- Ham iz yalnızca `ADMIN`'e açıktır ve her okuma `SAFETY_LOCATION_ACCESSED` olarak audit'lenir.
+- AI servisine ham iz gitmez; yalnızca türetilmiş sinyaller ve varış aşamasında iki nokta.
+- Silme hakkı: olay/değerlendirme tablolarında kullanıcıya FK yoktur (`actor_user_id` FK'siz);
+  tabloların kanıt saklama süresi ve silme politikası R-38 ile birlikte Faz 12'de. `TODO(legal)`
+
 ## 3b. Dijital ispat dokümanları (Faz 5)
 
 Before/after fotoğrafı S1'dir ve müşterinin evinin içini gösterir; bu yüzden en dar erişim

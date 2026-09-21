@@ -79,7 +79,12 @@ doğrudan erişemez. Yalnızca public service arayüzü veya domain event kullan
 
 - Structured JSON log. Her istekte `request_id`, varsa `user_id`, `booking_id`.
 - **Loglanmaz:** token, secret, kart verisi, ham kimlik bilgisi, tam konum geçmişi, OTP kodu,
-  `raw_text` içindeki kişisel veri (gerektiğinde maskelenir).
+  `raw_text` içindeki kişisel veri (gerektiğinde maskelenir). Koordinat anahtarları
+  (`latitude`, `longitude`, `lat`, `lon`, `lng`) Faz 8'den itibaren redaksiyon listesindedir
+  (`common/logging/redact.ts`): güvenlik kodu koordinat loglamaz, liste kazara sızıntıya
+  karşı ikinci katmandır.
+- Safety metrikleri sabit adlı yapılandırılmış log satırlarıdır (`safety.*`,
+  `safety/safety-metrics.ts`); koordinat ve kişi kimliği taşımaz.
 - Kritik işlemler (`audit_logs`): rol değişimi, verification onayı/reddi, ödeme durumu değişimi,
   admin müdahalesi, dispute çözümü, recovery, hassas veri erişimi.
 - Metrikler: p50/p95 latency, error rate, event lag, cache hit rate, panic flow latency.

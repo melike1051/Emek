@@ -57,6 +57,10 @@ export const ErrorCode = {
   MATCHING_RUN_NOT_FOUND: 'MATCHING_RUN_NOT_FOUND',
   PROVIDER_SERVICE_ALREADY_ADDED: 'PROVIDER_SERVICE_ALREADY_ADDED',
   PROVIDER_SERVICE_AREA_LIMIT: 'PROVIDER_SERVICE_AREA_LIMIT',
+  SAFETY_SESSION_NOT_FOUND: 'SAFETY_SESSION_NOT_FOUND',
+  SAFETY_SESSION_NOT_ACTIVE: 'SAFETY_SESSION_NOT_ACTIVE',
+  SAFETY_SESSION_ALREADY_CLOSED: 'SAFETY_SESSION_ALREADY_CLOSED',
+  SAFETY_INVALID_SESSION_TRANSITION: 'SAFETY_INVALID_SESSION_TRANSITION',
 } as const;
 
 export type ErrorCodeValue = (typeof ErrorCode)[keyof typeof ErrorCode];
@@ -112,6 +116,10 @@ export const ERROR_STATUS: Record<ErrorCodeValue, HttpStatus> = {
   [ErrorCode.MATCHING_RUN_NOT_FOUND]: HttpStatus.NOT_FOUND,
   [ErrorCode.PROVIDER_SERVICE_ALREADY_ADDED]: HttpStatus.CONFLICT,
   [ErrorCode.PROVIDER_SERVICE_AREA_LIMIT]: HttpStatus.CONFLICT,
+  [ErrorCode.SAFETY_SESSION_NOT_FOUND]: HttpStatus.NOT_FOUND,
+  [ErrorCode.SAFETY_SESSION_NOT_ACTIVE]: HttpStatus.CONFLICT,
+  [ErrorCode.SAFETY_SESSION_ALREADY_CLOSED]: HttpStatus.CONFLICT,
+  [ErrorCode.SAFETY_INVALID_SESSION_TRANSITION]: HttpStatus.CONFLICT,
 };
 
 /**
@@ -178,6 +186,10 @@ export const CLIENT_MESSAGES: Record<ErrorCodeValue, string> = {
   [ErrorCode.PROVIDER_SERVICE_ALREADY_ADDED]: 'Bu hizmet profilinizde zaten var.',
   [ErrorCode.PROVIDER_SERVICE_AREA_LIMIT]:
     'En fazla 5 hizmet bölgesi tanımlayabilirsiniz. Yeni bölge için önce birini kaldırın.',
+  [ErrorCode.SAFETY_SESSION_NOT_FOUND]: 'Güvenlik oturumu bulunamadı.',
+  [ErrorCode.SAFETY_SESSION_NOT_ACTIVE]: 'Güvenlik oturumu şu anda konum verisi kabul etmiyor.',
+  [ErrorCode.SAFETY_SESSION_ALREADY_CLOSED]: 'Güvenlik oturumu kapatılmış.',
+  [ErrorCode.SAFETY_INVALID_SESSION_TRANSITION]: 'Güvenlik oturumu bu duruma geçirilemez.',
 };
 
 /** HTTP status → kod (framework'ün ürettiği HttpException'ları kodlu yanıta çevirmek için). */

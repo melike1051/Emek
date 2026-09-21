@@ -156,7 +156,8 @@ export async function resetDomainTables(pool: Pool): Promise<void> {
   // audit_logs bilinçli olarak FK taşımaz (append-only + KVKK silme), bu yüzden
   // users güvenle temizlenebilir; audit satırları tarihsel kayıt olarak kalır.
   await pool.query(`
-    TRUNCATE TABLE booking_match_results, matching_runs,
+    TRUNCATE TABLE safety_risk_assessments, safety_events, location_events, safety_sessions,
+                   booking_match_results, matching_runs,
                    reviews, documents, disputes,
                    payment_commands, payment_events, payments,
                    booking_status_history, bookings, booking_requests,

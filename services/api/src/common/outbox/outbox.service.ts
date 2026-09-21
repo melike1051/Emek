@@ -19,6 +19,7 @@ export const EventType = {
   DISPUTE_OPENED: 'DisputeOpened',
   DISPUTE_RESOLVED: 'DisputeResolved',
   SERVICE_EVIDENCE_ADDED: 'ServiceEvidenceAdded',
+  SAFETY_ALERT_RAISED: 'SafetyAlertRaised',
 } as const;
 
 export type EventTypeValue = (typeof EventType)[keyof typeof EventType];

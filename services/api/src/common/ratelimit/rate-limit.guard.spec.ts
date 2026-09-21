@@ -71,6 +71,26 @@ describe('RateLimitGuard', () => {
     await expect(guard.canActivate(createContext())).rejects.toThrow(BusinessException);
   });
 
+  // Faz 8: güvenlik telemetrisi Redis kesintisinde reddedilseydi her aktif oturum
+  // "telemetri kesildi" alarmı üretirdi. İstisna açıkça işaretlenmiş uçlarla sınırlı.
+  it('failOpen işaretli uçta Redis erişilemezken isteği geçirir', async () => {
+    const guard = createGuard(
+      { ...LIMIT, failOpen: true },
+      { incr: jest.fn().mockRejectedValue(new Error('ECONNREFUSED')) },
+    );
+
+    await expect(guard.canActivate(createContext())).resolves.toBe(true);
+  });
+
+  it('failOpen işaretli uçta bile sınır aşımı reddedilir', async () => {
+    const guard = createGuard(
+      { ...LIMIT, failOpen: true },
+      { incr: jest.fn().mockResolvedValue(4) },
+    );
+
+    await expect(guard.canActivate(createContext())).rejects.toThrow(BusinessException);
+  });
+
   // Guard, kimlik doğrulama maliyetini korumak için AuthGuard'dan ÖNCE çalışır;
   // bu noktada request.user henüz yoktur. Kullanıcı bazlı kotalar Faz 12'de auth
   // sonrası çalışan ikinci bir guard ile gelir.

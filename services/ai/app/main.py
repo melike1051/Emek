@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from app.api.health import router as health_router
 from app.api.matching import router as matching_router
 from app.api.nlp import router as nlp_router
+from app.api.safety import router as safety_router
 from app.config import Settings, get_settings
 
 API_PREFIX = "/api/v1"
@@ -30,6 +31,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router, prefix=API_PREFIX)
     app.include_router(nlp_router, prefix=API_PREFIX)
     app.include_router(matching_router, prefix=API_PREFIX)
+    app.include_router(safety_router, prefix=API_PREFIX)
     return app
 
 

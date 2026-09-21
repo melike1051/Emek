@@ -15,27 +15,29 @@ bağlı olabilir.
 
 ## Migration dosyaları
 
-| Migration                             | İçerik                                                                                | Faz |
-| ------------------------------------- | ------------------------------------------------------------------------------------- | --- |
-| `…120000_shared-updated-at-trigger`   | Paylaşılan `set_updated_at()` fonksiyonu                                              | 1   |
-| `…120100_init-extensions-and-users`   | Extension'lar, `user_status`/`app_role`, `users`, `user_roles`                        | 1   |
-| `…130000_audit-logs`                  | `audit_logs` + hash zinciri + değişmezlik trigger'ları + `audit_chain_broken_at()`    | 2   |
-| `…130100_outbox-and-idempotency`      | `outbox`, `processed_events`, `idempotency_keys`                                      | 2   |
-| `…130200_profiles-and-catalog`        | `customer_profiles`, `provider_profiles`, katalog ve yetkinlik tabloları              | 2   |
-| `…130300_auth-subjects`               | `auth_subjects` (sağlayıcı subject → user eşlemesi)                                   | 2   |
-| `…140000_identity`                    | `identity_records`, `verification_attempts`, sağlayıcıdan bağımsız tekil kimlik       | 3   |
-| `…140100_deleted-user-contact`        | `users_contact_present` gevşetmesi (silinen kullanıcı)                                | 3   |
-| `…140200_auth-subject-lifecycle`      | `auth_subjects` ACTIVE/REVOKED yaşam döngüsü + kısmi unique                           | 3   |
-| `…140300_account-recovery-requests`   | `account_recovery_requests` (operatör onaylı kurtarma)                                | 3   |
-| `…150000_addresses-and-service-areas` | `addresses`, `provider_service_areas` (PostGIS + GIST)                                | 4   |
-| `…150100_availability`                | `availability`, `availability_exceptions` (EXCLUDE ile örtüşme yasağı)                | 4   |
-| `…150200_bookings`                    | `booking_status`, `booking_requests`, `bookings` (+EXCLUDE), `booking_status_history` | 4   |
-| `…150300_service-pricing`             | `services` fiyatlandırma kolonları + tutarlılık CHECK'leri                            | 4   |
-| `…160000_payments`                    | `payments`, `payment_events`, `payment_commands`                                      | 5   |
-| `…160100_disputes`                    | `disputes` (+ açık uyuşmazlık kısmi unique)                                           | 5   |
-| `…160200_documents`                   | `documents` (+ bütünlük trigger'ı)                                                    | 5   |
-| `…160300_reviews`                     | `reviews` (+ çift oy ve kendine puan engeli)                                          | 5   |
-| `…160400_payment-freeze-origin`       | `payments.frozen_from_status` (review bulgusu C2)                                     | 5   |
+| Migration                             | İçerik                                                                                       | Faz |
+| ------------------------------------- | -------------------------------------------------------------------------------------------- | --- |
+| `…120000_shared-updated-at-trigger`   | Paylaşılan `set_updated_at()` fonksiyonu                                                     | 1   |
+| `…120100_init-extensions-and-users`   | Extension'lar, `user_status`/`app_role`, `users`, `user_roles`                               | 1   |
+| `…130000_audit-logs`                  | `audit_logs` + hash zinciri + değişmezlik trigger'ları + `audit_chain_broken_at()`           | 2   |
+| `…130100_outbox-and-idempotency`      | `outbox`, `processed_events`, `idempotency_keys`                                             | 2   |
+| `…130200_profiles-and-catalog`        | `customer_profiles`, `provider_profiles`, katalog ve yetkinlik tabloları                     | 2   |
+| `…130300_auth-subjects`               | `auth_subjects` (sağlayıcı subject → user eşlemesi)                                          | 2   |
+| `…140000_identity`                    | `identity_records`, `verification_attempts`, sağlayıcıdan bağımsız tekil kimlik              | 3   |
+| `…140100_deleted-user-contact`        | `users_contact_present` gevşetmesi (silinen kullanıcı)                                       | 3   |
+| `…140200_auth-subject-lifecycle`      | `auth_subjects` ACTIVE/REVOKED yaşam döngüsü + kısmi unique                                  | 3   |
+| `…140300_account-recovery-requests`   | `account_recovery_requests` (operatör onaylı kurtarma)                                       | 3   |
+| `…150000_addresses-and-service-areas` | `addresses`, `provider_service_areas` (PostGIS + GIST)                                       | 4   |
+| `…150100_availability`                | `availability`, `availability_exceptions` (EXCLUDE ile örtüşme yasağı)                       | 4   |
+| `…150200_bookings`                    | `booking_status`, `booking_requests`, `bookings` (+EXCLUDE), `booking_status_history`        | 4   |
+| `…150300_service-pricing`             | `services` fiyatlandırma kolonları + tutarlılık CHECK'leri                                   | 4   |
+| `…160000_payments`                    | `payments`, `payment_events`, `payment_commands`                                             | 5   |
+| `…160100_disputes`                    | `disputes` (+ açık uyuşmazlık kısmi unique)                                                  | 5   |
+| `…160200_documents`                   | `documents` (+ bütünlük trigger'ı)                                                           | 5   |
+| `…160300_reviews`                     | `reviews` (+ çift oy ve kendine puan engeli)                                                 | 5   |
+| `…160400_payment-freeze-origin`       | `payments.frozen_from_status` (review bulgusu C2)                                            | 5   |
+| `…210000_matching` (2026-09-21)       | `provider_services`, `matching_runs`, `booking_match_results`, kapasite, bölge sınırı        | 7   |
+| `…220000_safety` (2026-09-22)         | `safety_sessions`, `location_events` (partition), `safety_events`, `safety_risk_assessments` | 8   |
 
 `set_updated_at()` kendi migration'ındadır: birden çok tablo ona bağlanacak ve fonksiyon ilk
 kullanan tablonun migration'ına gömülürse o migration'ın `down` yönü sonraki tabloların
@@ -357,6 +359,60 @@ Invariant'lar:
 - Tablo **append-only**'dir (trigger): karar değişirse yeni bir çalıştırma yazılır.
   Sonradan düzeltilebilen bir deney kaydı kanıt değeri taşımaz.
 
+## Faz 8 tabloları — safety (ADR-0008, ADR-0019)
+
+Tasarım: [safety.md](../architecture/safety.md).
+
+### `safety_sessions` — rezervasyona bağlı güvenlik oturumu
+
+- `booking_id` + denormalize `provider_id`/`customer_id` (her telemetride join yok).
+- Durum `safety_session_status`; **rezervasyon başına tek açık oturum**
+  (`uq_safety_sessions_open_booking`, `WHERE status <> 'CLOSED'`). Açma
+  `ON CONFLICT ... DO NOTHING` ile eşzamanlılığa dayanıklı.
+- Trigger `safety_session_status_guard`: durum geri gitmez, `CLOSED` terminaldir ve kapalı
+  oturumun telemetri sayaçları değişemez. Geçiş tablosunun tamamı uygulamadadır.
+- Oturum politikası kopyalanır: `service_location` (geography), `geofence_radius_meters`,
+  doğruluk sınırı, debounce, telemetri aralığı/sapma/yaş sınırları — karar yeniden
+  üretilebilsin diye.
+- Telemetri durumu: `last_sequence` (replay), `last_captured_at`, son konum/doğruluk/mesafe,
+  sayaçlar (`telemetry_count`, `rejected_count`, `integrity_rejection_count`,
+  `mock_location_count`), `consecutive_speed_rejections`.
+- Geofence: kabul edilmiş durum + başlangıcı, debounce adayı, `activation_geofence_state`.
+- Değerlendirme: `next_evaluation_at` (izleyici; kısmi index yalnızca telemetri kabul eden
+  oturumlar), `active_rules`, `anomaly_flagged`.
+- Panik: `panic_raised_at`, `panic_count`, `emergency_resolved_at` (CHECK'lerle tutarlı).
+- Retention: `retention_expires_at`, `location_purged_at` (CHECK: temizlenmiş oturumda son
+  konum yok).
+
+### `location_events` — ham telemetri (partition'lı)
+
+- `PARTITION BY RANGE (server_received_at)` — anahtar **sunucu zamanı**; aylık partition +
+  `DEFAULT` (partition unutulursa veri kaybolmaz). `safety_ensure_location_partition()`.
+- `captured_at` (istemci) + `server_received_at` (sunucu); `location` generated geography +
+  GIST; `distance_to_service_meters` ve tek örnek `geofence_state` ingest'te hesaplanır.
+- Sıra numarası tekilliği unique index ile **garanti edilemez** (partition anahtarı
+  gerektirir); garanti oturum satırı kilidi + `last_sequence` koşulu.
+- `ON DELETE CASCADE` → oturum; retention satır silmedir.
+
+### `safety_events` — append-only güvenlik olayları
+
+- Tip, kaynak (`RULE`/`ML`/`USER`/`SYSTEM`/`OPERATOR`), seviye, `rule_id`+`rule_version`,
+  `model_version`+`anomaly_score`, `actor_user_id` (**FK'siz**: append-only tabloda
+  `SET NULL` bir UPDATE'tir), `details` (koordinat içermez).
+- `seq` identity: aynı transaction'daki olayların sırası. `occurred_at` = `clock_timestamp()`.
+- CHECK: kural olayı kural kimliği, ML olayı model sürümü, kullanıcı/operatör olayı aktör taşır.
+- `uq_safety_events_panic (session_id, details->>'panicNumber')` + panik olayında
+  `panicNumber` zorunlu.
+- Trigger + REVOKE: UPDATE/DELETE/TRUNCATE yok.
+
+### `safety_risk_assessments` — her değerlendirme (append-only)
+
+Uygulanan ve hesaplanan seviye, önceki seviye, belirleyen kaynak, kural seti + toplama
+sürümü, tetiklenen kurallar (kanıtla), model sürümü/skoru/kalitesi/katkıları, model
+erişilemezse nedeni (CHECK: ya skor ya neden), rota kaynağı, eksik sinyaller, normalize
+sinyaller (koordinatsız), gecikme. Yalnızca alarm üretenler değil **her** değerlendirme
+saklanır: yanlış alarm oranının paydası budur.
+
 ## Sonraki fazlarda gelecek yapılar
 
 Bunlar Faz 1'de **bilinçli olarak yok**; ilgili domain ile birlikte gelir:
@@ -366,7 +422,7 @@ Bunlar Faz 1'de **bilinçli olarak yok**; ilgili domain ile birlikte gelir:
 | 3   | `identity_records` (sağlayıcıdan bağımsız `identity_hash` unique index), `verification_attempts`                                                              |
 | 4   | `addresses`, `provider_service_areas` (MULTIPOLYGON + GIST), `availability`, `bookings` (+ `EXCLUDE USING GIST` iptal predikatıyla), `booking_status_history` |
 | 5   | `payments`, `payment_events`, `documents`, `disputes`, `reviews`                                                                                              |
-| 8   | `safety_sessions`, `location_events` (partition + retention), `safety_events`                                                                                 |
+| 8   | ✅ `safety_sessions`, `location_events` (partition + retention), `safety_events`, `safety_risk_assessments`                                                   |
 
 ## Migration kuralları
 

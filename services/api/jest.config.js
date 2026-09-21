@@ -6,6 +6,6 @@ module.exports = {
   roots: ['<rootDir>/src'],
   testMatch: ['**/*.spec.ts'],
   testPathIgnorePatterns: ['\\.integration\\.spec\\.ts$'],
-  collectCoverageFrom: ['src/**/*.ts', '!src/**/*.spec.ts', '!src/main.ts'],
+  collectCoverageFrom: ['src/**/*.ts', '!src/**/*.spec.ts', '!src/**/*.fixture.ts', '!src/main.ts'],
   clearMocks: true,
 };

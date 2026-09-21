@@ -34,3 +34,8 @@ process.env.DATABASE_URL = testUrl;
 // açar ve bu worker thread test koşumu bittikten sonra da yaşar ("Jest did not exit").
 // Ortamı doğru ayarlamak, uyarıyı bastırmaktan daha doğrudur.
 process.env.NODE_ENV = 'test';
+
+// Güvenlik izleyicisi (değerlendirme, süre aşımı, retention) testlerde kapalıdır:
+// zamanlayıcının test verisini kendi başına değiştirmesi, testlerin ölçtüğü şeyi
+// belirsizleştirirdi. Testler aynı işleri servis üzerinden açıkça tetikler.
+process.env.SAFETY_MONITOR_ENABLED = 'false';

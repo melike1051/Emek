@@ -348,28 +348,41 @@ export class BookingsService {
     to: BookingStatus;
     reason?: string;
   }): Promise<Booking> {
-    return this.uow.withTransaction(async (client) => {
-      await this.assertPaymentAllows(client, input.bookingId, input.to);
+    return this.uow.withTransaction((client) => this.advanceBySystemWithin(client, input));
+  }
 
-      await this.state.transition(client, {
-        bookingId: input.bookingId,
-        to: input.to,
-        actor: 'SYSTEM',
-        ...(input.reason !== undefined ? { reason: input.reason } : {}),
-      });
+  /**
+   * Sistem aktörlü geçişi **verilen** transaction içinde uygular.
+   *
+   * Panik akışı (Faz 8) güvenlik olayını, oturum durumunu ve rezervasyon askısını
+   * tek transaction'da yazar: ayrı transaction'lar "panik kaydedildi ama rezervasyon
+   * askıya alınmadı (ödeme serbest bırakılabilir)" durumunu mümkün kılardı.
+   * Geçiş yine aynı state machine'den ve aynı ödeme etkilerinden geçer.
+   */
+  async advanceBySystemWithin(
+    client: PoolClient,
+    input: { bookingId: string; to: BookingStatus; reason?: string },
+  ): Promise<Booking> {
+    await this.assertPaymentAllows(client, input.bookingId, input.to);
 
-      await this.applyPaymentEffects(client, input.bookingId, input.to);
-      await this.publishLifecycleEvent(client, input.bookingId, input.to);
-
-      const updated = await client.query<BookingRow>(`${SELECT_BOOKING} WHERE id = $1`, [
-        input.bookingId,
-      ]);
-      const row = updated.rows[0];
-      if (row === undefined) {
-        throw new Error('güncellenen rezervasyon okunamadı');
-      }
-      return toBooking(row);
+    await this.state.transition(client, {
+      bookingId: input.bookingId,
+      to: input.to,
+      actor: 'SYSTEM',
+      ...(input.reason !== undefined ? { reason: input.reason } : {}),
     });
+
+    await this.applyPaymentEffects(client, input.bookingId, input.to);
+    await this.publishLifecycleEvent(client, input.bookingId, input.to);
+
+    const updated = await client.query<BookingRow>(`${SELECT_BOOKING} WHERE id = $1`, [
+      input.bookingId,
+    ]);
+    const row = updated.rows[0];
+    if (row === undefined) {
+      throw new Error('güncellenen rezervasyon okunamadı');
+    }
+    return toBooking(row);
   }
 
   /**

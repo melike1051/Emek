@@ -32,6 +32,23 @@ describe('log redaction', () => {
     expect(line).toContain('[REDACTED]');
   });
 
+  // Faz 8: konum S1 kişisel veridir. Güvenlik kodu koordinat loglamaz; bu test
+  // ileride eklenecek bir log satırının kazara sızdırmasına karşı ikinci katmanı korur.
+  it('koordinatları maskeler (konum sızıntısı)', () => {
+    const { lines, logger } = captureLogs();
+
+    logger.warn(
+      { sample: { latitude: 40.990912, longitude: 29.030345, lat: 41.1, lng: 29.2 } },
+      'telemetri',
+    );
+
+    const line = JSON.stringify(lines[0]);
+    expect(line).not.toContain('40.990912');
+    expect(line).not.toContain('29.030345');
+    expect(line).not.toContain('41.1');
+    expect(line).toContain('[REDACTED]');
+  });
+
   // pino'nun redact.paths seçeneği joker başına tek seviye eşler; derin nesneler
   // maskelenmeden loglanırdı. Bu test o regresyonu kapatır.
   it('derin iç içe nesnelerde de maskeler', () => {

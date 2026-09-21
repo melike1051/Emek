@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { SafetyCoreModule } from '../../safety/safety-core.module';
 import { BookingStateService } from './booking-state.service';
 
 /**
@@ -11,6 +12,9 @@ import { BookingStateService } from './booking-state.service';
  * **tek yol** olma özelliğini bozmadan bu döngüyü keser.
  */
 @Module({
+  // Güvenlik oturumu booking geçişiyle aynı transaction'da ilerler (ADR-0019 §2).
+  // `SafetyCoreModule` booking modüllerini import etmez; döngü oluşmaz.
+  imports: [SafetyCoreModule],
   providers: [BookingStateService],
   exports: [BookingStateService],
 })

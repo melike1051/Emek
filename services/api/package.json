@@ -2,7 +2,7 @@
   "name": "@emek/api",
   "version": "0.1.0",
   "private": true,
-  "description": "Emek core backend \u2014 NestJS",
+  "description": "Emek core backend — NestJS",
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -16,7 +16,9 @@
     "migrate:down": "dotenv -e ../../.env -- node-pg-migrate down",
     "migrate:redo": "npm run migrate:down && npm run migrate:up",
     "seed:catalog": "dotenv -e ../../.env -- node --require ts-node/register scripts/seed-catalog.ts",
-    "contracts:generate": "dotenv -e ../../.env -- node --require ts-node/register scripts/generate-openapi.ts"
+    "contracts:generate": "dotenv -e ../../.env -- node --require ts-node/register scripts/generate-openapi.ts",
+    "exp:safety": "node --require ts-node/register scripts/exp-004-safety.ts",
+    "exp:safety:latency": "dotenv -e ../../.env -- node --require ts-node/register scripts/exp-004-latency.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.6",

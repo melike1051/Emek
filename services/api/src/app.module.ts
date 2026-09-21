@@ -27,6 +27,7 @@ import { PaymentsModule } from './payments/payments.module';
 import { ProvidersModule } from './providers/providers.module';
 import { BookingRequestsModule } from './requests/booking-requests.module';
 import { ReviewsModule } from './reviews/reviews.module';
+import { SafetyModule } from './safety/safety.module';
 import { UsersModule } from './users/users.module';
 
 @Module({
@@ -54,6 +55,7 @@ import { UsersModule } from './users/users.module';
     ReviewsModule,
     BookingRequestsModule,
     MatchingModule,
+    SafetyModule,
   ],
   providers: [
     // Guard sırası önemlidir: oran sınırı → kimlik → rol.

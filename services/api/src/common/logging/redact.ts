@@ -35,6 +35,14 @@ export const SENSITIVE_KEYS: ReadonlySet<string> = new Set(
     'cvv',
     'cvc',
     'iban',
+    // Konum S1 kişisel veridir (Faz 8): koordinat sıradan loglara yazılmaz.
+    // Güvenlik kodu zaten koordinat loglamaz; bu liste, ileride eklenecek bir
+    // log satırının kazara sızdırmasına karşı ikinci katmandır.
+    'latitude',
+    'longitude',
+    'lat',
+    'lon',
+    'lng',
   ].map((key) => key.toLowerCase()),
 );
 
