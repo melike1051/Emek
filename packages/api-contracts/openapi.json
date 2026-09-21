@@ -221,6 +221,112 @@
         "tags": ["Providers"]
       }
     },
+    "/api/v1/providers/me/services": {
+      "get": {
+        "operationId": "ProvidersController_services",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Providers"]
+      },
+      "post": {
+        "operationId": "ProvidersController_addService",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddProviderServiceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": ["Providers"]
+      }
+    },
+    "/api/v1/providers/me/services/{serviceId}": {
+      "delete": {
+        "operationId": "ProvidersController_removeService",
+        "parameters": [
+          {
+            "name": "serviceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": ["Providers"]
+      }
+    },
+    "/api/v1/providers/me/service-areas": {
+      "get": {
+        "operationId": "ProvidersController_serviceAreas",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Providers"]
+      },
+      "post": {
+        "operationId": "ProvidersController_addServiceArea",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddServiceAreaDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": ["Providers"]
+      }
+    },
+    "/api/v1/providers/me/service-areas/{areaId}": {
+      "delete": {
+        "operationId": "ProvidersController_removeServiceArea",
+        "parameters": [
+          {
+            "name": "areaId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": ["Providers"]
+      }
+    },
     "/api/v1/providers/me/availability": {
       "get": {
         "operationId": "ProvidersController_listAvailability",
@@ -1046,6 +1152,89 @@
         },
         "tags": ["BookingRequests"]
       }
+    },
+    "/api/v1/booking-requests/{id}/match": {
+      "post": {
+        "operationId": "MatchingController_match",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": ["Matching"]
+      },
+      "get": {
+        "operationId": "MatchingController_result",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Matching"]
+      }
+    },
+    "/api/v1/matching/runs": {
+      "post": {
+        "operationId": "MatchingController_batch",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MatchBatchDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": ["Matching"]
+      }
+    },
+    "/api/v1/matching/runs/{requestId}": {
+      "get": {
+        "operationId": "MatchingController_run",
+        "parameters": [
+          {
+            "name": "requestId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Matching"]
+      }
     }
   },
   "info": {
@@ -1087,6 +1276,14 @@
         "properties": {}
       },
       "AddProviderSkillDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "AddProviderServiceDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "AddServiceAreaDto": {
         "type": "object",
         "properties": {}
       },
@@ -1143,6 +1340,10 @@
         "properties": {}
       },
       "CreateRequestFromFormDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "MatchBatchDto": {
         "type": "object",
         "properties": {}
       }

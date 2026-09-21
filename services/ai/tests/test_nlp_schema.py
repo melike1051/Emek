@@ -72,9 +72,7 @@ def test_parsed_result_requires_request() -> None:
 
 def test_clarification_result_requires_question() -> None:
     with pytest.raises(ValidationError):
-        ParseResult(
-            status=ParseStatus.NEEDS_CLARIFICATION, parser_version="x", confidence=0.2
-        )
+        ParseResult(status=ParseStatus.NEEDS_CLARIFICATION, parser_version="x", confidence=0.2)
 
 
 def test_rejected_result_cannot_carry_request() -> None:
@@ -94,9 +92,7 @@ def test_parser_version_is_mandatory() -> None:
             status=ParseStatus.NEEDS_CLARIFICATION,
             parser_version="",
             confidence=0.1,
-            clarifications=(
-                ClarificationQuestion(field="service_type", question="Hangi hizmet?"),
-            ),
+            clarifications=(ClarificationQuestion(field="service_type", question="Hangi hizmet?"),),
         )
 
 

@@ -95,6 +95,33 @@ export const envSchema = z
       .regex(/^[+-][0-9]{2}:[0-9]{2}$/, 'SERVICE_TIMEZONE_OFFSET ±HH:MM biçiminde olmalı')
       .default('+03:00'),
     AI_SERVICE_TIMEOUT_MS: z.coerce.number().int().min(100).max(60000).default(3000),
+
+    // --- Matching / Optimization (ADR-0007, Faz 7) ---
+    /**
+     * Karar motoru çağrısının zaman aşımı.
+     *
+     * NLP'den uzun tutulur: optimizasyon kombinatoryal bir problemi çözer ve
+     * AI servisi kendi içinde ayrıca bir çözücü zaman limiti uygular. Süre
+     * dolduğunda core kendi deterministik yedek sıralamasına düşer.
+     */
+    MATCHING_SERVICE_TIMEOUT_MS: z.coerce.number().int().min(100).max(60000).default(10000),
+    /**
+     * Mutlak mesafe üst sınırı (metre).
+     *
+     * Hizmet bölgesi poligonu "evet" dese bile aşılamaz: yanlış çizilmiş tek bir
+     * poligon şehirler arası atama üretebilirdi. AI servisindeki
+     * `AI_MATCHING_MAX_DISTANCE_METERS` ile aynı değeri taşımalıdır.
+     */
+    MATCHING_MAX_DISTANCE_METERS: z.coerce.number().int().min(1000).max(500000).default(50000),
+    /**
+     * Tek talep için değerlendirilecek en fazla aday.
+     *
+     * Sınırsız bir havuz hem sorguyu hem optimizasyonu aday sayısıyla birlikte
+     * büyütür (R-16). Havuz mesafeye göre sıralandığı için sınır "en yakın N" demektir.
+     */
+    MATCHING_CANDIDATE_LIMIT: z.coerce.number().int().min(1).max(200).default(50),
+    /** Tek toplu çalıştırmada birlikte çözülecek en fazla talep. */
+    MATCHING_BATCH_LIMIT: z.coerce.number().int().min(1).max(100).default(25),
     /**
      * AI servisine giden isteklerin taşıdığı paylaşılan sır.
      *

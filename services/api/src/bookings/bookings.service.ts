@@ -42,6 +42,24 @@ interface BookingRow {
   status: BookingStatus;
 }
 
+export interface CreateBookingInput {
+  /**
+   * Rezervasyonun kaynaklandığı talep (Faz 7).
+   *
+   * Eşleştirmeyle oluşan rezervasyon talebe bağlanır: bağ olmadan "bu rezervasyon
+   * hangi kararla, hangi algoritma sürümüyle oluştu" sorusu yanıtsız kalır ve
+   * Ar-Ge izlenebilirliği (ADR-0012) kopar. Müşterinin doğrudan oluşturduğu
+   * rezervasyonda talep yoktur.
+   */
+  requestId?: string;
+  customerId: string;
+  providerId: string;
+  serviceId: string;
+  addressId: string;
+  scheduledStart: Date;
+  scheduledEnd: Date;
+}
+
 export interface BookingHistoryEntry {
   fromStatus: BookingStatus | null;
   toStatus: BookingStatus;
@@ -107,20 +125,25 @@ export class BookingsService {
   ) {}
 
   /**
-   * Rezervasyon oluşturur.
+   * Rezervasyon oluşturur (kendi transaction'ında).
    *
    * Faz 4'te sağlayıcı doğrudan verilir (müşteri seçer). Faz 7'de matching motoru
-   * `REQUESTED` durumundaki talebi alıp sağlayıcıyı atayacak; bu yüzden `provider_id`
+   * `REQUESTED` durumundaki talebi alıp sağlayıcıyı atar; bu yüzden `provider_id`
    * nullable ve durum bazlı zorunlu (R-14 kararı).
    */
-  async create(input: {
-    customerId: string;
-    providerId: string;
-    serviceId: string;
-    addressId: string;
-    scheduledStart: Date;
-    scheduledEnd: Date;
-  }): Promise<Booking> {
+  async create(input: CreateBookingInput): Promise<Booking> {
+    return this.uow.withTransaction((client) => this.createWithin(client, input));
+  }
+
+  /**
+   * Rezervasyonu **verilen** transaction içinde oluşturur.
+   *
+   * Eşleştirme motoru (Faz 7) talebi kilitler, adayları okur, karar kaydını yazar ve
+   * rezervasyonu **aynı** transaction'da oluşturur: ayrı transaction açmak hem ikinci
+   * bir bağlantı tutup kilit sırasını bozar hem de "karar yazıldı ama rezervasyon
+   * oluşmadı" durumunu mümkün kılardı.
+   */
+  async createWithin(client: PoolClient, input: CreateBookingInput): Promise<Booking> {
     if (input.scheduledEnd.getTime() <= input.scheduledStart.getTime()) {
       throw new BusinessException(ErrorCode.VALIDATION_FAILED, {
         clientMessage: 'Bitiş zamanı başlangıçtan sonra olmalı.',
@@ -141,7 +164,7 @@ export class BookingsService {
     const durationMinutes = (input.scheduledEnd.getTime() - input.scheduledStart.getTime()) / 60000;
     const { priceMinor } = await this.catalog.priceFor(input.serviceId, durationMinutes);
 
-    return this.uow.withTransaction(async (client) => {
+    {
       // Müsaitlik kontrolü **transaction içinde** ve pencereyi kilitleyerek yapılır:
       // dışarıda yapılsaydı sağlayıcı aradan pencereyi silebilir ve rezervasyon
       // beyan edilmiş saatlerin dışına düşebilirdi (TOCTOU). Kilit, kaydı commit'e
@@ -158,12 +181,13 @@ export class BookingsService {
       try {
         inserted = await client.query<BookingRow>(
           `INSERT INTO bookings
-             (customer_id, provider_id, service_id, address_id,
+             (request_id, customer_id, provider_id, service_id, address_id,
               scheduled_start, scheduled_end, price_minor, status)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, 'REQUESTED')
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'REQUESTED')
            RETURNING id, request_id, customer_id, provider_id, service_id, address_id,
                      scheduled_start, scheduled_end, price_minor, currency, status`,
           [
+            input.requestId ?? null,
             input.customerId,
             input.providerId,
             input.serviceId,
@@ -217,7 +241,7 @@ export class BookingsService {
       });
 
       return toBooking(row);
-    });
+    }
   }
 
   /**

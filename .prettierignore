@@ -3,3 +3,13 @@ coverage
 node_modules
 package-lock.json
 docs/reference
+
+# Deney çıktıları makine üretimidir (`uv run python -m app.evaluation...` ile stdout'a
+# yazılır ve dosyaya yönlendirilir). Biçimlerini Prettier'a uydurmak, her deney
+# koşumundan sonra elle bir adım daha gerektirirdi; unutulan adım CI'ı düşürürdü.
+docs/research/experiments/*.json
+
+# Servis sözleşmesi fixture'ları gerçek bir çağrıdan yakalanır (bkz.
+# packages/api-contracts/matching/README.md); elle düzenlenmez ve biçimleri
+# yakalandıkları hâldedir.
+packages/api-contracts/matching/*.json

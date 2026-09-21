@@ -23,3 +23,4 @@ Bir ADR'yi değiştirmek için ADR silinmez: `Superseded by ADR-XXXX` olarak iş
 | [0015](0015-toolchain-choices.md)                 | Toolchain: NestJS 11 (CJS), TypeScript 6, uv, sürüm pinleme    | Accepted | 1     |
 | [0016](0016-firebase-token-verification.md)       | Firebase token doğrulaması jose + JWKS ile                     | Accepted | 2     |
 | [0017](0017-payment-data-model.md)                | Ödeme veri modeli: canlı ödeme, giden komut, kısmi iade        | Accepted | 5     |
+| [0018](0018-matching-decision-chain.md)           | Faz 7 karar zinciri: aday havuzu core'da, optimizasyon AI'da   | Accepted | 7     |

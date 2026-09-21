@@ -362,7 +362,7 @@ uyarısı üretiyor. `--detectOpenHandles` hiçbir sızan handle raporlamıyor �
 Postgres testinin soketi Jest'in 1 saniyelik bekleme penceresinden biraz geç kapanıyor.
 Testler kararlı; uyarı bastırılmadı, kaydedildi.
 
-## Faz 7 — Matching & Optimization
+## Faz 7 — Matching & Optimization ✅
 
 **Kapsam:** candidate retrieval (SQL/PostGIS); hard constraints; versiyonlu ağırlıklarla scoring;
 OR-Tools optimization (assignment + time windows + capacity + travel); routing sağlayıcı
@@ -370,9 +370,105 @@ abstraction (gerçek ETA opsiyonel, fallback haversine); ranking; explainability
 `booking_match_results`; benchmark harness (Recall@K, acceptance rate, latency, travel/distance
 reduction, constraint violation, runtime).
 
-**Exit:** aynı girdi + aynı `algorithm_version` → aynı sonuç (determinizm testi); optimization
-timeout'unda fallback devrede ve sonuç işaretli; hard constraint ihlali hiçbir skorla geçmiyor;
-explainability kullanıcı verisi sızdırmıyor; benchmark sonuçları raporlandı.
+Ayrıntı: [matching.md](matching.md), [ADR-0018](adr/0018-matching-decision-chain.md).
+
+**Exit kriterleri (durum):**
+
+- ✅ **Determinizm** (T-17): sıralama katmanı koşulsuz deterministik — skor 4 haneye
+  yuvarlanır, eşitlik `provider_id` ile çözülür, aday havuzunun geliş sırası sonucu
+  etkilemez. Çözücü `num_workers=1` + sabit tohumla çalışır. **Sınır dürüstçe
+  yazıldı:** optimizasyon zaman limitine takıldığında en iyi çabadır — ve tam bu
+  yüzden sonuç `degraded` işaretlenir.
+- ✅ **Hard constraint ihlali hiçbir skorla geçmiyor** (T-18): eleme skorlamadan önce
+  ve ondan bağımsız çalışır; kısıtlar hem AI'da hem core'da değerlendirilir (ADR-0018 §3).
+  Benchmark'ta proposed'ın ihlal oranı **0.00** (baseline 0.70).
+- ✅ **Üç kademeli, işaretli bozulma** (T-16): routing → `ROUTING_UNAVAILABLE`,
+  optimizasyon → `RANKED_FALLBACK`, AI servisi → `ENGINE_UNAVAILABLE`. Üçünde de
+  kısıt kuralı geçerli. Core'un yedeği skor bileşenlerini **uydurmaz**.
+- ✅ **Explainability kullanıcı verisi sızdırmıyor** (T-19): kapalı kod kümesi;
+  müşteri yanıtı yalnızca seçilen sağlayıcıyı taşır, skor bileşeni içermez, mesafe
+  kilometreye yuvarlanır (üçleme engeli). Tam sıralama yalnızca `ADMIN` uçunda.
+- ✅ **Benchmark raporlandı:** [EXP-002](../research/experiments/exp-002-matching-baseline-vs-optimized.md).
+  Recall@1 0.24 → 0.46, Recall@5 0.56 → 0.86, **geçerli** atama oranı 0.30 → 0.82,
+  kısıt ihlali 0.70 → 0.00, optimizasyon p95 94 ms, fallback oranı 0.
+- ✅ **R-46 kapandı:** ECE/MCE/Brier ölçülüyor ([EXP-003](../research/experiments/exp-003-confidence-calibration.md)).
+- ✅ Aday havuzu sorgusu 2.000 sağlayıcı + 50.000 rezervasyonla ~10 ms; sağlayıcı ve
+  rezervasyon tablolarında sequential scan yok.
+- ✅ 220 AI testi + 180 core unit + 283 core integration; ruff/ruff format/mypy/eslint/tsc/prettier temiz.
+- ✅ Servisler arası sözleşme iki taraflı test ediliyor
+  (`packages/api-contracts/matching/`): core'un ürettiği gövde ve motorun gerçek
+  yanıtı commit'li fixture'lardır. İki servis ayrı CI işlerinde koştuğu için, alan
+  adlandırmasındaki sessiz bir sapma aksi hâlde yalnızca üretimde — kalıcı bozulmuş
+  mod olarak — görünürdü.
+
+**Bu fazda ölçülen ama çözülmeyen:**
+
+- ❌ **Seyahat maliyeti hedefi tutmadı** (research-metrics §2.3). Proposed, baseline'dan
+  %152 **fazla** yol üretiyor (eşleştirilmiş kıyasta da aynı yön). Neden tasarımda
+  görünüyor: mesafe altı kriterden biri (ağırlık 0.15) ve amaç fonksiyonundaki yol
+  cezası skor farklarının yanında etkisiz. Duyarlılık ölçüldü — `objective-v2-travel`
+  seyahati %17.5 azaltıyor, bedeli ortalama sıranın 1.29 → 1.63 çıkması — ama
+  **varsayılan değiştirilmedi** (metric shopping yasağı). → R-49.
+- ❌ **Kalibrasyon ölçüldü, iyileştirilmedi:** `overall_score` kalibre bir olasılık
+  değil (ECE 0.467). Skor bu yüzden müşteriye açılmıyor. → R-50.
+- ⏸️ **Tekrarlayan müsaitlik (RRULE)** incelendi: matching recurrence **gerektirmiyor**
+  (somut aralıklarla çalışıyor). Eklenmedi, risk **açıkça korundu** → R-47.
+- ⚠️ Kısıt mantığı iki dilde yaşıyor ve birlikte güncellenmek zorunda → R-48.
+
+**Faz 7 code review bulguları ve çözümleri** (bağımsız review + güvenlik agent'ları):
+
+| Bulgu                                                                                                                                                                                                                                                                   | Önem     | Çözüm                                                                                                                                                                                                               |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Günlük kapasite toplu çalıştırmada uygulanmıyordu.** `persist` her talep için bağımsız çalışıyor ve hepsi aynı bayat `dailyBookingCount` anlık görüntüsünü görüyordu: 5 talep aynı sağlayıcıya atanabiliyordu (kapasite 2). Çakışma engeli yakalamaz — saatler farklı | CRITICAL | Kapasite ve takvim **parti boyunca** biriktiriliyor; ayrıca yazma anında `FOR SHARE` ile **taze** okunuyor. `POST /matching/runs` için ilk kez integration testi yazıldı                                            |
+| **Determinizm iddiası motor sınırında yanlıştı.** Aynı talep kümesi farklı sırada gönderilince 6 permütasyon 6 farklı sonuç veriyordu; üretimi yalnızca core'un `sort()` çağrısı kurtarıyordu                                                                           | HIGH     | Motor talepleri **kendisi** kanonik sıraya alıyor. Permütasyon testi eklendi (T-17)                                                                                                                                 |
+| **`FEASIBLE` (zaman limiti doldu) `OPTIMIZED` olarak ve bozulmamış raporlanıyordu** — "kararların yüzde kaçı zaman limitine takıldı" ölçülemezdi                                                                                                                        | HIGH     | `OPTIMIZATION_TIMEOUT` ile işaretleniyor; atama korunuyor, iddia edilmeyen tek şey en iyilik                                                                                                                        |
+| **Aday `LIMIT`'i elemeden önce uygulanıyordu:** "en yakın 50" havuzu doğrulanmamış/müsait olmayan sağlayıcılarla dolabilir, 200 m ötedeki uygun sağlayıcı hiç değerlendirilmezdi                                                                                        | HIGH     | Doğrulama, müsaitlik ve kapasite `LIMIT`'ten önceki `usable` CTE'sine taşındı. Yetkinlik bilinçli olarak kısıt katmanında bırakıldı (`eligible_count` sinyal taşısın)                                               |
+| **Motordan gelen 4xx, kesintiden ayırt edilemiyordu.** Katalogda yeni bir hizmet açıp motorun kapalı slug kümesine eklemeyi unutmak "AI servisi kapalı" gibi görünür, o hizmet kalıcı olarak mesafeye göre eşleşirdi                                                    | HIGH     | `ENGINE_CONTRACT_MISMATCH` ayrı etiket + error seviyesinde log. Ayrıca iki taraflı slug sözleşmesi (`catalog-slugs.json`) ve her iki serviste test                                                                  |
+| **AI çağrısı transaction içindeydi:** 10 sn'lik bir çağrı boyunca havuz bağlantısı + satır kilidi tutuluyordu; yavaşlayan AI servisi havuzu (10) tüketip **ilgisiz tüm endpoint'leri** durdururdu                                                                       | HIGH     | Akış üç faza ayrıldı: oku → (transaction yok) karar ver → yaz. Yazma fazı durumu, kapasiteyi ve müsaitliği **yeniden** okur                                                                                         |
+| **Hizmet bölgeleri sınırsızdı ve mesafe onların ağırlık merkezinden hesaplanıyordu:** küçük daireler koyarak `distance_score` satın alınabilir, binlerce satırla bölgedeki her sorgu yavaşlatılabilirdi                                                                 | HIGH     | Bölge sayısı veritabanı trigger'ıyla 5; referans noktası **kapsayan** bölgenin merkezi (birleşimin değil); yazma uçlarına oran sınırı. Kalan yüzey R-51 olarak kaydedildi                                           |
+| **Karar kaydı UPDATE'e kapalı ama DELETE'e açıktı**; `matching_runs` hiç korunmuyordu ve FK'ler `CASCADE` idi — tek bir talep silme işlemi tüm kanıtı yok ederdi                                                                                                        | MEDIUM   | Her iki tabloda `BEFORE UPDATE OR DELETE` trigger + `REVOKE`; FK'ler `RESTRICT`                                                                                                                                     |
+| **Üretim doğrulayıcısı kapasite ve çakışmayı kontrol etmiyordu**, `violations` sabit 0 dönüyordu; bu kontroller yalnızca benchmark'ta vardı                                                                                                                             | MEDIUM   | Çözüm seviyesindeki kontroller `engine._verify`'a taşındı. İlk denemede tampon yanlış hesaplandı (ev→hizmet yolu, iki hizmet arası yol sanıldı) ve **geçerli** çözümler eleniyordu; yalnızca örtüşme kontrolü kaldı |
+| **`preferredSkills` katalogla doğrulanmıyordu.** Profiline uydurma bir slug yazan tek müşteri kendi eşleştirmesini — ve toplu çalıştırmada aynı partideki diğerlerini — kalıcı olarak bozulmuş moda düşürebilirdi                                                       | MEDIUM   | Tercihler de katalogla karşılaştırılıyor; bilinmeyen olanlar **düşürülüyor** (zorunlu yetkinlikte hata, tercihte düşürme)                                                                                           |
+| **AI servisinin belgelenen üst sınırları hiç uygulanmıyordu** (`optimization_max_*` tanımlıydı ama okunmuyordu); tek sınır çağıranın kendi sınırıydı                                                                                                                    | MEDIUM   | Uçta uygulanıyor (422) + şemada mutlak tavan. "Çağıranın sınırına güvenmek, ağ politikasına güvenmekle aynı hata"                                                                                                   |
+| **Seyahat metriği yalnızca ilk ayağı ölçüyordu** ama "seyahat maliyeti" diye raporlanıyordu: rota optimizasyonu, onu hiç görmeyen bir metrikle yargılanıyordu                                                                                                           | MEDIUM   | `first_leg` / `realized_route` ayrıldı. **Asıl bulgu buradan çıktı:** yol cezası 12× → gerçekleşen rota **−%64**, atama/recall/ihlal sabit                                                                          |
+| **Kabul oranı, seyahat metriğinin düzeltildiği seçilim yanlılığını taşıyordu**                                                                                                                                                                                          | MEDIUM   | Eşleştirilmiş kabul raporlanıyor; ham fark "unpaired" etiketli. Δ −0.102 → −0.056                                                                                                                                   |
+| **EXP-002 metni kendi JSON'uyla uyuşmuyordu** (yalnızca gecikme sayıları)                                                                                                                                                                                               | MEDIUM   | Rapor yeniden üretildi; gecikmeler "makineye bağlı, tek yeniden üretilemeyen metrik" olarak işaretlendi. Doğrulama: 572 anahtar, 13 fark, **hepsi gecikme**                                                         |
+| **`percentile` bankacı yuvarlamasıyla bir sıra yukarı kayıyordu**; `capacity_limit` üzerine yazıyordu (min yerine)                                                                                                                                                      | MEDIUM   | `math.ceil` + `min`                                                                                                                                                                                                 |
+| Tekrar eden talep kimliği toplu istekte tek talep için **iki rezervasyon** üretebilirdi                                                                                                                                                                                 | MEDIUM   | `@ArrayUnique` + serviste tekilleştirme + veritabanında kısmi unique index (`uq_bookings_active_request`)                                                                                                           |
+| Mesafe sınırı iki serviste ayrı yapılandırılıyordu ("aynı olmalı" notuyla); sapma sessiz olurdu                                                                                                                                                                         | MEDIUM   | Değer **istekle birlikte** taşınıyor; motorun ayarı yalnızca varsayılan                                                                                                                                             |
+| Açıklamadaki mesafe 100 m çözünürlükteydi (üçleme) ve `PARTIAL_WINDOW_AVAILABLE` ham `availability_score` taşıyordu (takvim doluluğu)                                                                                                                                   | MEDIUM   | Mesafe 1 km kovasına; doluluk oranı açıklamadan kaldırıldı                                                                                                                                                          |
+| Kapasite değişikliği ve bölge silme audit'e yazılmıyordu; `PROVIDER_CAPACITY_UPDATED` sabiti hiç kullanılmıyordu                                                                                                                                                        | LOW      | İkisi de kaydediliyor                                                                                                                                                                                               |
+| Motor aynı sağlayıcıyı iki kez döndürürse `UNIQUE` ihlali tüm transaction'ı düşürürdü (müşteriye 500)                                                                                                                                                                   | LOW      | Core tekrarları kendisi eliyor                                                                                                                                                                                      |
+| `_minutes_since` saniye taşıyan bir köke göre aşağı yuvarlıyordu: çözücü aralık başından 59 sn önce başlangıç önerebilir, doğrulayıcı reddederdi                                                                                                                        | LOW      | Kök dakikaya yuvarlanıyor                                                                                                                                                                                           |
+| Yedek yolda ölü durum (`busy_by_provider`) ve `KeyError` fırlatan doğrudan indeksleme                                                                                                                                                                                   | LOW      | Kaldırıldı / `.get()` ile atlama                                                                                                                                                                                    |
+| `GET /booking-requests/:id/match` her zaman `bookingId: null` dönüyordu                                                                                                                                                                                                 | LOW      | Talepten okunuyor                                                                                                                                                                                                   |
+| EXP-003, matching skorunun ECE'sini "düzeltilmemiş kusur" gibi çerçeveliyordu; oysa skor olasılık olarak eğitilmiş değil                                                                                                                                                | LOW      | Kategori farkı olarak yeniden yazıldı; R-50 yalnızca NLP kalibrasyonunu kapsıyor, matching skoru R-49'a (ağırlık ayarı) bağlandı                                                                                    |
+
+**Ayrıca Faz 7'de kapatılan, Faz 7'ye ait olmayan bir CI sorunu:** `uv run ruff format --check .`
+adımı Faz 6'dan beri kırmızıydı (4 dosya). Formatlama uygulandı; Faz 7 kodunun bu
+adımı yeşil bırakması için gereken asgari müdahaleydi.
+
+**Reviewer'ların doğruladıkları:** CP-SAT modelinde yol cezası serbest değişkenden
+beslenmiyor (çift yönlü reification doğru); çakışma + yol boşluğu gerçekten zorlanıyor
+(34 km arayla iki iş → 88 dakika boşluk); bir rezervasyon iki kez atanamıyor; aralık
+seçimi doğru reified; `localDayBounds` sabit ofset için doğru; multirange aritmetiği
+doğru ve `bookings_no_overlap` predikatıyla birebir uyumlu; Python ↔ TypeScript kısıt
+paritesi **sekiz kodun sekizinde de** semantik olarak aynı (sınır operatörleri dâhil);
+benchmark yeniden üretilebilir ve gizli gerçek skor fonksiyonundan bağımsız; sonuçlar
+cherry-pick edilmemiş (seyahat sonucu **başarısızlık** olarak raporlanıyor, daha iyi
+görünen amaç sürümü varsayılan yapılmıyor); yetkilendirme sahiplik veri erişim
+katmanında; servisler arası PII taşınmıyor; SQL injection yok; audit/outbox payload'ları
+temiz; state machine atlanmıyor.
+
+**Faz 7'de yapılan şema değişiklikleri:** `provider_services`, `matching_runs`,
+`booking_match_results` (append-only), `provider_profiles.max_daily_bookings`,
+`provider_service_areas.radius_meters`.
+
+**Faz 6'dan taşınan ve Faz 7'de düzeltilen hata:** AI servisi "bugün"ü UTC gününden
+çözüyordu. Yerel gece yarısı ile UTC gece yarısı arasındaki üç saatte "bugün temizlik"
+diyen müşteri için **bir gün geriye** kayan bir tarih üretiyordu ve matching geçmişe
+düşen bir pencere için aday arardı. Artık `AI_SERVICE_TIMEZONE_OFFSET` ile hizmet
+zaman diliminde çözülüyor.
 
 ---
 

@@ -22,6 +22,7 @@ import { DisputesModule } from './disputes/disputes.module';
 import { DocumentsModule } from './documents/documents.module';
 import { HealthModule } from './health/health.module';
 import { IdentityModule } from './identity/identity.module';
+import { MatchingModule } from './matching/matching.module';
 import { PaymentsModule } from './payments/payments.module';
 import { ProvidersModule } from './providers/providers.module';
 import { BookingRequestsModule } from './requests/booking-requests.module';
@@ -52,6 +53,7 @@ import { UsersModule } from './users/users.module';
     DocumentsModule,
     ReviewsModule,
     BookingRequestsModule,
+    MatchingModule,
   ],
   providers: [
     // Guard sırası önemlidir: oran sınırı → kimlik → rol.

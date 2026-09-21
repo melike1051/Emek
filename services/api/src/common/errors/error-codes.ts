@@ -50,6 +50,13 @@ export const ErrorCode = {
   DOCUMENT_INTEGRITY_MISMATCH: 'DOCUMENT_INTEGRITY_MISMATCH',
   REVIEW_NOT_ALLOWED: 'REVIEW_NOT_ALLOWED',
   REVIEW_ALREADY_EXISTS: 'REVIEW_ALREADY_EXISTS',
+  MATCHING_ALREADY_COMPLETED: 'MATCHING_ALREADY_COMPLETED',
+  MATCHING_REQUEST_NOT_MATCHABLE: 'MATCHING_REQUEST_NOT_MATCHABLE',
+  MATCHING_CONFIDENCE_TOO_LOW: 'MATCHING_CONFIDENCE_TOO_LOW',
+  MATCHING_NO_CANDIDATE: 'MATCHING_NO_CANDIDATE',
+  MATCHING_RUN_NOT_FOUND: 'MATCHING_RUN_NOT_FOUND',
+  PROVIDER_SERVICE_ALREADY_ADDED: 'PROVIDER_SERVICE_ALREADY_ADDED',
+  PROVIDER_SERVICE_AREA_LIMIT: 'PROVIDER_SERVICE_AREA_LIMIT',
 } as const;
 
 export type ErrorCodeValue = (typeof ErrorCode)[keyof typeof ErrorCode];
@@ -98,6 +105,13 @@ export const ERROR_STATUS: Record<ErrorCodeValue, HttpStatus> = {
   [ErrorCode.DOCUMENT_INTEGRITY_MISMATCH]: HttpStatus.UNPROCESSABLE_ENTITY,
   [ErrorCode.REVIEW_NOT_ALLOWED]: HttpStatus.CONFLICT,
   [ErrorCode.REVIEW_ALREADY_EXISTS]: HttpStatus.CONFLICT,
+  [ErrorCode.MATCHING_ALREADY_COMPLETED]: HttpStatus.CONFLICT,
+  [ErrorCode.MATCHING_REQUEST_NOT_MATCHABLE]: HttpStatus.CONFLICT,
+  [ErrorCode.MATCHING_CONFIDENCE_TOO_LOW]: HttpStatus.UNPROCESSABLE_ENTITY,
+  [ErrorCode.MATCHING_NO_CANDIDATE]: HttpStatus.CONFLICT,
+  [ErrorCode.MATCHING_RUN_NOT_FOUND]: HttpStatus.NOT_FOUND,
+  [ErrorCode.PROVIDER_SERVICE_ALREADY_ADDED]: HttpStatus.CONFLICT,
+  [ErrorCode.PROVIDER_SERVICE_AREA_LIMIT]: HttpStatus.CONFLICT,
 };
 
 /**
@@ -155,6 +169,15 @@ export const CLIENT_MESSAGES: Record<ErrorCodeValue, string> = {
   [ErrorCode.DOCUMENT_INTEGRITY_MISMATCH]: 'Yüklenen dosyanın bütünlük özeti beklenenle uyuşmuyor.',
   [ErrorCode.REVIEW_NOT_ALLOWED]: 'Bu rezervasyon için değerlendirme yapılamaz.',
   [ErrorCode.REVIEW_ALREADY_EXISTS]: 'Bu rezervasyonu zaten değerlendirdiniz.',
+  [ErrorCode.MATCHING_ALREADY_COMPLETED]: 'Bu talep için eşleştirme zaten tamamlandı.',
+  [ErrorCode.MATCHING_REQUEST_NOT_MATCHABLE]: 'Bu talep eşleştirilebilir durumda değil.',
+  [ErrorCode.MATCHING_CONFIDENCE_TOO_LOW]:
+    'Talebiniz yeterince net anlaşılamadı; lütfen bilgileri formdan tamamlayın.',
+  [ErrorCode.MATCHING_NO_CANDIDATE]: 'Şu anda bu talep için uygun sağlayıcı bulunamadı.',
+  [ErrorCode.MATCHING_RUN_NOT_FOUND]: 'Bu talep için eşleştirme sonucu bulunamadı.',
+  [ErrorCode.PROVIDER_SERVICE_ALREADY_ADDED]: 'Bu hizmet profilinizde zaten var.',
+  [ErrorCode.PROVIDER_SERVICE_AREA_LIMIT]:
+    'En fazla 5 hizmet bölgesi tanımlayabilirsiniz. Yeni bölge için önce birini kaldırın.',
 };
 
 /** HTTP status → kod (framework'ün ürettiği HttpException'ları kodlu yanıta çevirmek için). */

@@ -65,6 +65,20 @@ describe('OpenAPI contract (integration)', () => {
     );
   });
 
+  it('Faz 7 eşleştirme endpoint.leri sözleşmede yer alır', () => {
+    const paths = Object.keys(generated.paths ?? {});
+
+    expect(paths).toEqual(
+      expect.arrayContaining([
+        '/api/v1/booking-requests/{id}/match',
+        '/api/v1/matching/runs',
+        '/api/v1/matching/runs/{requestId}',
+        '/api/v1/providers/me/services',
+        '/api/v1/providers/me/service-areas',
+      ]),
+    );
+  });
+
   it('sözleşme henüz uygulanmamış endpoint içermez', () => {
     const paths = Object.keys(generated.paths ?? {});
 

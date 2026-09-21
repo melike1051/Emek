@@ -35,9 +35,7 @@ def parser() -> HeuristicParser:
 
 
 @pytest.mark.parametrize("injection", INJECTIONS)
-def test_injection_does_not_change_output_shape(
-    parser: HeuristicParser, injection: str
-) -> None:
+def test_injection_does_not_change_output_shape(parser: HeuristicParser, injection: str) -> None:
     """Talimat metni eklenmiş talep, eklenmemişiyle **aynı** yapılandırılmış sonucu verir."""
     clean = parser.parse("Yarın sabah ev temizliği istiyorum", today=TODAY)
     injected = parser.parse(f"{injection} Yarın sabah ev temizliği istiyorum", today=TODAY)
@@ -47,9 +45,7 @@ def test_injection_does_not_change_output_shape(
 
 
 @pytest.mark.parametrize("injection", INJECTIONS)
-def test_injection_is_flagged_but_not_obeyed(
-    parser: HeuristicParser, injection: str
-) -> None:
+def test_injection_is_flagged_but_not_obeyed(parser: HeuristicParser, injection: str) -> None:
     """Talimat benzeri içerik ölçüm için işaretlenir; istek reddedilmez.
 
     Reddetmek yanlış olurdu: "önceki talimatları unut" cümlesi meşru bir metinde de
@@ -135,9 +131,7 @@ def test_ordinary_text_is_not_flagged() -> None:
 
 def test_html_and_script_payloads_do_not_reach_output(parser: HeuristicParser) -> None:
     """Çıktıda serbest metin alanı yok: taşınacak bir yer de yok."""
-    result = parser.parse(
-        "<script>alert(1)</script> yarın sabah ev temizliği", today=TODAY
-    )
+    result = parser.parse("<script>alert(1)</script> yarın sabah ev temizliği", today=TODAY)
 
     assert result.request is not None
     dumped = result.request.model_dump_json()

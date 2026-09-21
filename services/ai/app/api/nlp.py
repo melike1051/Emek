@@ -7,7 +7,7 @@ görüş alanında değildir — bu yüzden yanıtta böyle alanlar yoktur.
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+from datetime import date
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, ConfigDict, Field
@@ -30,7 +30,8 @@ class ParseRequest(BaseModel):
     # Uzunluk sınırı burada da var: sanitize kırpıyor, ama sözleşme seviyesinde
     # reddetmek istemciye net geri bildirim verir ve gereksiz iş yapılmaz.
     raw_text: str = Field(max_length=MAX_RAW_TEXT_LENGTH)
-    #: Göreli ifadelerin ("yarın") çözüleceği gün. Verilmezse sunucu günü kullanılır.
+    #: Göreli ifadelerin ("yarın") çözüleceği gün. Verilmezse **hizmet zaman
+    #: dilimindeki** bugün kullanılır (UTC günü değil).
     today: date | None = None
 
 
@@ -50,6 +51,6 @@ def parse(
     """
     settings: Settings = get_settings()
     parser = get_parser(parser_version or settings.parser_version)
-    today = payload.today or datetime.now(UTC).date()
+    today = payload.today or settings.today()
 
     return parser.parse(payload.raw_text, today=today)

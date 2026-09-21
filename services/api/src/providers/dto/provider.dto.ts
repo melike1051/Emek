@@ -1,5 +1,6 @@
 import {
   IsIn,
+  IsInt,
   IsNumber,
   IsOptional,
   IsString,
@@ -12,6 +13,8 @@ import {
 import {
   SKILL_LEVELS,
   type ProviderProfile,
+  type ProviderService,
+  type ProviderServiceArea,
   type ProviderSkill,
   type SkillLevel,
 } from '../providers.service';
@@ -51,6 +54,23 @@ export class UpdateProviderProfileDto {
   @Min(0)
   @Max(80)
   experienceYears?: number;
+
+  /**
+   * Günlük rezervasyon üst sınırı (Faz 7 kapasite kısıtı).
+   *
+   * Sınırlar veritabanındaki CHECK ile aynı: sözleşme seviyesinde reddetmek
+   * istemciye net geri bildirim verir, veritabanı son savunma olarak kalır.
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(10)
+  maxDailyBookings?: number;
+}
+
+export class AddProviderServiceDto {
+  @IsUUID()
+  serviceId!: string;
 }
 
 export class AddProviderSkillDto {
@@ -68,6 +88,7 @@ export class ProviderProfileResponseDto {
   experienceYears!: number | null;
   ratingAvg!: number | null;
   ratingCount!: number;
+  maxDailyBookings!: number;
   state!: string;
   createdAt!: string;
   updatedAt!: string;
@@ -80,6 +101,7 @@ export class ProviderProfileResponseDto {
       experienceYears: profile.experienceYears,
       ratingAvg: profile.ratingAvg,
       ratingCount: profile.ratingCount,
+      maxDailyBookings: profile.maxDailyBookings,
       state: profile.state,
       createdAt: profile.createdAt.toISOString(),
       updatedAt: profile.updatedAt.toISOString(),
@@ -96,5 +118,69 @@ export class ProviderSkillResponseDto {
 
   static from(skill: ProviderSkill): ProviderSkillResponseDto {
     return { ...skill };
+  }
+}
+
+export class ProviderServiceResponseDto {
+  serviceId!: string;
+  slug!: string;
+  name!: string;
+  active!: boolean;
+
+  static from(service: ProviderService): ProviderServiceResponseDto {
+    return {
+      serviceId: service.serviceId,
+      slug: service.slug,
+      name: service.name,
+      active: service.active,
+    };
+  }
+}
+
+/**
+ * Hizmet bölgesi girişi: merkez + yarıçap.
+ *
+ * Serbest poligon kabul edilmez (bkz. `ProvidersService.addServiceArea`). Yarıçap
+ * sınırları veritabanındaki CHECK ile aynıdır.
+ */
+export class AddServiceAreaDto {
+  @IsString()
+  @MinLength(2)
+  @MaxLength(80)
+  name!: string;
+
+  @IsNumber({ maxDecimalPlaces: 6 })
+  @Min(-90)
+  @Max(90)
+  latitude!: number;
+
+  @IsNumber({ maxDecimalPlaces: 6 })
+  @Min(-180)
+  @Max(180)
+  longitude!: number;
+
+  @IsInt()
+  @Min(500)
+  @Max(100000)
+  radiusMeters!: number;
+}
+
+export class ProviderServiceAreaResponseDto {
+  id!: string;
+  name!: string;
+  latitude!: number;
+  longitude!: number;
+  radiusMeters!: number;
+  active!: boolean;
+
+  static from(area: ProviderServiceArea): ProviderServiceAreaResponseDto {
+    return {
+      id: area.id,
+      name: area.name,
+      latitude: area.latitude,
+      longitude: area.longitude,
+      radiusMeters: area.radiusMeters,
+      active: area.active,
+    };
   }
 }

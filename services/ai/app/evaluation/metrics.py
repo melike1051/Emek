@@ -36,9 +36,7 @@ class PRF:
             if (true_positive + false_negative) > 0
             else 0.0
         )
-        f1 = (
-            2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
-        )
+        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
         return cls(
             precision=round(precision, 4),
             recall=round(recall, 4),
@@ -248,17 +246,13 @@ class Comparison:
             baseline=baseline,
             proposed=proposed,
             deltas={
-                "intent_macro_f1": round(
-                    proposed.intent_macro_f1 - baseline.intent_macro_f1, 4
-                ),
+                "intent_macro_f1": round(proposed.intent_macro_f1 - baseline.intent_macro_f1, 4),
                 "intent_accuracy": round(proposed.intent_accuracy - baseline.intent_accuracy, 4),
                 "slot_macro_f1": round(proposed.slot_macro_f1 - baseline.slot_macro_f1, 4),
                 "clarification_recall": round(
                     proposed.clarification_recall - baseline.clarification_recall, 4
                 ),
                 # Kalibrasyon farkında **azalma** iyidir; işaret bu yüzden ters okunur.
-                "calibration_gap": round(
-                    proposed.calibration_gap - baseline.calibration_gap, 4
-                ),
+                "calibration_gap": round(proposed.calibration_gap - baseline.calibration_gap, 4),
             },
         )

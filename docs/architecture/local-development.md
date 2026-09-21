@@ -35,18 +35,20 @@ npm run infra:up:events
 
 ## Günlük komutlar
 
-| Komut                                                      | Ne yapar                                                    |
-| ---------------------------------------------------------- | ----------------------------------------------------------- |
-| `npm run infra:up` / `infra:down`                          | Yerel altyapıyı başlatır/durdurur                           |
-| `npm run infra:reset`                                      | Altyapıyı **veri hacmiyle birlikte** siler (yalnızca yerel) |
-| `npm run migrate:up` / `migrate:down`                      | Şemayı ileri/geri alır                                      |
-| `npm run dev --workspace=@emek/api`                        | Core API'yi watch modunda çalıştırır                        |
-| `npm run lint` / `format` / `typecheck` / `build`          | Tüm workspace'lerde                                         |
-| `npm test`                                                 | Unit testler (altyapı gerekmez)                             |
-| `npm run test:integration`                                 | Integration testler (**altyapı gerekir**)                   |
-| `cd services/ai && uv run fastapi dev app/main.py`         | AI servisini çalıştırır                                     |
-| `cd services/ai && uv run pytest`                          | AI servisi testleri                                         |
-| `cd services/ai && uv run ruff check . && uv run mypy app` | AI lint + typecheck                                         |
+| Komut                                                            | Ne yapar                                                    |
+| ---------------------------------------------------------------- | ----------------------------------------------------------- |
+| `npm run infra:up` / `infra:down`                                | Yerel altyapıyı başlatır/durdurur                           |
+| `npm run infra:reset`                                            | Altyapıyı **veri hacmiyle birlikte** siler (yalnızca yerel) |
+| `npm run migrate:up` / `migrate:down`                            | Şemayı ileri/geri alır                                      |
+| `npm run dev --workspace=@emek/api`                              | Core API'yi watch modunda çalıştırır                        |
+| `npm run lint` / `format` / `typecheck` / `build`                | Tüm workspace'lerde                                         |
+| `npm test`                                                       | Unit testler (altyapı gerekmez)                             |
+| `npm run test:integration`                                       | Integration testler (**altyapı gerekir**)                   |
+| `cd services/ai && uv run fastapi dev app/main.py`               | AI servisini çalıştırır                                     |
+| `cd services/ai && uv run pytest`                                | AI servisi testleri                                         |
+| `cd services/ai && uv run ruff check . && uv run mypy app`       | AI lint + typecheck                                         |
+| `cd services/ai && uv run python -m app.evaluation.run`          | NLP deneyi (EXP-001) + kalibrasyon (EXP-003) — JSON çıktı   |
+| `cd services/ai && uv run python -m app.evaluation.matching.run` | Matching benchmark'ı (EXP-002) — JSON çıktı                 |
 
 ## Servis adresleri
 
@@ -89,3 +91,15 @@ development/test içindir; `NODE_ENV=production` ile birlikte verilirse servis b
 | `postgis_version()` hatası                               | Migration çalışmamış; `npm run migrate:up`                                                               |
 | Health `degraded` dönüyor                                | Gövdedeki `checks` hangi bağımlılığın `down` olduğunu söyler                                             |
 | Port çakışması (5432/6379)                               | Başka bir yerel Postgres/Redis çalışıyor; onu durdurun veya compose portunu değiştirin                   |
+
+## Deney çıktılarını yenileme
+
+Deney raporlarındaki sayılar elle yazılmaz; JSON çıktıdan üretilir (ADR-0012 §4):
+
+```bash
+cd services/ai
+uv run python -m app.evaluation.matching.run > ../../docs/research/experiments/exp-002-matching-baseline-vs-optimized.json
+```
+
+Benchmark tohumları sabittir (`SCENARIOS`), bu yüzden aynı kod aynı sayıları üretir.
+Sayı değiştiyse **algoritma değişmiştir** — ya rapor ya sürüm etiketi güncellenmeli.

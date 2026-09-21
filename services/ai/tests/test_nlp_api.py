@@ -1,11 +1,11 @@
 """NLP endpoint sözleşmesi."""
 
-from datetime import date
+from datetime import UTC, date, datetime
 
 import pytest
 from fastapi.testclient import TestClient
 
-from app.config import get_settings
+from app.config import Settings, get_settings
 from app.main import API_PREFIX, create_app
 from app.nlp.sanitize import MAX_RAW_TEXT_LENGTH
 
@@ -82,12 +82,27 @@ def test_oversized_raw_text_is_rejected_at_contract_level(client: TestClient) ->
     assert response.status_code == 422
 
 
-def test_today_defaults_to_server_date(client: TestClient) -> None:
-    """`today` verilmezse sunucu günü kullanılır; sonuç yine deterministiktir."""
+def test_today_defaults_to_service_timezone_date(client: TestClient) -> None:
+    """`today` verilmezse **hizmet zaman dilimindeki** bugün kullanılır.
+
+    Makinenin yerel saati (`date.today()`) veya UTC günü değil: ikisi de yerel gece
+    yarısı civarında kullanıcının "bugün"ünden bir gün sapar ve matching geçmişe
+    düşen bir pencere için aday arar.
+    """
     response = client.post(f"{API_PREFIX}/nlp/parse", json={"raw_text": "bugün temizlik"})
 
     body = response.json()
-    assert body["request"]["service_date"] == date.today().isoformat()
+    assert body["request"]["service_date"] == get_settings().today().isoformat()
+
+
+def test_service_timezone_today_is_not_utc_date_near_midnight() -> None:
+    """Ofset gerçekten uygulanıyor mu? Sabit bir ana karşı doğrulanır."""
+    settings = Settings(service_timezone_offset="+03:00")
+    instant = datetime(2026, 9, 20, 22, 30, tzinfo=UTC)
+
+    # UTC günü 20 Eylül; hizmet zaman diliminde saat 01:30 ve gün 21 Eylül.
+    assert instant.astimezone(settings.service_timezone).date() == date(2026, 9, 21)
+    assert instant.date() == date(2026, 9, 20)
 
 
 def test_response_carries_no_decision_fields(client: TestClient) -> None:

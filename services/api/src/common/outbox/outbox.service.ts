@@ -8,6 +8,7 @@ export const EventType = {
   PROVIDER_PROFILE_SUBMITTED: 'ProviderProfileSubmitted',
   IDENTITY_VERIFIED: 'IdentityVerified',
   BOOKING_CREATED: 'BookingCreated',
+  BOOKING_MATCHED: 'BookingMatched',
   BOOKING_CONFIRMED: 'BookingConfirmed',
   BOOKING_CANCELLED: 'BookingCancelled',
   SERVICE_STARTED: 'ServiceStarted',

@@ -6,6 +6,7 @@ Yarım yapılandırılmış bir servisin ayakta kalması hatayı ilk isteğe kad
 
 from __future__ import annotations
 
+from datetime import UTC, date, datetime, timedelta, timezone
 from functools import lru_cache
 from typing import Literal
 
@@ -32,6 +33,39 @@ class Settings(BaseSettings):
     # Ar-Ge izlenebilirliği: her NLP yanıtı hangi parser sürümüyle üretildiğini taşır (ADR-0012).
     parser_version: str = Field(default="heuristic-v1", min_length=1, max_length=64)
 
+    # Hizmet saatlerinin yorumlandığı zaman dilimi ofseti.
+    #
+    # Core API'deki `SERVICE_TIMEZONE_OFFSET` ile **aynı** değeri taşımak zorundadır:
+    # iki servis farklı bir "bugün" tanımı kullanırsa, "bugün temizlik" diyen müşteri
+    # için NLP bir gün, core başka bir gün hesaplar. UTC gününü kullanmak aynı hatanın
+    # sessiz hâliydi — yerel saat 00:00-03:00 arasında sunucu hâlâ "dün"ü gösteriyordu
+    # ve matching (Faz 7) geçmişe düşen bir pencere için aday arıyordu.
+    service_timezone_offset: str = Field(
+        default="+03:00",
+        pattern=r"^[+-][0-9]{2}:[0-9]{2}$",
+    )
+
+    # Matching kararlarının sürüm etiketleri (ADR-0012 §1). Her biri sonuçla birlikte
+    # saklanır; değişiklik yeni sürüm numarası üretir.
+    matching_algorithm_version: str = Field(default="matching-v1", min_length=1, max_length=64)
+    matching_weights_version: str = Field(default="weights-v1", min_length=1, max_length=64)
+    optimization_objective_version: str = Field(default="objective-v1", min_length=1, max_length=64)
+
+    # Optimizasyon zaman limiti. Aşıldığında çözüm **atılmaz**: o ana kadarki en iyi
+    # uygun çözüm kullanılır, hiç çözüm yoksa deterministik sıralamaya düşülür (T-16).
+    optimization_time_limit_seconds: float = Field(default=5.0, gt=0.0, le=60.0)
+    # Tek çalıştırmada değerlendirilecek üst sınırlar: kombinatoryal patlama koruması (R-16).
+    optimization_max_bookings: int = Field(default=50, ge=1, le=500)
+    optimization_max_candidates_per_booking: int = Field(default=50, ge=1, le=500)
+
+    # Mutlak mesafe üst sınırı. Hizmet bölgesi poligonu "evet" dese bile bu sınır
+    # aşılamaz: yanlış çizilmiş tek bir poligon şehirler arası atama üretebilirdi.
+    matching_max_distance_meters: int = Field(default=50_000, ge=1_000, le=500_000)
+
+    # Routing sağlayıcısı. `haversine` dış servise hiç çıkmaz ve her zaman kullanılabilir;
+    # gerçek yol ağı sağlayıcıları aynı portun arkasına takılır (ADR-0002).
+    routing_provider: Literal["haversine"] = "haversine"
+
     # Servisler arası paylaşılan sır.
     #
     # AI servisi yalnızca ağ politikasıyla korunuyordu; "deny by default" duruşu
@@ -43,6 +77,29 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.environment == "production"
+
+    @property
+    def service_timezone(self) -> timezone:
+        """Ofset dizesinden timezone nesnesi.
+
+        Sabit ofset yeterlidir: Türkiye 2016'dan beri yaz saati uygulamıyor.
+        TODO(verify): yaz saati geri gelirse veya başka bir ülkeye açılırsa IANA
+        zaman dilimi (Europe/Istanbul) ile değiştirilmeli — core tarafındaki
+        `SERVICE_TIMEZONE_OFFSET` ile birlikte.
+        """
+        sign = 1 if self.service_timezone_offset[0] == "+" else -1
+        hours = int(self.service_timezone_offset[1:3])
+        minutes = int(self.service_timezone_offset[4:6])
+        return timezone(sign * timedelta(hours=hours, minutes=minutes))
+
+    def today(self) -> date:
+        """Hizmet zaman dilimindeki bugünün tarihi.
+
+        `datetime.now(UTC).date()` değildir: yerel gece yarısı ile UTC gece yarısı
+        arasındaki üç saatte iki tanım ayrışır ve kullanıcının "bugün"ü bir gün
+        geriye kayar.
+        """
+        return datetime.now(UTC).astimezone(self.service_timezone).date()
 
     @model_validator(mode="after")
     def _production_requires_service_key(self) -> Settings:

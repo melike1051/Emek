@@ -1,0 +1,117 @@
+{
+  "algorithm_version": "matching-v1",
+  "weights_version": "weights-v1",
+  "objective_version": "objective-v1",
+  "strategy": "OPTIMIZED",
+  "degraded": false,
+  "degraded_reason": null,
+  "routing_provider": "haversine",
+  "rankings": [
+    {
+      "request_id": "00000000-0000-0000-0000-0000000003e8",
+      "candidates": [
+        {
+          "provider_id": "00000000-0000-0000-0000-000000000001",
+          "rank": 1,
+          "components": {
+            "skill_score": 1,
+            "availability_score": 1,
+            "quality_score": 0.9,
+            "distance_score": 0.96,
+            "rating_score": 0.8958,
+            "preference_score": 1
+          },
+          "overall_score": 0.9686,
+          "explanation": [
+            {
+              "code": "ALL_REQUIRED_SKILLS_VERIFIED",
+              "value": 1
+            },
+            {
+              "code": "EXPERT_LEVEL_SKILLS",
+              "value": 1
+            },
+            {
+              "code": "PREFERRED_SKILLS_MATCHED",
+              "value": 1
+            },
+            {
+              "code": "FULL_WINDOW_AVAILABLE",
+              "value": null
+            },
+            {
+              "code": "NEARBY",
+              "value": 2
+            },
+            {
+              "code": "WITHIN_SERVICE_AREA",
+              "value": null
+            },
+            {
+              "code": "HIGH_RATING",
+              "value": 4.7
+            },
+            {
+              "code": "EXPERIENCED",
+              "value": null
+            }
+          ],
+          "distance_meters": 2000,
+          "travel_seconds": 217,
+          "earliest_start": "2026-10-05T06:00:00Z"
+        },
+        {
+          "provider_id": "00000000-0000-0000-0000-000000000002",
+          "rank": 2,
+          "components": {
+            "skill_score": 0.5,
+            "availability_score": 1,
+            "quality_score": 0,
+            "distance_score": 0.56,
+            "rating_score": 0.75,
+            "preference_score": 0
+          },
+          "overall_score": 0.484,
+          "explanation": [
+            {
+              "code": "ALL_REQUIRED_SKILLS_VERIFIED",
+              "value": 1
+            },
+            {
+              "code": "FULL_WINDOW_AVAILABLE",
+              "value": null
+            },
+            {
+              "code": "WITHIN_SERVICE_AREA",
+              "value": null
+            },
+            {
+              "code": "LIMITED_RATING_HISTORY",
+              "value": 0
+            }
+          ],
+          "distance_meters": 22000,
+          "travel_seconds": 3432,
+          "earliest_start": "2026-10-05T06:00:00Z"
+        }
+      ],
+      "eliminated": [],
+      "evaluated_count": 2
+    }
+  ],
+  "assignments": [
+    {
+      "request_id": "00000000-0000-0000-0000-0000000003e8",
+      "provider_id": "00000000-0000-0000-0000-000000000001",
+      "scheduled_start": "2026-10-05T06:00:00Z",
+      "scheduled_end": "2026-10-05T09:00:00Z",
+      "travel_seconds": 217,
+      "distance_meters": 2000,
+      "rank": 1
+    }
+  ],
+  "unassigned": [],
+  "constraint_violations": 0,
+  "scoring_runtime_ms": 0,
+  "optimization_runtime_ms": 0
+}

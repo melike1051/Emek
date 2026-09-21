@@ -1,0 +1,86 @@
+{
+  "demands": [
+    {
+      "request_id": "00000000-0000-0000-0000-0000000003e8",
+      "service_type": "detayli-temizlik",
+      "duration_minutes": 180,
+      "window": {
+        "start": "2026-10-05T06:00:00.000Z",
+        "end": "2026-10-05T14:00:00.000Z"
+      },
+      "location": {
+        "latitude": 41,
+        "longitude": 29
+      },
+      "required_skills": [
+        "derin-temizlik"
+      ],
+      "preferred_skills": [
+        "utu"
+      ],
+      "candidates": [
+        {
+          "provider_id": "00000000-0000-0000-0000-000000000001",
+          "verified": true,
+          "offers_service": true,
+          "verified_skills": [
+            "derin-temizlik",
+            "utu"
+          ],
+          "availability": [
+            {
+              "start": "2026-10-05T06:00:00.000Z",
+              "end": "2026-10-05T14:00:00.000Z"
+            }
+          ],
+          "has_conflicting_booking": false,
+          "within_service_area": true,
+          "distance_meters": 2000,
+          "daily_booking_count": 0,
+          "max_daily_bookings": 2,
+          "skill_levels": {
+            "derin-temizlik": "EXPERT",
+            "utu": "INTERMEDIATE"
+          },
+          "rating_avg": 4.7,
+          "rating_count": 25,
+          "quality_score": 0.9,
+          "completed_bookings": 40,
+          "home_location": {
+            "latitude": 41.01,
+            "longitude": 29.01
+          }
+        },
+        {
+          "provider_id": "00000000-0000-0000-0000-000000000002",
+          "verified": true,
+          "offers_service": true,
+          "verified_skills": [
+            "derin-temizlik"
+          ],
+          "availability": [
+            {
+              "start": "2026-10-05T06:00:00.000Z",
+              "end": "2026-10-05T14:00:00.000Z"
+            }
+          ],
+          "has_conflicting_booking": false,
+          "within_service_area": true,
+          "distance_meters": 22000,
+          "daily_booking_count": 0,
+          "max_daily_bookings": 2,
+          "skill_levels": {
+            "derin-temizlik": "BEGINNER"
+          },
+          "rating_avg": null,
+          "rating_count": 0,
+          "quality_score": null,
+          "completed_bookings": 0,
+          "home_location": null
+        }
+      ]
+    }
+  ],
+  "optimize": true,
+  "max_distance_meters": 50000
+}

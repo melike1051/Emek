@@ -12,8 +12,15 @@ import sys
 from dataclasses import asdict
 from typing import Any
 
+from app.evaluation.calibration import expected_calibration_error
 from app.evaluation.dataset import load_dataset
-from app.evaluation.harness import PROPOSED_VERSION, collect_errors, run_comparison
+from app.evaluation.harness import (
+    BASELINE_VERSION,
+    PROPOSED_VERSION,
+    collect_calibration,
+    collect_errors,
+    run_comparison,
+)
 from app.evaluation.metrics import EvaluationReport
 from app.nlp.registry import get_parser
 
@@ -35,8 +42,20 @@ def _serialize(report: EvaluationReport) -> dict[str, Any]:
 
 def main() -> int:
     comparison = run_comparison()
+    examples = load_dataset()
 
-    errors = collect_errors(get_parser(PROPOSED_VERSION), load_dataset())
+    errors = collect_errors(get_parser(PROPOSED_VERSION), examples)
+
+    # Kalibrasyon (R-46): ortalama fark yerine ECE. Dataset küçük olduğu için kova
+    # sayısı 5 seçildi; 10 kovada çoğu kova tek örnekli olur ve ECE gürültüye döner.
+    calibration = {
+        version: asdict(
+            expected_calibration_error(
+                collect_calibration(get_parser(version), examples), bin_count=5
+            )
+        )
+        for version in (BASELINE_VERSION, PROPOSED_VERSION)
+    }
 
     payload = {
         "baseline": _serialize(comparison.baseline),
@@ -44,6 +63,7 @@ def main() -> int:
         "deltas": comparison.deltas,
         # Hata analizi rapora elle yazılmaz, buradan alınır (review bulgusu H1).
         "proposed_errors": [asdict(error) for error in errors],
+        "calibration": calibration,
     }
     sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2, default=str))
     sys.stdout.write("\n")

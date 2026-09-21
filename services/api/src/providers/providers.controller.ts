@@ -12,12 +12,17 @@ import {
   Query,
 } from '@nestjs/common';
 import { CurrentUser, Roles, type AuthenticatedUser } from '../auth/auth.decorators';
+import { RateLimit } from '../common/ratelimit/rate-limit.decorator';
 import { BusinessException } from '../common/errors/business.exception';
 import { ErrorCode } from '../common/errors/error-codes';
 import {
+  AddProviderServiceDto,
+  AddServiceAreaDto,
   AddProviderSkillDto,
   CreateProviderProfileDto,
   ProviderProfileResponseDto,
+  ProviderServiceAreaResponseDto,
+  ProviderServiceResponseDto,
   ProviderSkillResponseDto,
   UpdateProviderProfileDto,
 } from './dto/provider.dto';
@@ -86,6 +91,84 @@ export class ProvidersController {
   ): Promise<ProviderSkillResponseDto[]> {
     const skills = await this.providers.addSkill(user.id, dto);
     return skills.map(ProviderSkillResponseDto.from);
+  }
+
+  /**
+   * Sağlayıcının sunduğu hizmetler.
+   *
+   * Aday havuzu buradan başlar (Faz 7): hizmeti beyan etmemiş bir sağlayıcı o hizmet
+   * için hiç aday olmaz. "Yetkinliği var, demek ki sunuyordur" varsayımı, sağlayıcıyı
+   * satmak istemediği bir işe atardı.
+   */
+  @Get('me/services')
+  @Roles('PROVIDER')
+  async services(@CurrentUser() user: AuthenticatedUser): Promise<ProviderServiceResponseDto[]> {
+    const services = await this.providers.listServices(user.id);
+    return services.map(ProviderServiceResponseDto.from);
+  }
+
+  @Post('me/services')
+  @Roles('PROVIDER')
+  @HttpCode(HttpStatus.CREATED)
+  @RateLimit({ name: 'provider-service-add', limit: 20, windowSeconds: 60 })
+  async addService(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: AddProviderServiceDto,
+  ): Promise<ProviderServiceResponseDto[]> {
+    const services = await this.providers.addService(user.id, dto.serviceId);
+    return services.map(ProviderServiceResponseDto.from);
+  }
+
+  @Delete('me/services/:serviceId')
+  @Roles('PROVIDER')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async removeService(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('serviceId', ParseUUIDPipe) serviceId: string,
+  ): Promise<void> {
+    await this.providers.removeService(user.id, serviceId);
+  }
+
+  /**
+   * Hizmet bölgeleri.
+   *
+   * Birbirine değmeyen bölgeler birden fazla kayıtla ifade edilir: tek bir daire
+   * "iki ayrı ilçede çalışıyorum" durumunu anlatamaz.
+   */
+  @Get('me/service-areas')
+  @Roles('PROVIDER')
+  async serviceAreas(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<ProviderServiceAreaResponseDto[]> {
+    const areas = await this.providers.listServiceAreas(user.id);
+    return areas.map(ProviderServiceAreaResponseDto.from);
+  }
+
+  /**
+   * Oran sınırı burada özellikle önemlidir: her bölge, o bölgedeki her müşterinin
+   * aday havuzu sorgusuna maliyet ekler ve mesafe referans noktasını değiştirir.
+   * Sayı üst sınırı veritabanında (5); bu sınır yazma hızını da bağlar.
+   */
+  @Post('me/service-areas')
+  @Roles('PROVIDER')
+  @HttpCode(HttpStatus.CREATED)
+  @RateLimit({ name: 'provider-service-area-add', limit: 10, windowSeconds: 60 })
+  async addServiceArea(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: AddServiceAreaDto,
+  ): Promise<ProviderServiceAreaResponseDto> {
+    const area = await this.providers.addServiceArea(user.id, dto);
+    return ProviderServiceAreaResponseDto.from(area);
+  }
+
+  @Delete('me/service-areas/:areaId')
+  @Roles('PROVIDER')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async removeServiceArea(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('areaId', ParseUUIDPipe) areaId: string,
+  ): Promise<void> {
+    await this.providers.removeServiceArea(user.id, areaId);
   }
 
   @Get('me/availability')

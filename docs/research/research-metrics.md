@@ -32,24 +32,56 @@ metrik ailesi ve belirsizlik birlikte raporlanır.
 
 ### 2.2 Matching
 
-| Metrik                    | Tanım                                                                         |
-| ------------------------- | ----------------------------------------------------------------------------- |
-| Recall@K                  | doğru/kabul edilen provider'ın ilk K aday içinde bulunma oranı (K = 1, 5, 10) |
-| Acceptance rate           | önerilen provider'ın teklifi kabul etme oranı                                 |
-| Assignment latency        | talep → öneri arası p50/p95                                                   |
-| Match success             | eşleşmenin tamamlanan booking'e dönüşme oranı                                 |
-| Hard constraint violation | önerilen adaylarda hard constraint ihlali sayısı (hedef: 0)                   |
+| Metrik                    | Tanım                                                                                                                               |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Recall@K                  | doğru/kabul edilen provider'ın ilk K aday içinde bulunma oranı (K = 1, 5, 10)                                                       |
+| Acceptance rate           | önerilen provider'ın teklifi kabul etme oranı                                                                                       |
+| Assignment latency        | talep → öneri arası p50/p95                                                                                                         |
+| Match success             | eşleşmenin tamamlanan booking'e dönüşme oranı                                                                                       |
+| Hard constraint violation | önerilen adaylarda hard constraint ihlali sayısı (hedef: 0)                                                                         |
+| **Geçerli** atama oranı   | kısıt denetiminden geçen atamaların talep sayısına oranı (Faz 7'de eklendi: ham atama oranı, kural tanımayan bir kolu 1.0 gösterir) |
+
+### 2.2.1 Faz 7 ölçüm durumu
+
+Matching ve optimization metrikleri [EXP-002](experiments/exp-002-matching-baseline-vs-optimized.md)
+ile **sentetik** veri üzerinde ölçüldü. Kabul oranı simüle edilmiş bir modele dayanır
+ve mutlak iddia taşımaz; gerçek kabul/tamamlanma verisi Faz 15-16'da toplanacak.
+
+| Metrik                    | Durum                                                         |
+| ------------------------- | ------------------------------------------------------------- |
+| Recall@K (1/5/10)         | ✅ ölçüldü — 0.46 / 0.86 / 0.94 (baseline 0.24 / 0.56 / 0.90) |
+| Acceptance rate           | ⚠️ simüle edildi — kollar arası karşılaştırma için geçerli    |
+| Assignment latency        | ✅ ölçüldü — senaryo p95 98 ms; aday havuzu ~10 ms            |
+| Match success             | ⏸️ üretim verisi gerektirir (Faz 15+)                         |
+| Hard constraint violation | ✅ ölçüldü — **0** (hedef tutturuldu)                         |
+| Geçerli atama oranı       | ✅ ölçüldü — 0.82 (baseline 0.30)                             |
 
 ### 2.3 Optimization
 
-| Metrik                    | Tanım                                                    |
-| ------------------------- | -------------------------------------------------------- |
-| Travel time reduction     | baseline atamaya göre toplam seyahat süresi azalması (%) |
-| Distance reduction        | toplam mesafe azalması (%)                               |
-| Provider utilization      | uygun kapasitenin kullanım oranı                         |
-| Constraint violation rate | çözümde ihlal edilen soft/hard kısıt oranı               |
-| Optimization runtime      | p50/p95 ve timeout oranı                                 |
-| Fallback oranı            | timeout nedeniyle fallback'e düşen çözüm yüzdesi         |
+| Metrik                    | Tanım                                                                                                                                                                                                                |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Travel time reduction     | baseline atamaya göre toplam seyahat süresi azalması (%). **Eşleştirilmiş (paired) kümede ölçülür**: kolların geçerli atama kümeleri farklı olduğu için ham ortalama kıyası seçilim yanlılığı taşır (Faz 7 bulgusu). |
+| Distance reduction        | toplam mesafe azalması (%)                                                                                                                                                                                           |
+| Provider utilization      | uygun kapasitenin kullanım oranı                                                                                                                                                                                     |
+| Constraint violation rate | çözümde ihlal edilen soft/hard kısıt oranı                                                                                                                                                                           |
+| Optimization runtime      | p50/p95 ve timeout oranı                                                                                                                                                                                             |
+| Fallback oranı            | timeout nedeniyle fallback'e düşen çözüm yüzdesi                                                                                                                                                                     |
+
+### 2.3.1 Faz 7 ölçüm durumu
+
+| Metrik                    | Durum                                                            |
+| ------------------------- | ---------------------------------------------------------------- |
+| Travel time reduction     | ❌ **hedef tutmadı** — proposed %152 _fazla_ yol üretiyor (R-49) |
+| Distance reduction        | ❌ aynı bulgu                                                    |
+| Provider utilization      | ⏸️ üretim verisi gerektirir                                      |
+| Constraint violation rate | ✅ 0.00 (baseline 0.70)                                          |
+| Optimization runtime      | ✅ p50 64 ms / p95 94 ms, timeout oranı 0                        |
+| Fallback oranı            | ✅ 0.00 (5 sn limitine hiç takılınmadı)                          |
+
+Seyahat hedefinin tutmaması bir ölçüm hatası değil, **ağırlık/amaç ayarının
+yapılmamış olmasının sonucudur**. Duyarlılık analizi (`objective-v2-travel`) %17.5
+azalma gösteriyor ama varsayılan değiştirilmedi — iyi görünen katsayıyı seçip
+varsayılan yapmak §"metric shopping" yasağına girer.
 
 ### 2.4 Safety
 

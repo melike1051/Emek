@@ -92,7 +92,7 @@ class TestTemporal:
         assert (window.value.start_hour, window.value.end_hour) == (13, 18)  # type: ignore[union-attr]
 
     def test_bare_number_range_is_not_a_clock_range(self) -> None:
-        """"3-5 kişi" bir saat aralığı değildir (review bulgusu C1).
+        """ "3-5 kişi" bir saat aralığı değildir (review bulgusu C1).
 
         Çapasız sayı aralığı saat sayılsaydı, "sabah" diyen müşteriye 03:00
         randevusu oluşurdu ve aynı cümledeki "sabah" ezilirdi.
@@ -140,9 +140,7 @@ class TestHeuristicParser:
         assert result.request.service_type == "standart-temizlik"
         assert result.request.service_date == date(2026, 3, 6)
 
-    def test_missing_date_triggers_clarification_not_a_guess(
-        self, parser: HeuristicParser
-    ) -> None:
+    def test_missing_date_triggers_clarification_not_a_guess(self, parser: HeuristicParser) -> None:
         """Tarih uydurmak, yanlış günde rezervasyon demektir (ADR-0007 §2)."""
         result = parser.parse("Ev temizliği istiyorum", today=TODAY)
 

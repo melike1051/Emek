@@ -56,6 +56,12 @@ ve testlenir.
 | `POST /booking-requests/from-text`                                 | ✅                                          | —                          | kendi adresi                      | ham metin saklanır, audit'e yazılmaz; oran sınırı: 20/dk |
 | `POST /booking-requests`                                           | ✅                                          | —                          | kendi adresi                      | form yolu; AI servisine hiç dokunmaz (T-15)              |
 | `GET /booking-requests/:id`                                        | ✅                                          | —                          | kendi talebi                      | sahibi olmayan 404 alır                                  |
+| `POST /booking-requests/:id/match`                                 | ✅ sahibi                                   | —                          | kendi talebi                      | başkasının talebi 404; rezervasyon oluşturur             |
+| `GET /booking-requests/:id/match`                                  | ✅ sahibi                                   | —                          | kendi talebi                      | yalnızca **seçilen** sağlayıcı döner (T-19)              |
+| `POST /matching/runs`                                              | —                                           | —                          | `ADMIN`                           | toplu eşleştirme; başkaları adına rezervasyon oluşturur  |
+| `GET /matching/runs/:requestId`                                    | —                                           | —                          | `ADMIN`                           | tam sıralama + skor bileşenleri yalnızca burada          |
+| `GET/POST/DELETE /providers/me/services`                           | —                                           | ✅ kendi                   | —                                 | aday havuzunun hizmet kapısı                             |
+| `GET/POST/DELETE /providers/me/service-areas`                      | —                                           | ✅ kendi                   | —                                 | merkez + yarıçap; serbest poligon kabul edilmez          |
 
 ## Veri erişim katmanı
 
@@ -70,5 +76,6 @@ verisini döndüremez (ADR-0013 §3).
 | 3   | verification endpoint'leri; `VERIFICATION_REQUIRED` ile seviye bazlı yetki                        |
 | 4   | booking sahipliği (müşteri ↔ sağlayıcı iki taraflı erişim), state machine yetkileri               |
 | 5   | ✅ ödeme ve dispute aksiyonları eklendi; `SUPPORT` kısıtları Faz 10 admin API'siyle test edilecek |
+| 7   | ✅ eşleştirme uçları eklendi; skor bileşenleri `ADMIN` dışına kapalı (T-19)                       |
 | 10  | admin/ops endpoint'leri; hassas veri erişimi için ayrı ve loglanan yetki                          |
 | 12  | App Check zorunluluğu, oran sınırı genişletme, abuse senaryoları                                  |

@@ -317,6 +317,46 @@ kez), `reviews_not_self` (kendine puan yok) ve `rating BETWEEN 1 AND 5` veritaba
 "Yalnızca tamamlanmış rezervasyon" kuralı serviste uygulanır: CHECK içinden başka tabloya
 bakılamaz.
 
+## Faz 7 tabloları — eşleştirme ve karar kaydı
+
+`provider_services` (PK `provider_id, service_id`) sağlayıcının **sattığı** hizmetleri
+tutar. Yetkinlik (`provider_skills`) ile karıştırılmamalı: yetkinlik "ne yapabiliyor",
+hizmet "neyi satıyor" sorusunun cevabıdır. Aday havuzu hizmetten başlar; `service_id`
+üzerindeki kısmi indeks (`WHERE active`) bu erişim yolunu taşır.
+
+`provider_profiles.max_daily_bookings` (SMALLINT, 1-10, varsayılan 2) optimizasyonun
+kapasite kısıtıdır. `NULL` (sınırsız) bilinçli olarak seçilmedi: sınırsız kapasite,
+çözücünün aynı sağlayıcıya sınırsız iş yığmasına izin verir ve kombinatoryal patlamaya
+kapı açardı (R-16).
+
+`provider_service_areas.radius_meters` (500-100.000) eklendi: bölgeler API'den
+**merkez + yarıçap** olarak alınır ve yarıçap poligondan geri hesaplanmak yerine
+saklanır — türetme, kullanıcının girdiği değeri yaklaşık geri verir ve düzenleme
+akışında sapma birikirdi.
+
+`matching_runs` bir eşleştirme çalıştırmasıdır. Üç sürüm kolonu (`algorithm_version`,
+`weights_version`, `objective_version`) **zorunludur** (ADR-0012 §1): sürümsüz bir
+karar geriye dönük karşılaştırılamaz. Ölçüm kolonları (`candidate_count`,
+`eligible_count`, `constraint_violations`, `retrieval_ms`, `decision_ms`,
+`optimization_runtime_ms`) üretimde de izlenebilmek içindir; yoksa laboratuvar sonucu
+ile gerçek davranış ayrışır. `strategy <> 'RANKED_FALLBACK' OR degraded_reason IS NOT NULL`
+CHECK'i, işaretsiz bir bozulmayı engeller.
+
+`booking_match_results` her değerlendirilen adayı sırasıyla tutar. Skor bileşenleri
+**ayrı kolonlardır** ve NUMERIC'tir (float değil): skorlar karşılaştırılan ve
+raporlanan değerlerdir; ikili kayan nokta gösterimi aynı girdinin iki ortamda farklı
+saklanmasına yol açardı. Her bileşen `BETWEEN 0 AND 1` ile sınırlıdır.
+
+Invariant'lar:
+
+- `UNIQUE (run_id, provider_id)` ve `UNIQUE (run_id, rank)` — bir sıra bir adaya aittir.
+- Kısmi unique index `(run_id) WHERE selected` — bir çalıştırmada **en fazla bir** aday
+  seçilir; iki seçili satır "hangi sağlayıcı atandı" sorusuna iki cevap verirdi.
+- `NOT selected OR proposed_start IS NOT NULL` — seçim, "kim" ve "ne zaman"ın birlikte
+  kararıdır; takvimsiz bir seçim eksik bir karardır.
+- Tablo **append-only**'dir (trigger): karar değişirse yeni bir çalıştırma yazılır.
+  Sonradan düzeltilebilen bir deney kaydı kanıt değeri taşımaz.
+
 ## Sonraki fazlarda gelecek yapılar
 
 Bunlar Faz 1'de **bilinçli olarak yok**; ilgili domain ile birlikte gelir:
@@ -326,7 +366,6 @@ Bunlar Faz 1'de **bilinçli olarak yok**; ilgili domain ile birlikte gelir:
 | 3   | `identity_records` (sağlayıcıdan bağımsız `identity_hash` unique index), `verification_attempts`                                                              |
 | 4   | `addresses`, `provider_service_areas` (MULTIPOLYGON + GIST), `availability`, `bookings` (+ `EXCLUDE USING GIST` iptal predikatıyla), `booking_status_history` |
 | 5   | `payments`, `payment_events`, `documents`, `disputes`, `reviews`                                                                                              |
-| 7   | `booking_match_results` (Ar-Ge skor bileşenleri + `algorithm_version`)                                                                                        |
 | 8   | `safety_sessions`, `location_events` (partition + retention), `safety_events`                                                                                 |
 
 ## Migration kuralları

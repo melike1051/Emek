@@ -1,0 +1,23 @@
+{
+  "description": "Katalog slug'ları — core seed'i ile AI servisinin kapalı Literal kümesi arasındaki tek doğruluk kaynağı. Her iki taraf da bu dosyaya karşı test edilir.",
+  "serviceSlugs": [
+    "standart-temizlik",
+    "detayli-temizlik",
+    "tasinma-temizligi",
+    "yasli-bakimi",
+    "cocuk-bakimi",
+    "hasta-refakati",
+    "gunluk-yemek",
+    "haftalik-mealprep"
+  ],
+  "skillSlugs": [
+    "pet-friendly",
+    "derin-temizlik",
+    "ilk-yardim",
+    "yasli-bakim-deneyimi",
+    "cocuk-gelisimi",
+    "utu",
+    "cam-temizligi",
+    "vegan-mutfak"
+  ]
+}

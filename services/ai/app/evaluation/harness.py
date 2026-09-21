@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from app.evaluation.calibration import CalibrationSample
 from app.evaluation.dataset import EvaluationExample, load_dataset
 from app.evaluation.metrics import Comparison, EvaluationReport, MetricAccumulator
 from app.nlp.parser import RequestParser
@@ -179,3 +180,41 @@ def run_comparison(
     baseline = evaluate(get_parser(baseline_version), examples)
     proposed = evaluate(get_parser(proposed_version), examples)
     return Comparison.of(baseline, proposed)
+
+
+def collect_calibration(
+    parser: RequestParser,
+    examples: tuple[EvaluationExample, ...],
+) -> tuple[CalibrationSample, ...]:
+    """Güven kalibrasyonu örnekleri (R-46).
+
+    "Doğru" tanımı **Faz 7'nin tükettiği karara** göre yapılır: core, eşiği geçen bir
+    ayrıştırmadan hizmet türünü, günü ve saat penceresini alıp aday aramaya başlar.
+    Dolayısıyla kalibrasyon açısından bir tahmin, ancak bu üç alan da doğruysa
+    doğrudur. Yalnızca intent'e bakmak, yanlış güne randevu veren bir ayrıştırmayı
+    "doğru" sayar ve eşiği ölçüsüz bırakırdı.
+
+    Talep üretmeyen sonuçlar (netleştirme/red) örnekleme girmez: onlarda güvenin
+    karşılık geldiği bir karar yoktur.
+    """
+    samples: list[CalibrationSample] = []
+
+    for example in examples:
+        result = parser.parse(example.raw_text, today=example.today)
+        request = result.request
+        if request is None:
+            continue
+
+        predicted_window = (
+            (request.time_window.start_hour, request.time_window.end_hour)
+            if request.time_window is not None
+            else None
+        )
+        correct = (
+            request.service_type == example.gold.service_type
+            and request.service_date == example.gold.service_date
+            and predicted_window == example.gold.time_window
+        )
+        samples.append(CalibrationSample(confidence=result.confidence, correct=correct))
+
+    return tuple(samples)
