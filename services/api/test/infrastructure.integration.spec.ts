@@ -169,6 +169,17 @@ describe('core infrastructure (integration)', () => {
   });
 
   describe('transactional outbox (T-39)', () => {
+    beforeAll(async () => {
+      // Bu blok `drain()`'i elle çağırıp aday satırın **belirli** attempts/status
+      // değerlerini bekliyor. Arka plan zamanlayıcısı (1 sn'de bir) aynı satırı
+      // testin kendi `drain()` çağrısıyla yarışarak claim edebilir — satır
+      // `next_attempt_at`'i ileri atar (`claimBatch`) ama henüz PUBLISHED/FAILED
+      // işaretlemeden önce testin sorgusu araya girerse "attempts: 0" gibi yanlış
+      // negatifler üretir. Zamanlayıcı burada kapatılır; `drain()` doğrudan
+      // çağrılabilir olmaya devam eder (yalnızca `schedule()` `stopped` kontrol eder).
+      await app.get(OutboxPublisher).onApplicationShutdown();
+    });
+
     it('event domain değişikliğiyle aynı transaction.da yazılır', async () => {
       const userId = await register('outbox-sub-1');
 

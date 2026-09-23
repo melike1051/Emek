@@ -38,6 +38,7 @@ bağlı olabilir.
 | `…160400_payment-freeze-origin`       | `payments.frozen_from_status` (review bulgusu C2)                                            | 5   |
 | `…210000_matching` (2026-09-21)       | `provider_services`, `matching_runs`, `booking_match_results`, kapasite, bölge sınırı        | 7   |
 | `…220000_safety` (2026-09-22)         | `safety_sessions`, `location_events` (partition), `safety_events`, `safety_risk_assessments` | 8   |
+| `…110000_event-driven` (2026-09-22)   | `dead_letter_events`, `notification_jobs`, `analytics_events`                                | 9   |
 
 `set_updated_at()` kendi migration'ındadır: birden çok tablo ona bağlanacak ve fonksiyon ilk
 kullanan tablonun migration'ına gömülürse o migration'ın `down` yönü sonraki tabloların
@@ -431,6 +432,76 @@ Bunlar Faz 1'de **bilinçli olarak yok**; ilgili domain ile birlikte gelir:
 | 4   | `addresses`, `provider_service_areas` (MULTIPOLYGON + GIST), `availability`, `bookings` (+ `EXCLUDE USING GIST` iptal predikatıyla), `booking_status_history` |
 | 5   | `payments`, `payment_events`, `documents`, `disputes`, `reviews`                                                                                              |
 | 8   | ✅ `safety_sessions`, `location_events` (partition + retention), `safety_events`, `safety_risk_assessments`                                                   |
+| 9   | ✅ `dead_letter_events`, `notification_jobs`, `analytics_events`                                                                                              |
+
+## Faz 9 tabloları — event-driven ve asenkron işlemler
+
+### `dead_letter_events` — Kalıcı Hata Yönetimi (DLQ)
+
+| Kolon                    | Tip          | Not                                                                                                                                                  |
+| ------------------------ | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                     | BIGSERIAL PK |                                                                                                                                                      |
+| `event_id`               | UUID         | Consumer'da işlenemeyen asıl olayın ID'si                                                                                                            |
+| `event_type`             | VARCHAR(80)  | `BookingCreated` vb.                                                                                                                                 |
+| `event_version`          | INT          | Olayın şema sürümü (varsayılan 1)                                                                                                                    |
+| `consumer`               | VARCHAR(80)  | Hata alan consumer adı (`processed_events.consumer` ile aynı ad uzayı)                                                                               |
+| `payload`                | JSONB        | Olayın orijinal verisi                                                                                                                               |
+| `attempt_count`          | INT          | Deneme sayısı (`> 0`)                                                                                                                                |
+| `failure_classification` | VARCHAR(20)  | `TRANSIENT` veya `PERMANENT` (CHECK). Runner pipeline'ı yalnızca `PERMANENT` yazar — `TRANSIENT` hatalar NACK ile Pub/Sub'a bırakılır, DLQ'ya düşmez |
+| `failure_reason`         | VARCHAR(500) | Hata sebebi (500 karaktere kırpılır)                                                                                                                 |
+| `first_failure_at`       | TIMESTAMPTZ  | İlk hata zamanı                                                                                                                                      |
+| `last_failure_at`        | TIMESTAMPTZ  | Son hata zamanı (`>= first_failure_at`)                                                                                                              |
+| `resolved_at`            | TIMESTAMPTZ  | Operasyonel çözüm zamanı (nullable)                                                                                                                  |
+| `created_at`             | TIMESTAMPTZ  | Kayıt zamanı                                                                                                                                         |
+
+**Kısıtlar/İndeksler:**
+
+- Kısmi `UNIQUE (event_id, consumer) WHERE resolved_at IS NULL`: aynı olay aynı consumer için çözülene kadar tek DLQ kaydı tutar (`DeadLetterService.record()` bu kayda `ON CONFLICT ... DO UPDATE` ile deneme sayısını günceller).
+- Kısmi indeks `(consumer, created_at) WHERE resolved_at IS NULL` — consumer bazlı çözülmemiş kayıt taraması için.
+
+### `notification_jobs` — Asenkron Bildirim İşleri
+
+| Kolon               | Tip                                                         | Not                                                                |
+| ------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------ |
+| `id`                | BIGSERIAL PK                                                |                                                                    |
+| `event_id`          | UUID                                                        | Kaynak olayın ID'si                                                |
+| `event_type`        | VARCHAR(80)                                                 | `BookingCreated` vb.                                               |
+| `channel`           | ENUM `notification_channel` (`PUSH`,`SMS`,`EMAIL`,`IN_APP`) | Varsayılan `IN_APP`; gerçek teslimat henüz bağlanmadı (R-76, R-77) |
+| `recipient_user_id` | UUID                                                        | Alıcı kullanıcı                                                    |
+| `template_key`      | VARCHAR(120)                                                | Şablon anahtarı (`booking.created` vb.)                            |
+| `template_data`     | JSONB                                                       | Şablon parametreleri — yalnızca id referansları, PII yok           |
+| `status`            | ENUM `notification_job_status` (`PENDING`,`SENT`,`FAILED`)  | Varsayılan `PENDING`                                               |
+| `attempts`          | INT                                                         | Teslim deneme sayısı (varsayılan 0)                                |
+| `last_error`        | VARCHAR(200)                                                | Son hata (nullable)                                                |
+| `created_at`        | TIMESTAMPTZ                                                 | Kayıt zamanı                                                       |
+| `sent_at`           | TIMESTAMPTZ                                                 | Teslim zamanı (nullable)                                           |
+
+**Kısıtlar/İndeksler:**
+
+- `UNIQUE (event_id, channel, recipient_user_id)`: `NotificationJobConsumer`'ın idempotency kaynağı — aynı olay aynı alıcı+kanal için ikinci iş üretmez.
+- Kısmi indeks `(created_at) WHERE status = 'PENDING'` — teslim worker'ının bekleyen işleri hızlıca bulması için.
+
+### `analytics_events` — Veri Ambarı Aktarımı İçin Olay Günlüğü
+
+| Kolon            | Tip          | Not                                                       |
+| ---------------- | ------------ | --------------------------------------------------------- |
+| `id`             | BIGSERIAL PK | Sıra garantisi (lokal loglama)                            |
+| `event_id`       | UUID         | Orijinal olay ID'si (`UNIQUE`)                            |
+| `event_type`     | VARCHAR(80)  | `BookingCreated`, `PaymentAuthorized` vb.                 |
+| `event_version`  | INT          | Olayın şema sürümü (varsayılan 1)                         |
+| `aggregate_type` | VARCHAR(80)  | `booking`, `payment` vb.                                  |
+| `aggregate_id`   | UUID         | İlgili aggregate'in ID'si (nullable)                      |
+| `occurred_at`    | TIMESTAMPTZ  | Olayın meydana geliş zamanı                               |
+| `correlation_id` | UUID         | İzlenebilirlik için (nullable)                            |
+| `payload`        | JSONB        | Olay verisi — yalnızca id referansları, PII yok           |
+| `exported_at`    | TIMESTAMPTZ  | BigQuery'ye (Faz 11) aktarılma zamanı (null ise bekliyor) |
+| `created_at`     | TIMESTAMPTZ  | Kayıt zamanı                                              |
+
+**Kısıtlar/İndeksler:**
+
+- `UNIQUE (event_id)`: `AnalyticsExportConsumer`'ın idempotency kaynağı.
+- Kısmi indeks `(created_at) WHERE exported_at IS NULL` — Faz 11 export aracının aktarılmamış kayıtları çekmesi için.
+- İndeks `(event_type, occurred_at)` — tip/zaman bazlı analitik sorgular için.
 
 ## Migration kuralları
 

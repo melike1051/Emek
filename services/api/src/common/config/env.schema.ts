@@ -207,6 +207,15 @@ export const envSchema = z
 
     GCP_PROJECT_ID: z.string().min(1).default('emek-local'),
     PUBSUB_EMULATOR_HOST: z.string().min(1).optional(),
+
+    EVENT_TRANSPORT_TYPE: z.enum(['logging', 'pubsub']).default('logging'),
+    PUBSUB_PROJECT_ID: z.string().optional(),
+    SCHEDULED_RELEASE_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((val) => val === 'true'),
+    SCHEDULED_RELEASE_INTERVAL_MS: z.coerce.number().int().min(1000).default(60000),
+    SCHEDULED_RELEASE_DISPUTE_WINDOW_HOURS: z.coerce.number().int().min(1).default(48),
   })
   .superRefine((env, ctx) => {
     // ADR-0005 / ADR-0009: mock sağlayıcılar production'da seçilemez.

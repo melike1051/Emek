@@ -7,7 +7,8 @@
     "node": ">=20.11.0"
   },
   "workspaces": [
-    "services/api"
+    "services/api",
+    "packages/api-contracts/*"
   ],
   "scripts": {
     "lint": "eslint .",
@@ -21,6 +22,7 @@
     "infra:up:events": "docker compose -f infra/docker/docker-compose.yml --profile events up -d --wait",
     "infra:down": "docker compose -f infra/docker/docker-compose.yml down",
     "infra:reset": "docker compose -f infra/docker/docker-compose.yml down -v",
+    "infra:setup:events": "PUBSUB_EMULATOR_HOST=localhost:8085 npx tsx services/api/scripts/setup-pubsub.ts",
     "migrate:up": "npm run migrate:up --workspace=@emek/api",
     "migrate:down": "npm run migrate:down --workspace=@emek/api"
   },

@@ -10,6 +10,7 @@ export default tseslint.config(
       '**/.next/**',
       'apps/mobile/**',
       'services/ai/**',
+      '.claude/**',
     ],
   },
   js.configs.recommended,

@@ -9,6 +9,7 @@ import type { Pool } from 'pg';
 import { POSTGRES_POOL } from '../database/database.tokens';
 import { ROOT_LOGGER } from '../logging/logging.tokens';
 import { EVENT_TRANSPORT, type EventTransport, type OutboundEvent } from './event-transport';
+import { EventMetrics } from '../events/event-metrics';
 
 interface OutboxRow {
   event_id: string;
@@ -24,6 +25,8 @@ interface OutboxRow {
 
 export const OUTBOX_BATCH_SIZE = 50;
 export const OUTBOX_POLL_INTERVAL_MS = 1000;
+/** `outboxStats` metriği her turda değil, bu kadar turda bir yayınlanır (log gürültüsünü sınırlar). */
+export const STATS_EVERY_N_TICKS = 30;
 /** Bu sayıdan sonra kayıt FAILED'a alınır ve alarm konusu olur (DLQ topolojisi Faz 9). */
 export const OUTBOX_MAX_ATTEMPTS = 10;
 /** Sahiplenilen kaydın başka instance tarafından alınamayacağı süre. */
@@ -48,11 +51,13 @@ export class OutboxPublisher implements OnApplicationBootstrap, OnApplicationShu
   private timer?: NodeJS.Timeout;
   private running = false;
   private stopped = false;
+  private tickCount = 0;
 
   constructor(
     @Inject(POSTGRES_POOL) private readonly pool: Pool,
     @Inject(EVENT_TRANSPORT) private readonly transport: EventTransport,
     @Inject(ROOT_LOGGER) private readonly logger: Logger,
+    private readonly metrics: EventMetrics,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -75,9 +80,42 @@ export class OutboxPublisher implements OnApplicationBootstrap, OnApplicationShu
         .catch((error: unknown) => {
           this.logger.error({ err: error }, 'Outbox publisher turu başarısız');
         })
-        .finally(() => this.schedule());
+        .finally(() => {
+          this.tickCount += 1;
+          if (this.tickCount % STATS_EVERY_N_TICKS === 0) {
+            void this.reportStats().catch((error: unknown) => {
+              this.logger.warn({ err: error }, 'Outbox stats sorgusu başarısız');
+            });
+          }
+          this.schedule();
+        });
     }, OUTBOX_POLL_INTERVAL_MS);
     this.timer.unref();
+  }
+
+  private async reportStats(): Promise<void> {
+    const result = await this.pool.query<{
+      pending_count: string;
+      failed_count: string;
+      oldest_pending_age_ms: string | null;
+    }>(
+      `SELECT
+         count(*) FILTER (WHERE status = 'PENDING') AS pending_count,
+         count(*) FILTER (WHERE status = 'FAILED') AS failed_count,
+         EXTRACT(EPOCH FROM (now() - min(occurred_at) FILTER (WHERE status = 'PENDING'))) * 1000
+           AS oldest_pending_age_ms
+       FROM outbox`,
+    );
+
+    const row = result.rows[0];
+    this.metrics.outboxStats({
+      pendingCount: parseInt(row?.pending_count ?? '0', 10),
+      failedCount: parseInt(row?.failed_count ?? '0', 10),
+      oldestPendingAgeMs:
+        row?.oldest_pending_age_ms !== null && row?.oldest_pending_age_ms !== undefined
+          ? Math.round(Number(row.oldest_pending_age_ms))
+          : null,
+    });
   }
 
   /** Bekleyen kayıtları işler ve yayınlanan event sayısını döner. Testler bunu doğrudan çağırır. */
@@ -155,6 +193,19 @@ export class OutboxPublisher implements OnApplicationBootstrap, OnApplicationShu
         WHERE event_id = $1`,
       [row.event_id],
     );
+
+    const attempts = row.attempts + 1;
+    this.logger.info(
+      { eventId: row.event_id, eventType: row.event_type, attempts },
+      'Outbox event published',
+    );
+    this.metrics.publishSuccess({
+      eventId: row.event_id,
+      eventType: row.event_type,
+      attempts,
+      latencyMs: Date.now() - row.occurred_at.getTime(),
+    });
+
     return true;
   }
 
@@ -167,7 +218,9 @@ export class OutboxPublisher implements OnApplicationBootstrap, OnApplicationShu
     // Yalnızca sınıflandırılmış kod saklanır: hata metni payload/PII sızdırabilir.
     const errorCode = error instanceof Error ? error.name : 'UnknownError';
     // Exponential backoff, üst sınırla.
-    const backoffSeconds = Math.min(2 ** attempts, 300);
+    const base = Math.min(2 ** attempts, 300);
+    const jitter = base * 0.2 * (Math.random() * 2 - 1);
+    const backoffSeconds = Math.max(1, Math.round(base + jitter));
 
     await this.pool.query(
       `UPDATE outbox
@@ -183,5 +236,11 @@ export class OutboxPublisher implements OnApplicationBootstrap, OnApplicationShu
       { eventId: row.event_id, eventType: row.event_type, attempts, exhausted },
       'Outbox event yayınlanamadı',
     );
+    this.metrics.publishFailure({
+      eventId: row.event_id,
+      eventType: row.event_type,
+      attempts,
+      errorCode: errorCode.slice(0, 80),
+    });
   }
 }

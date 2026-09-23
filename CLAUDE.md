@@ -131,6 +131,21 @@ Bu yapıyı değiştirmek gerekirse önce `docs/architecture/adr/` altında ADR 
   (uygulama rolüne UPDATE/DELETE yok) ve hash zinciriyle tamper-evident. Rate limiting Redis/gateway'de.
 - Hukuki doğrulama gerektiren her nokta kodda ve dokümanda `TODO(legal)` ile işaretlenir.
 
+**Event-Driven & Consumers (Faz 9)**
+
+- Belgelenmiş/test edilmiş sözleşme `packages/api-contracts/events/` altındadır (Zod şemaları,
+  topic-mapping). **services/api runtime'da bunu import etmez** — paket ham `.ts` olarak
+  yayınlandığı için `tsc` build'inde çözülemez (build-tooling kısıtı, bilinçli kabul edilmiş
+  risk). Gerçek çalışan topoloji `services/api/src/common/events/event-topology.ts`'dedir; iki
+  dosya arasında sürüklenme riski vardır (bkz. `event-driven.md`).
+- Tüm consumer'lar `EventConsumer` arayüzünü uygular (`src/common/events/event-consumer.ts`).
+- Consumer'lar idempotency yönetiminden (veri tabanında aynı işlemin tekrarlanmaması) kendileri sorumludur; genel event tekilleştirmesi (deduplication) ise runner tarafından `processed_events` ile yapılır.
+- Event payload'larında PII verisi yer almaz, yalnızca kimlik referansları (ID'ler) taşınır.
+- `EventTransport` üretimde Pub/Sub, geliştirmede `LoggingEventTransport` üzerinden çalışır ve ortam config dosyasında seçilir. `PUBSUB_EMULATOR_HOST` yalnızca emulator gerçekten ayaktayken (`npm run infra:up:events`) ayarlanır — sürekli açık bırakmak publish çağrılarını 10 sn zaman aşımına düşürür.
+- Pub/Sub topic'i başına **tek** subscription vardır (`{topic}.core-api`); `PubSubSubscriberService` mesajı `EventConsumerRunner`'a iletir, runner event type'a göre kayıtlı tüm consumer'lara kendi içinde dispatch eder. Consumer başına ayrı subscription açılmaz.
+- Olası geçici hatalar `FailureClassification.TRANSIENT`, kalıcı hatalar `PERMANENT` olarak sınıflandırılır (DLQ için).
+- Testler runner pipeline'ı `EventConsumerRunner.processEvent` üzerinden (Pub/Sub handler yerine) doğrudan çağırarak sınanmalıdır.
+
 ## 5. Çalışma disiplini
 
 **Her faz şu döngüyü izler:**
@@ -167,7 +182,7 @@ Bu yapıyı değiştirmek gerekirse önce `docs/architecture/adr/` altında ADR 
 | 6   | Python AI/NLP: structured extraction, versiyonlama, evaluation dataset                                                                                          |               |
 | 7   | Matching & Optimization: retrieval, constraints, scoring, OR-Tools, explainability, benchmark                                                                   |               |
 | 8   | Safety: sessions, geofence, telemetry, rules + anomaly, panic flow                                                                                              | ✅ tamamlandı |
-| 9   | Event-driven: Pub/Sub, contracts, retries, DLQ, idempotency                                                                                                     |               |
+| 9   | Event-driven: Pub/Sub, contracts, retries, DLQ, idempotency                                                                                                     | ✅ tamamlandı |
 | 10  | Admin/Operations API                                                                                                                                            |               |
 | 11  | Analytics: BigQuery pipeline, metrikler                                                                                                                         |               |
 | 12  | Security hardening                                                                                                                                              |               |

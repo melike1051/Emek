@@ -6,6 +6,7 @@ import { PAYMENT_PROVIDER, type PaymentProvider } from './payment-provider.port'
 import { PaymentsController } from './payments.controller';
 import { PaymentsRepository } from './payments.repository';
 import { PaymentsService } from './payments.service';
+import { ScheduledReleaseWorker } from './scheduled-release.worker';
 
 @Module({
   imports: [BookingStateModule],
@@ -14,6 +15,7 @@ import { PaymentsService } from './payments.service';
     PaymentsService,
     PaymentsRepository,
     MockPaymentProvider,
+    ScheduledReleaseWorker,
     {
       provide: PAYMENT_PROVIDER,
       inject: [AppConfigService, MockPaymentProvider],

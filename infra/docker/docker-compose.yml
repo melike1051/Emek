@@ -42,7 +42,7 @@ services:
   # Opsiyonel profile: imaj ~1.5GB ve Faz 1'de hiçbir kod Pub/Sub kullanmıyor.
   # Gerektiğinde: npm run infra:up:events
   pubsub:
-    profiles: ['events']
+    profiles: ['events', 'full']
     image: gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
     command:
       - gcloud

@@ -59,8 +59,27 @@ Tek doğruluk kaynağı. Bir event burada tanımlanmadan yayınlanmaz; şemalar 
 | Publisher (poll + retry + backoff + FAILED eşiği) | ✅ Faz 2                                                  |
 | `processed_events` tablosu (consumer idempotency) | ✅ Faz 2 (tablo hazır, consumer'lar Faz 9)                |
 | `EventTransport` portu                            | ✅ Faz 2 — yerel log transport'u; Pub/Sub adapter'ı Faz 9 |
-| Topic/subscription topolojisi, DLQ, observability | ⏳ Faz 9                                                  |
-| Şema dosyaları (`packages/api-contracts/events/`) | ⏳ Faz 9                                                  |
+| Topic/subscription topolojisi, DLQ, observability | ✅ Faz 9                                                  |
+| Şema dosyaları (`packages/api-contracts/events/`) | ✅ Faz 9                                                  |
+
+## Consumer Topology (Faz 9)
+
+Aşağıdaki tablo, olayları dinleyen consumer'ları gösterir. Her domain topic'i (`emek.booking`,
+`emek.payment`, `emek.safety`, `emek.identity`) için **tek** bir subscription vardır
+(`core-api`, bkz. aşağıdaki bölüm); `PubSubSubscriberService` mesajı `EventConsumerRunner`'a
+iletir, runner **kendi içinde** event type'a göre kayıtlı consumer'lara dispatch eder
+(`services/api/src/common/events/events.module.ts`). Consumer başına ayrı subscription açılmaz
+— aksi halde aynı event birden fazla kez teslim edilirdi.
+
+| Consumer           | Dinlediği Event'ler                                                                                                                                                            | İşlevi                                                                                                |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `notification-job` | `BookingCreated`, `BookingConfirmed`, `BookingCancelled`, `ServiceStarted`, `ServiceCompleted`, `PaymentAuthorized`, `PaymentReleased`, `PaymentRefunded`, `SafetyAlertRaised` | Olay tipine göre `notification_jobs` tablosunu doldurur (gerçek teslimat Faz 10 worker'ı).            |
+| `analytics-export` | Tüm event tipleri                                                                                                                                                              | Veri ambarı/BigQuery aktarımı (Faz 11) için event'leri `analytics_events` tablosuna denormalize eder. |
+
+`safety_monitor` ve `booking_state_observer` gibi ek consumer'lar (kural değerlendirme,
+booking domain'ine yan akış yansıtma) **henüz yazılmadı** — bugünkü ihtiyaç senkron akışlarla
+(safety rule engine, booking state hook'ları) karşılanıyor; event-driven bir sürüm gerekirse
+ayrı bir consumer olarak eklenecek.
 
 Yayınlanan eventler: `UserRegistered`, `ProviderProfileSubmitted` (Faz 2), `IdentityVerified` (Faz 3),
 `SafetyAlertRaised` (Faz 8 — outbox'a yazılır; Pub/Sub topic'i `emek.safety` ve tüketiciler
@@ -75,7 +94,8 @@ uçtan okur. Oturum yaşam döngüsü (`SESSION_*`), geofence ve kural olayları
 - **Domain başına topic** (`emek.booking`, `emek.payment`, `emek.safety`, gerekirse `emek.identity`);
   event tipi mesaj attribute'unda taşınır ve subscription filtresiyle ayrıştırılır. Event tipi
   başına ayrı topic ancak ölçülebilir bir ihtiyaç doğduğunda bölünerek elde edilir (ADR-0010 §8).
-- Her consumer kendi subscription'ına sahiptir; subscription başına retry politikası + DLQ.
+- Domain topic'i başına **tek** subscription (`{topic}.core-api`, örn. `emek.booking.core-api`);
+  consumer başına değil (bkz. Consumer Topology). Subscription başına retry politikası + Pub/Sub-seviyesi DLQ topic'i.
 - DLQ derinliği ve mesaj yaşı alarmlıdır.
 - Yerel geliştirmede Pub/Sub emulator kullanılır.
 

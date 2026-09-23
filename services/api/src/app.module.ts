@@ -14,6 +14,7 @@ import { IdempotencyInterceptor } from './common/idempotency/idempotency.interce
 import { IdempotencyModule } from './common/idempotency/idempotency.module';
 import { LoggingModule } from './common/logging/logging.module';
 import { RequestContextMiddleware } from './common/logging/request-context.middleware';
+import { EventsModule } from './common/events/events.module';
 import { OutboxModule } from './common/outbox/outbox.module';
 import { RateLimitGuard } from './common/ratelimit/rate-limit.guard';
 import { RateLimitModule } from './common/ratelimit/rate-limit.module';
@@ -38,6 +39,7 @@ import { UsersModule } from './users/users.module';
     RedisModule,
     AuditModule,
     OutboxModule,
+    EventsModule,
     IdempotencyModule,
     RateLimitModule,
     HealthModule,
