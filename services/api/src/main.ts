@@ -29,6 +29,9 @@ async function bootstrap(): Promise<void> {
     {
       port: config.env.PORT,
       nodeEnv: config.env.NODE_ENV,
+      // Cloud Run revizyonu kendi enjekte eder; ayrı bir ayar tutulmaz ve bu
+      // değer public health ucunda yayınlanmaz (yalnızca log korelasyonu).
+      revision: process.env.K_REVISION ?? 'local',
       identityProvider: config.env.IDENTITY_PROVIDER,
       paymentProvider: config.env.PAYMENT_PROVIDER,
     },

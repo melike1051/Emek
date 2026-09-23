@@ -203,7 +203,7 @@ Bu yapıyı değiştirmek gerekirse önce `docs/architecture/adr/` altında ADR 
 | 10  | Admin/Operations API                                                                                                                                            | ✅ tamamlandı |
 | 11  | Analytics: BigQuery pipeline, metrikler                                                                                                                         | ✅ tamamlandı |
 | 12  | Security hardening: proxy güveni (R-53), App Check, audit zincir doğrulama, retention, SAST/dependency gate                                                     | ✅ tamamlandı |
-| 13  | DevOps: Terraform, Cloud Run, staging/production                                                                                                                |               |
+| 13  | DevOps: Terraform, Cloud Run, staging/production                                                                                                                | ⚠️ kod tamam, gerçek-bulut doğrulaması bekliyor |
 | 14  | Performance & reliability                                                                                                                                       |               |
 | 15  | **Web frontend** (bundan önce frontend geliştirilmez)                                                                                                           |               |
 | 16  | Flutter mobile                                                                                                                                                  |               |
@@ -227,10 +227,14 @@ npm run contracts:generate --workspace=@emek/api          # OpenAPI sözleşmesi
 npm run lint && npm run typecheck && npm test             # hızlı kontrol (altyapı gerekmez)
 npm run audit:deps                                        # bağımlılık taraması (CI'da bloklayıcı)
 npm run sast                                              # SAST: semgrep (kayıt defteri + Emek kuralları)
+npm run smoke -- --api-url <url> --environment staging    # dağıtım sonrası smoke testleri (Faz 13)
 npm run test:integration                                  # gerçek Postgres+Redis gerektirir
 cd services/ai && uv run pytest                           # AI servisi testleri
 cd services/ai && uv run ruff check . && uv run mypy app  # AI lint + typecheck
 ```
+
+Altyapı (Faz 13): `infra/terraform` — `terraform fmt -recursive -check` ve ortam kökünde
+`terraform init -backend=false && terraform validate`. `plan`/`apply` gerçek GCP kimliği ister.
 
 Toolchain: Node 22, TypeScript 6 (`module/moduleResolution: node16`), NestJS 11 (CommonJS —
 ADR-0015), Python 3.12 + uv. Build `tsc` iledir; `@nestjs/cli` kullanılmaz.
@@ -240,9 +244,10 @@ ADR-0015), Python 3.12 + uv. Build `tsc` iledir; `@nestjs/cli` kullanılmaz.
 | Dosya                                         | İçerik                                                         |
 | --------------------------------------------- | -------------------------------------------------------------- |
 | `docs/architecture/initial-assessment.md`     | Mevcut durum, boşluk analizi, anti-hedefler                    |
-| `docs/architecture/adr/`                      | Architecture Decision Record'lar (0001-0022)                   |
+| `docs/architecture/adr/`                      | Architecture Decision Record'lar (0001-0023)                   |
 | `docs/api/error-codes.md`                     | Business error kodları                                         |
 | `docs/architecture/local-development.md`      | Kurulum, komutlar, sorun giderme                               |
+| `docs/architecture/deployment.md`             | Dağıtım topolojisi, yayın akışı, rollback, smoke testleri      |
 | `docs/database/schema.md`                     | Şema, invariant'lar, migration kuralları                       |
 | `docs/architecture/phase-plan.md`             | Faz planı, çıktılar, exit kriterleri                           |
 | `docs/architecture/coding-conventions.md`     | Kod/commit/naming konvansiyonları                              |

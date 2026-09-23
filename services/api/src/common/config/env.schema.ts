@@ -36,6 +36,15 @@ export const envSchema = z
     DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(200).default(10),
 
     REDIS_URL: redisUrlSchema,
+    /**
+     * Memorystore'un sunduğu CA sertifikası (PEM).
+     *
+     * `SERVER_AUTHENTICATION` modunda Memorystore kendi CA'sıyla imzalanmış bir
+     * sertifika sunar; bu CA public güven deposunda **yoktur**. `rediss://` ile
+     * bağlanırken verilmezse el sıkışma doğrulamada düşer. Yerelde TLS yoktur,
+     * bu yüzden opsiyoneldir — ama `rediss://` ile birlikte zorunludur (aşağıda).
+     */
+    REDIS_CA_CERT: z.string().min(1).optional(),
 
     /**
      * Önümüzde duran **güvenilen** ters proxy sayısı (R-53, ADR-0022).
@@ -80,6 +89,15 @@ export const envSchema = z
     IDENTITY_HASH_KEY_SOURCE: z.enum(['env', 'kms']).default('env'),
     IDENTITY_HASH_KEY: z.string().min(32).default('local-development-identity-hash-key-000'),
     IDENTITY_HASH_KEY_VERSION: z.string().min(1).default('v1'),
+    /**
+     * Cloud KMS MAC anahtarının **sürüm** kaynak adı (Faz 13, R-39).
+     *
+     * Biçim: `projects/<p>/locations/<l>/keyRings/<r>/cryptoKeys/<k>/cryptoKeyVersions/<n>`.
+     * Sürüm açıkça yazılır: KMS "primary" sürümü sessizce değişirse aynı kişi farklı
+     * hash üretir ve tekillik bozulurdu (ADR-0004 §5 — rotasyon yoktur).
+     * Anahtar materyali uygulamaya **hiç** taşınmaz; HMAC'i KMS hesaplar (`macSign`).
+     */
+    IDENTITY_KMS_KEY_NAME: z.string().min(1).optional(),
     IDENTITY_CALLBACK_SECRET: z.string().min(16).default('local-development-callback-secret'),
     VERIFICATION_SESSION_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(900),
     VERIFICATION_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5),
@@ -312,6 +330,14 @@ export const envSchema = z
      * TODO(legal): denetim izi saklama süresi hukuk görüşüyle kesinleşecek (A-04).
      */
     AUDIT_EXPORT_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(3650),
+    /**
+     * Retention-locked arşiv bucket'ı (Faz 13, R-82).
+     *
+     * Bucket'ın **kilitli** retention policy'si ve object retention özelliği Terraform'da
+     * tanımlıdır; uygulama nesneyi yazarken üzerine yazmayı önler ve nesne bazlı
+     * saklama süresi ayarlar. `gcs` sağlayıcısında zorunludur.
+     */
+    AUDIT_ARCHIVE_BUCKET: z.string().min(1).optional(),
 
     /**
      * Retention silme işi (T-24). Kapalıyken hiçbir veri otomatik silinmez.
@@ -337,10 +363,60 @@ export const envSchema = z
     RETENTION_ANALYTICS_EVENT_DAYS: z.coerce.number().int().min(1).max(3650).default(90),
   })
   .superRefine((env, ctx) => {
-    // ADR-0005 / ADR-0009: mock sağlayıcılar production'da seçilemez.
-    // Bu kontrol config katmanındadır; runtime'da "acaba mock mu" diye sormak yerine
-    // servis hiç başlamaz.
-    if (env.NODE_ENV !== 'production') {
+    // --- Ortamdan bağımsız tutarlılık kuralları ---
+    // Bir sağlayıcı seçildiyse onun çalışması için gereken değer de verilmelidir;
+    // eksikliği ilk isteğe kadar saklamak, hatayı üretimde kanıt akışının ortasında
+    // ortaya çıkarırdı.
+    if (env.IDENTITY_HASH_KEY_SOURCE === 'kms' && env.IDENTITY_KMS_KEY_NAME === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['IDENTITY_KMS_KEY_NAME'],
+        message: 'IDENTITY_HASH_KEY_SOURCE=kms iken IDENTITY_KMS_KEY_NAME zorunludur',
+      });
+    }
+
+    if (
+      env.IDENTITY_KMS_KEY_NAME !== undefined &&
+      !/^projects\/[^/]+\/locations\/[^/]+\/keyRings\/[^/]+\/cryptoKeys\/[^/]+\/cryptoKeyVersions\/[^/]+$/.test(
+        env.IDENTITY_KMS_KEY_NAME,
+      )
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['IDENTITY_KMS_KEY_NAME'],
+        message:
+          'IDENTITY_KMS_KEY_NAME tam sürüm kaynak adı olmalı (.../cryptoKeyVersions/<n>): ' +
+          'primary sürüme bırakmak anahtarın sessizce değişmesine yol açar (ADR-0004 §5)',
+      });
+    }
+
+    // TLS'li bir Redis adresi CA olmadan bağlanamaz; bunu ilk komuta kadar
+    // saklamak, servisin "redis down" raporlayarak hazır olmamasına yol açardı.
+    if (env.REDIS_URL.startsWith('rediss://') && env.REDIS_CA_CERT === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['REDIS_CA_CERT'],
+        message: 'rediss:// adresi için REDIS_CA_CERT zorunludur (Memorystore kendi CA.sını sunar)',
+      });
+    }
+
+    if (env.AUDIT_ARCHIVE_PROVIDER === 'gcs' && env.AUDIT_ARCHIVE_BUCKET === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['AUDIT_ARCHIVE_BUCKET'],
+        message: 'AUDIT_ARCHIVE_PROVIDER=gcs iken AUDIT_ARCHIVE_BUCKET zorunludur',
+      });
+    }
+
+    // --- Dağıtılan ortamların sertleştirme kuralları ---
+    //
+    // Kurallar **staging'i de** kapsar (Faz 13, ADR-0023 §1). Staging'in işi
+    // production ile aynı kod yollarını çalıştırmaktır; sahte sağlayıcılarla ayağa
+    // kalkabilen bir staging, production'a çıkmadan önce hiçbir şeyi kanıtlamaz —
+    // ve elle değiştirilen tek bir ortam değişkeni onu sessizce oraya düşürebilirdi.
+    // Tek savunmanın dağıtım **sonrası** smoke testi olması geç kalmaktır.
+    const isDeployedEnvironment = env.NODE_ENV === 'production' || env.NODE_ENV === 'staging';
+    if (!isDeployedEnvironment) {
       return;
     }
 
@@ -349,7 +425,7 @@ export const envSchema = z
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: [key],
-          message: `${key}=mock production ortamında kullanılamaz`,
+          message: `${key}=mock dağıtılan ortamlarda (staging/production) kullanılamaz`,
         });
       }
     }
@@ -360,7 +436,7 @@ export const envSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['FIREBASE_PROJECT_ID'],
-        message: 'FIREBASE_PROJECT_ID production ortamında gerçek proje kimliği olmalı',
+        message: 'FIREBASE_PROJECT_ID dağıtılan ortamlarda gerçek proje kimliği olmalı',
       });
     }
 
@@ -369,7 +445,7 @@ export const envSchema = z
         code: z.ZodIssueCode.custom,
         path: ['IDENTITY_HASH_KEY_SOURCE'],
         message:
-          'IDENTITY_HASH_KEY_SOURCE production ortamında kms olmalı (ADR-0004: anahtar KMS.te tutulur)',
+          'IDENTITY_HASH_KEY_SOURCE dağıtılan ortamlarda (staging/production) kms olmalı (ADR-0004)',
       });
     }
 
@@ -393,7 +469,7 @@ export const envSchema = z
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: [key],
-          message: `${key} production ortamında yerel varsayılan değeri olamaz`,
+          message: `${key} dağıtılan ortamlarda (staging/production) yerel varsayılan değeri olamaz`,
         });
       }
     }
@@ -404,7 +480,7 @@ export const envSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['STORAGE_PROVIDER'],
-        message: 'STORAGE_PROVIDER production ortamında gcs olmalı',
+        message: 'STORAGE_PROVIDER dağıtılan ortamlarda (staging/production) gcs olmalı',
       });
     }
 
@@ -415,7 +491,9 @@ export const envSchema = z
         code: z.ZodIssueCode.custom,
         path: ['TRUSTED_PROXY_HOP_COUNT'],
         message:
-          'TRUSTED_PROXY_HOP_COUNT production ortamında açıkça ayarlanmalı (Cloud Run: 2) — ADR-0022',
+          'TRUSTED_PROXY_HOP_COUNT dağıtılan ortamlarda açıkça ayarlanmalı — ADR-0022. ' +
+          'Cloud Run için doğru değer ölçülmeden bilinemez (A-10); fazla bir değer ' +
+          'fail-open olduğu için güvenli başlangıç 1.',
       });
     }
 
@@ -424,7 +502,7 @@ export const envSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['APP_CHECK_ENABLED'],
-        message: 'APP_CHECK_ENABLED production ortamında true olmalı (ADR-0022)',
+        message: 'APP_CHECK_ENABLED dağıtılan ortamlarda true olmalı (ADR-0022)',
       });
     }
 
@@ -432,7 +510,7 @@ export const envSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['APP_CHECK_PROVIDER'],
-        message: 'APP_CHECK_PROVIDER=mock production ortamında kullanılamaz',
+        message: 'APP_CHECK_PROVIDER=mock dağıtılan ortamlarda kullanılamaz',
       });
     }
 
@@ -440,7 +518,7 @@ export const envSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['FIREBASE_PROJECT_NUMBER'],
-        message: 'FIREBASE_PROJECT_NUMBER production ortamında gerçek proje numarası olmalı',
+        message: 'FIREBASE_PROJECT_NUMBER dağıtılan ortamlarda gerçek proje numarası olmalı',
       });
     }
 
@@ -449,7 +527,7 @@ export const envSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['AUDIT_VERIFICATION_ENABLED'],
-        message: 'AUDIT_VERIFICATION_ENABLED production ortamında true olmalı (ADR-0013 §8)',
+        message: 'AUDIT_VERIFICATION_ENABLED dağıtılan ortamlarda true olmalı (ADR-0013 §8)',
       });
     }
 
@@ -458,7 +536,7 @@ export const envSchema = z
         code: z.ZodIssueCode.custom,
         path: ['AUDIT_ARCHIVE_PROVIDER'],
         message:
-          'AUDIT_ARCHIVE_PROVIDER=memory ile dışa aktarım üretimde anlamsızdır (R-82, Faz 13)',
+          'AUDIT_ARCHIVE_PROVIDER=memory ile dışa aktarım dağıtılan ortamlarda anlamsızdır (R-82)',
       });
     }
 
@@ -467,7 +545,7 @@ export const envSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['RETENTION_ENABLED'],
-        message: 'RETENTION_ENABLED production ortamında true olmalı (KVKK, R-38)',
+        message: 'RETENTION_ENABLED dağıtılan ortamlarda true olmalı (KVKK, R-38)',
       });
     }
 
@@ -476,7 +554,39 @@ export const envSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['AI_SERVICE_API_KEY'],
-        message: 'AI_SERVICE_API_KEY production ortamında tanımlı olmalı',
+        message: 'AI_SERVICE_API_KEY dağıtılan ortamlarda tanımlı olmalı',
+      });
+    }
+
+    // R-82 kapanışı (Faz 13): gerçek, retention-locked arşiv bağlandı. Artık
+    // "doğrulanmış zincirin bağımsız kopyası" iddiası taşınabilir — ve taşınmak
+    // zorundadır: veritabanına tam erişimi olan bir saldırgan karşısında zincirin
+    // tek kopyası aynı veritabanındaysa doğrulama hiçbir şey kanıtlamaz.
+    if (!env.AUDIT_EXPORT_ENABLED) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['AUDIT_EXPORT_ENABLED'],
+        message: 'AUDIT_EXPORT_ENABLED dağıtılan ortamlarda true olmalı (ADR-0013 §8, R-82)',
+      });
+    }
+
+    if (env.AUDIT_ARCHIVE_PROVIDER !== 'gcs') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['AUDIT_ARCHIVE_PROVIDER'],
+        message:
+          'AUDIT_ARCHIVE_PROVIDER dağıtılan ortamlarda (staging/production) gcs olmalı (R-82)',
+      });
+    }
+
+    // Event transport'u production'da gerçek olmalı: 'logging' event'i hiçbir yere
+    // yayınlamaz, ama outbox kaydını "yayınlandı" diye işaretler (ADR-0010).
+    if (env.EVENT_TRANSPORT_TYPE !== 'pubsub') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['EVENT_TRANSPORT_TYPE'],
+        message:
+          'EVENT_TRANSPORT_TYPE dağıtılan ortamlarda (staging/production) pubsub olmalı (ADR-0010)',
       });
     }
 
@@ -484,7 +594,7 @@ export const envSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['PUBSUB_EMULATOR_HOST'],
-        message: 'PUBSUB_EMULATOR_HOST production ortamında tanımlı olamaz',
+        message: 'PUBSUB_EMULATOR_HOST dağıtılan ortamlarda tanımlı olamaz',
       });
     }
 
@@ -495,7 +605,7 @@ export const envSchema = z
         code: z.ZodIssueCode.custom,
         path: ['BIGQUERY_PROVIDER'],
         message:
-          'ANALYTICS_EXPORT_ENABLED=true iken BIGQUERY_PROVIDER production ortamında bigquery olmalı',
+          'ANALYTICS_EXPORT_ENABLED=true iken BIGQUERY_PROVIDER dağıtılan ortamlarda bigquery olmalı',
       });
     }
   });

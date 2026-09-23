@@ -779,14 +779,102 @@ bağlı), R-39 (KMS adapter'ı Faz 13), R-66 (safety telemetri sınırı hâlâ 
 
 ---
 
-## Faz 13 — DevOps
+## Faz 13 — DevOps ⚠️ (kısmi — dış altyapı olmadan tamamlanamayan kısımlar açık)
 
 **Kapsam:** üretim Dockerfile'ları (multi-stage, non-root); GitHub Actions tam pipeline;
 Terraform ile Cloud Run, Cloud SQL, Memorystore, Pub/Sub, Storage, BigQuery, Secret Manager, KMS,
-Monitoring; staging + production config ayrımı; alerting.
+Monitoring; staging + production config ayrımı; alerting; **production GCP adapter'ları**
+(KMS identity MAC, GCS storage, GCS audit archive).
 
-**Exit:** staging Terraform'dan sıfırdan kurulabiliyor; deploy rollback edilebiliyor;
-smoke testler pipeline'da; alarmlar test edildi.
+**Bu fazda alınan karar:** [ADR-0023](adr/0023-deployment-topology.md) — dağıtım topolojisi,
+keyless CI/CD kimliği, migration/rollback sırası.
+
+**Exit kriterleri (durum):**
+
+- ✅ Production adapter'ları yazıldı ve testlendi: `KmsIdentityMacProvider` (R-39),
+  `GcsStorageProvider` (R-41), `GcsAuditArchive` (R-82). Üçü de **boot'ta** kendi
+  altyapısını doğrular; yanlış yapılandırmayla servis ayağa kalkmaz.
+- ✅ Kimlik hash portu değişti: `key()` → `mac()`. Anahtar materyali uygulamaya **hiç
+  inmez**; HMAC'i Cloud KMS hesaplar. Anahtar tam **sürüm** adıyla verilir (rotasyonsuzluk
+  kararı yapılandırma seviyesinde korunur).
+- ✅ Production config fail-closed genişletildi: `gcs` arşiv + dışa aktarım, `pubsub`
+  transport, KMS anahtar adı ve sürüm biçimi zorunlu (8 yeni config testi).
+- ✅ Dockerfile'lar sertleştirildi: `--ignore-scripts`, ayrı prod-deps aşaması (derleme
+  araçları çalışan imajda yok), `$PORT`, OCI etiketleri, non-root. **Gerçekten derlendi ve
+  çalıştırıldı**: API container'ı yerel Postgres/Redis'e karşı ayağa kalktı, SIGTERM'e
+  203 ms'de temiz kapandı, imajda `.env` yok, `USER node`/`uid=999(emek)`.
+- ✅ Terraform: tek ortam modülü + iki ayrı kök (ayrı proje, ayrı state). Cloud Run (api +
+  ai + migration job), Cloud SQL (public IP yok, PITR), Memorystore (AUTH + TLS), Pub/Sub
+  (4 topic + 4 DLQ + tek subscription/topic), Storage (private + kilitli arşiv + lifecycle),
+  BigQuery (partition expiration), Secret Manager, KMS, WIF, monitoring/alerting, bütçe.
+  `terraform fmt -check` ve `validate` **her iki ortamda geçti**.
+- ✅ Pipeline: `deploy.yml` — CI (çağrılır, kopyalanmaz) → imaj build/push (digest) →
+  migration job → staging deploy → smoke → **manuel onay kapısı** → production. Kimlik
+  bilgisi yoksa dağıtım işleri çalışmaz ve nedeni iş özetine yazılır. `actionlint` temiz.
+- ✅ Smoke testleri gerçekten doğruluyor: bağımlılıklar, **etkin sağlayıcı türleri**
+  (mock ile ayağa kalkmış ortamı yakalar), kimlik/rol guard'ları, hata gövdesi sızıntısı,
+  AI servisinin internete kapalılığı. Yerel container'a karşı koşturuldu: 8 kontrolün 7'si
+  geçti, sağlayıcı kontrolü **kasıtlı olarak düştü** (`storage: gcs bekleniyordu, mock
+bulundu`) — testin gerçekten ölçtüğünün kanıtı.
+- ✅ Rollback **tanımlandı** ve pipeline'a bağlandı (revizyon trafiği; şema geri alınmaz,
+  PITR yolu yazıldı). Gerçek bir rollback çalıştırılmadı.
+- ❌ **Staging Terraform'dan sıfırdan kurulamadı.** Gerçek GCP projesi, faturalandırma
+  hesabı ve kimlik bilgisi yok: `terraform plan`/`apply` ve Cloud Run dağıtımı
+  **çalıştırılmadı** (R-93). Bu exit kriteri açık bırakıldı.
+- ❌ **Alarmlar test edilmedi.** Alarm politikaları tanımlı ama tetiklenmedi; eşikler
+  tanımlı bir SLO'dan gelmiyor, varsayım olarak kaydedildi (A-09, R-87).
+- ❌ **R-53 kapanmadı.** `TRUSTED_PROXY_HOP_COUNT=1` (güvenli taraf) Terraform'da ayarlı ama gerçek
+  topolojide doğrulanmadı (A-10); yordam `deployment.md` §6'da.
+
+**Faz 13 bağımsız review bulguları ve çözümleri** (iki ayrı review subagent'ı: kod/mimari
+ve güvenlik). Hepsi aynı faz içinde kapatıldı:
+
+| Bulgu                                                                                                                                                                                                                                             | Önem   | Çözüm                                                                                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `macSign` çağrısı `dataCrc32c` göndermiyordu; KMS bu durumda `verifiedDataCrc32c`'yi **her zaman** `false` döndürür → her kimlik doğrulaması (ve boot kanaryası) düşerdi. Test, KMS'in hiç üretmediği bir yanıt şeklini sabitlediği için yeşildi. | Kritik | Checksum gönderiliyor (bağımlılıksız `crc32c`, bilinen test vektörleriyle sabitlendi); yanıttaki anahtar sürümü de doğrulanıyor |
+| `objectAdmin`/`objectCreator`, `storage.buckets.get` **içermez** → her iki adapter'ın boot doğrulaması 403 alır, servis hiç ayağa kalkmazdı                                                                                                       | Kritik | Yalnızca `storage.buckets.get` veren özel rol; iki bucket'a da bağlandı                                                         |
+| Memorystore `SERVER_AUTHENTICATION` kendi CA'sını sunar; `rediss://` CA olmadan doğrulamada düşer → readiness sonsuza kadar "redis down"                                                                                                          | Yüksek | CA Secret Manager'a yazılıyor, `REDIS_CA_CERT` ile okunuyor; `rediss://` + CA yokluğu config'te reddediliyor                    |
+| `gcloud container images add-tag` projeler arası kopyalamaz → production promosyonu hiç çalışmazdı                                                                                                                                                | Yüksek | Aynı yerel imaj tek build işinde iki registry'ye push ediliyor (aynı digest)                                                    |
+| Staging WIF **her dala** açıktı: repoya push yetkisi olan herkes staging'in sırlarını alabilirdi                                                                                                                                                  | Yüksek | Sağlayıcı koşulu `repository` + `repository_owner` + `ref == refs/heads/main` (staging dahil); SA bağlaması da main ile sınırlı |
+| `TRUSTED_PROXY_HOP_COUNT=2` doğrulanmadan sabitlenmişti; **fazla** değer fail-open'dır (XFF ön ekiyle oran sınırı atlatılır)                                                                                                                      | Yüksek | Güvenli taraftan başlandı: `1`. Asimetri ve doğrulama yordamı belgelendi (A-10)                                                 |
+| Terraform `apply`, pipeline'ın dağıttığı imajı bootstrap imajına geri döndürürdü                                                                                                                                                                  | Yüksek | `template[0].containers[0].image` `ignore_changes` içinde (iki servis)                                                          |
+| Production, `main`'e her push'ta dağıtılıyordu; tek kapı repo dışındaki environment ayarıydı                                                                                                                                                      | Yüksek | Repoda okunabilir ikinci kapı: yalnızca `workflow_dispatch` + `deploy_production: true`                                         |
+| `google_billing_budget` için API etkinleştirilmemişti → `apply` hata verirdi                                                                                                                                                                      | Yüksek | `billingbudgets.googleapis.com` eklendi; kullanılmayan `cloudscheduler` kaldırıldı                                              |
+| Staging'de **hiçbir** sertleştirme kuralı uygulanmıyordu (`superRefine` yalnızca production'a bakıyordu)                                                                                                                                          | Orta   | Kurallar `staging`'i de kapsıyor: mock sağlayıcı, `logging` transport, bellek arşivi ile staging ayağa kalkmaz                  |
+| Public `/health`, commit SHA'sını ve dağıtım envanterini kimliksiz yayınlıyordu                                                                                                                                                                   | Orta   | `revision` kaldırıldı (yalnızca boot logunda, `K_REVISION`); testle sabitlendi                                                  |
+| Sağlayıcı raporu emulator'ü "pubsub" gibi gösteriyordu → sahte transport'u yakalaması gereken smoke kontrolü onu geçirirdi                                                                                                                        | Orta   | Ayrı `pubsubEmulator` alanı; smoke `false` olmasını şart koşuyor                                                                |
+| Trafik smoke'tan **önce** taşınıyordu → smoke'un yakaladığı her şey önce kullanıcıya çarpardı; geri alma adımı sağlıklı bir revizyonu da düşürebiliyordu                                                                                          | Orta   | `--no-traffic --tag candidate` → aday adrese smoke → `--to-latest`. Ayrı geri alma adımı kaldırıldı (gerekmiyor)                |
+| KMS sürümü örtük aranıyordu — ADR'nin kendi "sürüm açıkça yazılır" argümanını deliyordu                                                                                                                                                           | Orta   | `version = 1` ile pinlendi                                                                                                      |
+| Staging Cloud SQL `prevent_destroy = true` ile silinemezdi (staging tasarımıyla çelişir)                                                                                                                                                          | Orta   | Kaldırıldı; koruma ortam bazlı `deletion_protection` ile                                                                        |
+| AI `ingress: internal` + API `PRIVATE_RANGES_ONLY` egress → çağrı reddedilirdi (ve çözümü genelde ingress'i gevşetmek olurdu)                                                                                                                     | Düşük  | Egress `ALL_TRAFFIC` + Cloud NAT (dış çağrılar için)                                                                            |
+| `DATABASE_URL` `sslmode` taşımıyordu; instance `ENCRYPTED_ONLY`                                                                                                                                                                                   | Düşük  | `?sslmode=require`; `verify-ca` için CA dağıtımı Faz 14                                                                         |
+| Redis alarmı instance kimliğini yanlış etiketle filtreliyordu (hiç eşleşmeyen, yani hiç çalmayan alarm)                                                                                                                                           | Düşük  | Kısa ad kullanılıyor                                                                                                            |
+| Arşiv bucket'ında CMEK yoktu (documents'ta vardı)                                                                                                                                                                                                 | Düşük  | Eklendi                                                                                                                         |
+| Fork PR'ı Terraform sağlayıcı binary'si indirip çalıştırabiliyordu                                                                                                                                                                                | Düşük  | Fork PR'ları workflow'dan dışlandı                                                                                              |
+| Smoke'un "AI internete kapalı" kontrolü bağlantı hatasını **geçer** sayıyordu → `--ai-url` yazım hatası sessizce geçerdi                                                                                                                          | Düşük  | HTTP yanıtı (403/404) zorunlu                                                                                                   |
+
+Reviewer'ların doğruladıkları: kimlik portu değişiminin determinizmi ve tekilliği
+bozmadığı, atlanan çağrı yeri olmadığı; GCS adapter'larının kurulu paket tipleriyle
+uyumu; Pub/Sub boot kontrolünün geçici/kalıcı ayrımı ve yerel geliştirmeyi bozmaması;
+ortamlar arası izolasyonun gerçekten zorlanması (ayrı proje/state/CIDR); repoda sır
+bulunmaması ve CI loglarına sır yazılmaması; `preflight`'ın "atlanan iş dağıtım değildir"
+tasarımı.
+
+**Risk durumu:** R-39 ✅, R-41 ✅, R-82 ✅, R-83 ✅, R-24 kısmi (bütçe/limit tanımlı,
+gerçek hesap yok), R-53 **açık** (hop sayısı güvenli taraftan `1`, ölçülmedi — A-10).
+Yeni: R-85 (state sır taşır), R-86 (kilitli retention geri alınamaz), R-87 (eşikler
+SLO'suz), R-88 (moderate `uuid`), R-89 (AI çağrısında ID token yok), R-90 (deploy
+kimliği uygulama kimliğini üstlenebilir), R-91 (`latest` sır sürümleri), R-92 (alarmlar
+hiç tetiklenmedi), R-93 (altyapı hiç uygulanmadı).
+
+**Faz 14'e bilinçli olarak taşınan riskler** (hepsinin ortak nedeni: gerçek bir GCP
+projesi, faturalandırma hesabı ve kimlik bilgisi yok — bunlar kodla kapatılamaz):
+R-93, R-92, R-87 (+A-09), R-53 (+A-10), R-85 (state bucket IAM'i bootstrap adımı),
+R-89, R-90, R-91. R-86 ve R-88 kod/karar tarafında kapatılabilir ama R-86 ilk
+production `apply`'ından önce hukuki onay (A-04) bekler.
+
+**Faz 13 kapanış notu:** implementation tamamdır; **gerçek-bulut doğrulaması açıktır**.
+Bu faz "fully complete" değildir ve öyle iddia edilmemelidir.
 
 ---
 

@@ -3,6 +3,7 @@
 #   docker build -f infra/docker/Dockerfile.ai -t emek-ai .
 #
 # Python sürümü burada pinlenir; yerel makinenin sistem Python'u kullanılmaz (risk R-21).
+# Cloud Run `$PORT` enjekte eder; uvicorn onu dinler (varsayılan 8000).
 
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS build
 WORKDIR /app
@@ -12,17 +13,25 @@ ENV UV_COMPILE_BYTECODE=1 \
     UV_PROJECT_ENVIRONMENT=/app/.venv
 
 # Bağımlılıklar kaynak koddan önce kurulur: kod değişimi dependency katmanını geçersiz kılmaz.
-COPY services/ai/pyproject.toml services/ai/uv.lock* ./
-RUN uv sync --no-dev --no-install-project
+# `--frozen`: lock dosyası güncel değilse build **başarısız olur**; sessizce farklı
+# sürüm çözmek, test edilenden başka bir imaj üretirdi.
+COPY services/ai/pyproject.toml services/ai/uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
 
 COPY services/ai/app ./app
-RUN uv sync --no-dev
+RUN uv sync --frozen --no-dev
 
 FROM python:3.12-slim-bookworm AS runtime
+
+ARG GIT_SHA=unknown
+LABEL org.opencontainers.image.title="emek-ai" \
+      org.opencontainers.image.revision="${GIT_SHA}"
+
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    AI_ENVIRONMENT=production
+    AI_ENVIRONMENT=production \
+    PORT=8000
 WORKDIR /app
 
 RUN groupadd --system emek && useradd --system --gid emek --no-create-home emek
@@ -33,4 +42,6 @@ COPY --from=build --chown=emek:emek /app/app /app/app
 USER emek
 
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# `exec`: uvicorn PID 1 olur ve Cloud Run'ın SIGTERM'ini doğrudan alır. Kabuk
+# araya girerse sinyal iletilmez ve container 10 sn sonra zorla öldürülür.
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

@@ -2,12 +2,12 @@ import { Module } from '@nestjs/common';
 import { AppConfigService } from '../common/config/app-config.service';
 import { UsersModule } from '../users/users.module';
 import {
-  EnvIdentityHashKeyProvider,
-  IDENTITY_HASH_KEY_PROVIDER,
+  EnvIdentityMacProvider,
+  IDENTITY_MAC_PROVIDER,
   IdentityHasher,
-  KmsIdentityHashKeyProvider,
-  type IdentityHashKeyProvider,
+  type IdentityMacProvider,
 } from './identity-hasher';
+import { KmsIdentityMacProvider } from './kms-identity-mac-provider';
 import { IDENTITY_PROVIDER, type IdentityVerificationProvider } from './identity-provider.port';
 import { IdentityController } from './identity.controller';
 import { IdentityRepository } from './identity.repository';
@@ -23,14 +23,21 @@ import { MockIdentityProvider } from './mock-identity-provider';
     IdentityHasher,
     MockIdentityProvider,
     {
-      provide: IDENTITY_HASH_KEY_PROVIDER,
+      provide: IDENTITY_MAC_PROVIDER,
       inject: [AppConfigService],
-      useFactory: (config: AppConfigService): IdentityHashKeyProvider =>
-        // Production'da yalnızca KMS kabul edilir (env.schema bunu zorlar); KMS adapter'ı
-        // Faz 13'te bağlanana kadar açıkça hata verir — sessizce zayıf anahtara düşmez.
-        config.env.IDENTITY_HASH_KEY_SOURCE === 'kms'
-          ? new KmsIdentityHashKeyProvider()
-          : new EnvIdentityHashKeyProvider(config),
+      useFactory: (config: AppConfigService): IdentityMacProvider => {
+        // Production'da yalnızca KMS kabul edilir (env.schema bunu zorlar).
+        if (config.env.IDENTITY_HASH_KEY_SOURCE !== 'kms') {
+          return new EnvIdentityMacProvider(config);
+        }
+        const keyName = config.env.IDENTITY_KMS_KEY_NAME;
+        if (keyName === undefined) {
+          // Config katmanı bunu zaten reddeder; burada da kontrol edilir çünkü
+          // sessizce ortam değişkenindeki anahtara düşmek kabul edilemez.
+          throw new Error('IDENTITY_HASH_KEY_SOURCE=kms iken IDENTITY_KMS_KEY_NAME zorunludur');
+        }
+        return KmsIdentityMacProvider.create(keyName);
+      },
     },
     {
       provide: IDENTITY_PROVIDER,

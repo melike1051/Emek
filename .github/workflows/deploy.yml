@@ -1,0 +1,424 @@
+# Dağıtım hattı (Faz 13, ADR-0023).
+#
+#   CI (lint → typecheck → unit → integration → build → güvenlik taramaları)
+#     → container build + push (digest)
+#     → migration (Cloud Run Job)
+#     → staging deploy
+#     → staging smoke testleri
+#     → [manuel tetikleme + GitHub environment onayı]
+#     → production migration + deploy + smoke
+#
+# **Kimlik bilgisi yoksa sahte başarı üretilmez.** `preflight` işi gerekli
+# repository değişkenlerinin varlığını kontrol eder; yoksa dağıtım işleri
+# çalışmaz ve bunun **neden** olduğu iş özetine yazılır. "Skipped" bir iş,
+# "deploy edildi" demek değildir.
+#
+# Kimlik: Workload Identity Federation (keyless). Uzun ömürlü servis hesabı JSON
+# anahtarı üretilmez ve repository secret'ında tutulmaz.
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      deploy_production:
+        description: 'Staging doğrulandıktan sonra production dağıtımını da çalıştır'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  # Dağıtımlar sıraya girer; iptal edilmez. Yarıda kesilen bir dağıtım,
+  # migration ile revizyon arasında tutarsız bir durum bırakabilir.
+  group: deploy-main
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '22'
+  REGION: europe-west1
+
+jobs:
+  # Aynı kalite kapıları — yeniden tanımlanmaz, çağrılır.
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  preflight:
+    name: Dağıtım yapılandırması var mı
+    runs-on: ubuntu-latest
+    outputs:
+      staging_ready: ${{ steps.check.outputs.staging_ready }}
+      production_ready: ${{ steps.check.outputs.production_ready }}
+    steps:
+      - id: check
+        env:
+          STAGING_WIF: ${{ vars.STAGING_WORKLOAD_IDENTITY_PROVIDER }}
+          STAGING_SA: ${{ vars.STAGING_DEPLOYER_SERVICE_ACCOUNT }}
+          STAGING_PROJECT: ${{ vars.STAGING_PROJECT_ID }}
+          PRODUCTION_WIF: ${{ vars.PRODUCTION_WORKLOAD_IDENTITY_PROVIDER }}
+          PRODUCTION_SA: ${{ vars.PRODUCTION_DEPLOYER_SERVICE_ACCOUNT }}
+          PRODUCTION_PROJECT: ${{ vars.PRODUCTION_PROJECT_ID }}
+        run: |
+          staging_ready=false
+          production_ready=false
+
+          if [ -n "$STAGING_WIF" ] && [ -n "$STAGING_SA" ] && [ -n "$STAGING_PROJECT" ]; then
+            staging_ready=true
+          fi
+          if [ -n "$PRODUCTION_WIF" ] && [ -n "$PRODUCTION_SA" ] && [ -n "$PRODUCTION_PROJECT" ]; then
+            production_ready=true
+          fi
+
+          echo "staging_ready=$staging_ready" >> "$GITHUB_OUTPUT"
+          echo "production_ready=$production_ready" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Dağıtım ön kontrolü"
+            echo ""
+            echo "| Ortam | Yapılandırma | Sonuç |"
+            echo "| --- | --- | --- |"
+            echo "| staging | STAGING_WORKLOAD_IDENTITY_PROVIDER / _DEPLOYER_SERVICE_ACCOUNT / _PROJECT_ID | $staging_ready |"
+            echo "| production | PRODUCTION_WORKLOAD_IDENTITY_PROVIDER / _DEPLOYER_SERVICE_ACCOUNT / _PROJECT_ID | $production_ready |"
+            echo ""
+            if [ "$staging_ready" != "true" ]; then
+              echo "> Staging dağıtımı **çalıştırılmadı**: GCP kimliği yapılandırılmamış."
+              echo "> Bu bir başarı değildir. Kurulum: \`docs/architecture/deployment.md\`."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  images:
+    name: Container imajları (build + push)
+    needs: [ci, preflight]
+    if: needs.preflight.outputs.staging_ready == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # WIF için OIDC token'ı
+    outputs:
+      api_image: ${{ steps.push.outputs.api_image }}
+      ai_image: ${{ steps.push.outputs.ai_image }}
+      production_api_image: ${{ steps.push_production.outputs.api_image }}
+      production_ai_image: ${{ steps.push_production.outputs.ai_image }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.STAGING_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.STAGING_DEPLOYER_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Artifact Registry kimlik doğrulaması
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Build
+        env:
+          STAGING_REGISTRY: ${{ env.REGION }}-docker.pkg.dev/${{ vars.STAGING_PROJECT_ID }}/emek
+        run: |
+          set -euo pipefail
+          docker build -f infra/docker/Dockerfile.api --build-arg GIT_SHA="$GITHUB_SHA" \
+            -t "$STAGING_REGISTRY/api:$GITHUB_SHA" .
+          docker build -f infra/docker/Dockerfile.ai --build-arg GIT_SHA="$GITHUB_SHA" \
+            -t "$STAGING_REGISTRY/ai:$GITHUB_SHA" .
+
+      - id: push
+        name: Push (staging registry)
+        env:
+          STAGING_REGISTRY: ${{ env.REGION }}-docker.pkg.dev/${{ vars.STAGING_PROJECT_ID }}/emek
+        run: |
+          set -euo pipefail
+          docker push "$STAGING_REGISTRY/api:$GITHUB_SHA"
+          docker push "$STAGING_REGISTRY/ai:$GITHUB_SHA"
+
+          # Etiket değil **digest** dağıtılır: etiket sonradan başka bir içeriğe
+          # taşınabilir ve hangi kodun çalıştığı belirsizleşir.
+          # Digest indise göre değil, registry adına göre seçilir: aynı imaj
+          # birden fazla registry'ye push edildiğinde indisler kayar.
+          api_digest=$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' \
+            "$STAGING_REGISTRY/api:$GITHUB_SHA" | grep "^$STAGING_REGISTRY/api@")
+          ai_digest=$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' \
+            "$STAGING_REGISTRY/ai:$GITHUB_SHA" | grep "^$STAGING_REGISTRY/ai@")
+
+          echo "api_image=$api_digest" >> "$GITHUB_OUTPUT"
+          echo "ai_image=$ai_digest" >> "$GITHUB_OUTPUT"
+
+      # Production **ayrı bir projededir**: `gcloud container images add-tag` yalnızca
+      # aynı repository içinde etiket ekler, projeler arası kopyalamaz. Bu yüzden
+      # aynı yerel imaj — dolayısıyla aynı digest — production registry'sine de
+      # buradan push edilir. Böylece "staging'de doğrulanan aynı artefakt" iddiası
+      # gerçekten taşınır; production job'u yeniden build etmez.
+      - uses: google-github-actions/auth@v2
+        if: needs.preflight.outputs.production_ready == 'true'
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_DEPLOYER_SERVICE_ACCOUNT }}
+
+      - id: push_production
+        if: needs.preflight.outputs.production_ready == 'true'
+        name: Push (production registry — aynı digest)
+        env:
+          STAGING_REGISTRY: ${{ env.REGION }}-docker.pkg.dev/${{ vars.STAGING_PROJECT_ID }}/emek
+          PRODUCTION_REGISTRY: ${{ env.REGION }}-docker.pkg.dev/${{ vars.PRODUCTION_PROJECT_ID }}/emek
+        run: |
+          set -euo pipefail
+          gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+
+          docker tag "$STAGING_REGISTRY/api:$GITHUB_SHA" "$PRODUCTION_REGISTRY/api:$GITHUB_SHA"
+          docker tag "$STAGING_REGISTRY/ai:$GITHUB_SHA" "$PRODUCTION_REGISTRY/ai:$GITHUB_SHA"
+          docker push "$PRODUCTION_REGISTRY/api:$GITHUB_SHA"
+          docker push "$PRODUCTION_REGISTRY/ai:$GITHUB_SHA"
+
+          api_digest=$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' \
+            "$PRODUCTION_REGISTRY/api:$GITHUB_SHA" | grep "^$PRODUCTION_REGISTRY/api@")
+          ai_digest=$(docker inspect --format='{{range .RepoDigests}}{{println .}}{{end}}' \
+            "$PRODUCTION_REGISTRY/ai:$GITHUB_SHA" | grep "^$PRODUCTION_REGISTRY/ai@")
+
+          echo "api_image=$api_digest" >> "$GITHUB_OUTPUT"
+          echo "ai_image=$ai_digest" >> "$GITHUB_OUTPUT"
+
+  staging:
+    name: Staging (migration → deploy → smoke)
+    needs: [preflight, images]
+    if: needs.preflight.outputs.staging_ready == 'true'
+    runs-on: ubuntu-latest
+    # GitHub environment'ı: koruma kuralları ve dağıtım geçmişi buradan görünür.
+    environment:
+      name: staging
+      url: ${{ steps.deploy.outputs.api_url }}
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      api_url: ${{ steps.deploy.outputs.api_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.STAGING_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.STAGING_DEPLOYER_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      # Migration **önce** ve ayrı çalışır: uygulama başlangıcında migration
+      # çalıştırmak, N instance'ın aynı anda şema değiştirmesi demektir. Sıra
+      # şudur: geriye uyumlu migration → yeni revizyon (docs/architecture/deployment.md).
+      - name: Migration (Cloud Run Job)
+        run: |
+          set -euo pipefail
+          gcloud run jobs update "emek-staging-migrate" \
+            --project "${{ vars.STAGING_PROJECT_ID }}" \
+            --region "${{ env.REGION }}" \
+            --image "${{ needs.images.outputs.api_image }}" \
+            --quiet
+          gcloud run jobs execute "emek-staging-migrate" \
+            --project "${{ vars.STAGING_PROJECT_ID }}" \
+            --region "${{ env.REGION }}" \
+            --wait
+
+      - id: deploy
+        name: Aday revizyonu dağıt (trafik **verilmeden**)
+        run: |
+          set -euo pipefail
+
+          gcloud run deploy "emek-staging-ai" \
+            --project "${{ vars.STAGING_PROJECT_ID }}" \
+            --region "${{ env.REGION }}" \
+            --image "${{ needs.images.outputs.ai_image }}" \
+            --quiet
+
+          # `--no-traffic --tag`: yeni revizyon oluşur ama **hiç trafik almaz**.
+          # Smoke testi kendi etiketli adresinde koşar; ancak geçerse trafik
+          # yönlendirilir. Aksi halde "yanlış yapılandırma bir kesinti değil,
+          # başarısız bir dağıtımdır" iddiası yalnızca boot hataları için doğru
+          # olurdu — smoke'un yakaladığı her şey önce kullanıcıya çarpardı.
+          gcloud run deploy "emek-staging-api" \
+            --project "${{ vars.STAGING_PROJECT_ID }}" \
+            --region "${{ env.REGION }}" \
+            --image "${{ needs.images.outputs.api_image }}" \
+            --no-traffic --tag "candidate" \
+            --quiet
+
+          candidate_url=$(gcloud run services describe "emek-staging-api" \
+            --project "${{ vars.STAGING_PROJECT_ID }}" \
+            --region "${{ env.REGION }}" \
+            --format='value(status.traffic.filter("tag:candidate").extract("url").flatten())')
+          api_url=$(gcloud run services describe "emek-staging-api" \
+            --project "${{ vars.STAGING_PROJECT_ID }}" \
+            --region "${{ env.REGION }}" --format='value(status.url)')
+          ai_url=$(gcloud run services describe "emek-staging-ai" \
+            --project "${{ vars.STAGING_PROJECT_ID }}" \
+            --region "${{ env.REGION }}" --format='value(status.url)')
+
+          echo "candidate_url=$candidate_url" >> "$GITHUB_OUTPUT"
+          echo "api_url=$api_url" >> "$GITHUB_OUTPUT"
+          echo "ai_url=$ai_url" >> "$GITHUB_OUTPUT"
+
+      # Smoke testleri "200 döndü mü" ile yetinmez: bağımlılıkların ayakta
+      # olduğunu, **gerçek** sağlayıcıların (gcs/kms/pubsub/bigquery) etkin
+      # olduğunu ve güvenlik guard'larının fail-closed çalıştığını doğrular.
+      - name: Staging smoke testleri (aday revizyona karşı)
+        run: |
+          npx tsx services/api/scripts/smoke-test.ts \
+            --api-url "${{ steps.deploy.outputs.candidate_url }}" \
+            --ai-url "${{ steps.deploy.outputs.ai_url }}" \
+            --environment staging
+
+      # Trafik **yalnızca** smoke geçtikten sonra taşınır. Geri dönüş ayrı bir
+      # adım değildir: trafik hiç taşınmadıysa geri alınacak bir şey de yoktur.
+      - name: Trafiği aday revizyona taşı
+        run: |
+          gcloud run services update-traffic "emek-staging-api" \
+            --project "${{ vars.STAGING_PROJECT_ID }}" \
+            --region "${{ env.REGION }}" \
+            --to-latest --quiet
+
+      - name: Başarısızlıkta aday revizyonu bırak
+        if: failure()
+        run: |
+          {
+            echo "## Staging dağıtımı başarısız"
+            echo ""
+            echo "Aday revizyon oluşturuldu ama **trafik taşınmadı**: çalışan revizyon"
+            echo "etkilenmedi. Aday revizyon inceleme için duruyor."
+            echo ""
+            echo "Not: bu iş içinde migration **çalışmış olabilir**. Şema geri alınmaz;"
+            echo "geriye uyumluluk bu yüzden gerekliliktir (deployment.md §3)."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  production:
+    name: Production (manuel tetikleme → onay → migration → deploy → smoke)
+    needs: [preflight, images, staging]
+    # **İki** kapı vardır ve ikisi de gereklidir:
+    #  1. Burada: production yalnızca **açık bir tetiklemeyle** çalışır
+    #     (`workflow_dispatch` + `deploy_production: true`). `main`'e push,
+    #     staging'e kadar gider ve orada durur. Bu kapı repodadır ve okunabilir.
+    #  2. GitHub `production` environment'ının **required reviewers** kuralı.
+    #     Bu repo dışında, elle yapılandırılır (deployment.md §2) — bu yüzden
+    #     tek başına bir garanti sayılmaz ve yukarıdaki kapı ona güvenmez.
+    if: >-
+      needs.preflight.outputs.production_ready == 'true' &&
+      github.event_name == 'workflow_dispatch' &&
+      inputs.deploy_production
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.api_url }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_DEPLOYER_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      # Yeniden build **yok**: `images` işi aynı yerel imajı — dolayısıyla aynı
+      # digest'i — production registry'sine de push etti. Burada yalnızca o digest
+      # dağıtılır, yani staging'de doğrulanan artefaktın ta kendisi.
+      - name: Dağıtılacak imajı doğrula
+        env:
+          API_IMAGE: ${{ needs.images.outputs.production_api_image }}
+          AI_IMAGE: ${{ needs.images.outputs.production_ai_image }}
+        run: |
+          set -euo pipefail
+          if [ -z "$API_IMAGE" ] || [ -z "$AI_IMAGE" ]; then
+            echo "Production imajı üretilmedi — production yapılandırması eksikti." >&2
+            exit 1
+          fi
+          echo "API: $API_IMAGE"
+          echo "AI:  $AI_IMAGE"
+
+      - name: Migration (Cloud Run Job)
+        run: |
+          set -euo pipefail
+          gcloud run jobs update "emek-production-migrate" \
+            --project "${{ vars.PRODUCTION_PROJECT_ID }}" \
+            --region "${{ env.REGION }}" \
+            --image "${{ needs.images.outputs.production_api_image }}" \
+            --quiet
+          gcloud run jobs execute "emek-production-migrate" \
+            --project "${{ vars.PRODUCTION_PROJECT_ID }}" \
+            --region "${{ env.REGION }}" \
+            --wait
+
+      - id: deploy
+        name: Aday revizyonu dağıt (trafik **verilmeden**)
+        run: |
+          set -euo pipefail
+
+          gcloud run deploy "emek-production-ai" \
+            --project "${{ vars.PRODUCTION_PROJECT_ID }}" \
+            --region "${{ env.REGION }}" \
+            --image "${{ needs.images.outputs.production_ai_image }}" \
+            --quiet
+
+          gcloud run deploy "emek-production-api" \
+            --project "${{ vars.PRODUCTION_PROJECT_ID }}" \
+            --region "${{ env.REGION }}" \
+            --image "${{ needs.images.outputs.production_api_image }}" \
+            --no-traffic --tag "candidate" \
+            --quiet
+
+          candidate_url=$(gcloud run services describe "emek-production-api" \
+            --project "${{ vars.PRODUCTION_PROJECT_ID }}" \
+            --region "${{ env.REGION }}" \
+            --format='value(status.traffic.filter("tag:candidate").extract("url").flatten())')
+          api_url=$(gcloud run services describe "emek-production-api" \
+            --project "${{ vars.PRODUCTION_PROJECT_ID }}" \
+            --region "${{ env.REGION }}" --format='value(status.url)')
+          ai_url=$(gcloud run services describe "emek-production-ai" \
+            --project "${{ vars.PRODUCTION_PROJECT_ID }}" \
+            --region "${{ env.REGION }}" --format='value(status.url)')
+
+          echo "candidate_url=$candidate_url" >> "$GITHUB_OUTPUT"
+          echo "api_url=$api_url" >> "$GITHUB_OUTPUT"
+          echo "ai_url=$ai_url" >> "$GITHUB_OUTPUT"
+
+      - name: Production smoke testleri (aday revizyona karşı)
+        run: |
+          npx tsx services/api/scripts/smoke-test.ts \
+            --api-url "${{ steps.deploy.outputs.candidate_url }}" \
+            --ai-url "${{ steps.deploy.outputs.ai_url }}" \
+            --environment production
+
+      - name: Trafiği aday revizyona taşı
+        run: |
+          gcloud run services update-traffic "emek-production-api" \
+            --project "${{ vars.PRODUCTION_PROJECT_ID }}" \
+            --region "${{ env.REGION }}" \
+            --to-latest --quiet
+
+      - name: Başarısızlıkta aday revizyonu bırak
+        if: failure()
+        run: |
+          {
+            echo "## Production dağıtımı başarısız"
+            echo ""
+            echo "Aday revizyon oluşturuldu ama **trafik taşınmadı**: çalışan revizyon"
+            echo "etkilenmedi ve kullanıcılar etkilenmedi."
+            echo ""
+            echo "Migration çalışmış olabilir; şema geri alınmaz (deployment.md §4)."
+          } >> "$GITHUB_STEP_SUMMARY"

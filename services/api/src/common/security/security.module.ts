@@ -1,21 +1,28 @@
 import { Module } from '@nestjs/common';
-import { AUDIT_ARCHIVE } from '../audit/audit-archive.port';
+import { AUDIT_ARCHIVE, type AuditArchive } from '../audit/audit-archive.port';
 import { AuditVerificationService } from '../audit/audit-verification.service';
+import { GcsAuditArchive } from '../audit/gcs-audit-archive';
 import { MemoryAuditArchive } from '../audit/memory-audit-archive';
+import { AppConfigService } from '../config/app-config.service';
 import { RetentionService } from '../retention/retention.service';
 import { SecurityMaintenanceService } from './security-maintenance.service';
 
 /**
- * Faz 12 güvenlik bakım modülü: audit zinciri doğrulaması + retention.
+ * Güvenlik bakım modülü: audit zinciri doğrulaması + retention + arşiv.
  *
- * Arşiv olarak yalnızca bellek uygulaması bağlıdır. Gerçek GCS arşivi ve onun
- * bucket retention policy'si **Faz 13**'e aittir (Terraform ile sağlanır, R-82);
- * production config'i dışa aktarımı bellek arşiviyle birlikte reddeder, yani
- * burada "üretimde çalışıyor" iddiası yoktur.
+ * Arşiv sağlayıcısı yapılandırmadan seçilir (Faz 13, R-82): geliştirmede bellek,
+ * production'da GCS. Production config'i `memory`yi reddeder — bellekteki bir arşiv
+ * "veritabanından bağımsız kopya" iddiasını taşıyamaz.
  */
 @Module({
   providers: [
-    { provide: AUDIT_ARCHIVE, useClass: MemoryAuditArchive },
+    MemoryAuditArchive,
+    {
+      provide: AUDIT_ARCHIVE,
+      inject: [AppConfigService, MemoryAuditArchive],
+      useFactory: (config: AppConfigService, memory: MemoryAuditArchive): AuditArchive =>
+        config.env.AUDIT_ARCHIVE_PROVIDER === 'gcs' ? GcsAuditArchive.create(config) : memory,
+    },
     AuditVerificationService,
     RetentionService,
     SecurityMaintenanceService,

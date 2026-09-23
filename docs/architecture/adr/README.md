@@ -25,3 +25,7 @@ Bir ADR'yi değiştirmek için ADR silinmez: `Superseded by ADR-XXXX` olarak iş
 | [0017](0017-payment-data-model.md)                | Ödeme veri modeli: canlı ödeme, giden komut, kısmi iade          | Accepted | 5     |
 | [0018](0018-matching-decision-chain.md)           | Faz 7 karar zinciri: aday havuzu core'da, optimizasyon AI'da     | Accepted | 7     |
 | [0019](0019-safety-domain.md)                     | Faz 8 safety: oturum booking'i izler, panik yalnızca DB'ye bağlı | Accepted | 8     |
+| [0020](0020-event-consumer-runner.md)             | Topic başına tek subscription, runner içi dispatch               | Accepted | 9     |
+| [0021](0021-analytics-bigquery-pipeline.md)       | BigQuery export pipeline ve ödeme mutabakatı                     | Accepted | 11    |
+| [0022](0022-security-hardening.md)                | Guard sırası, proxy güveni, App Check, retention                 | Accepted | 12    |
+| [0023](0023-deployment-topology.md)               | Dağıtım topolojisi, keyless CI/CD, migration/rollback sırası     | Accepted | 13    |

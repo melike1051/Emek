@@ -14,7 +14,16 @@ export { REDIS_CLIENT } from './redis.tokens';
       provide: REDIS_CLIENT,
       inject: [AppConfigService, ROOT_LOGGER],
       useFactory: (config: AppConfigService, logger: Logger): Redis => {
+        // Memorystore aktarım şifrelemesi (`SERVER_AUTHENTICATION`) **kendi**
+        // CA'sını sunar; bu sertifika public güven deposunda yoktur. CA verilmezse
+        // `rediss://` el sıkışması doğrulamada düşer ve readiness sonsuza kadar
+        // "redis down" raporlar — yani yeni revizyon hiç hazır olmaz.
+        // `rejectUnauthorized: false` ile geçmek şifrelemeyi korur ama sunucu
+        // kimliğini doğrulamaz; o yüzden CA açıkça yapılandırılır (ADR-0023).
+        const caCertificate = config.env.REDIS_CA_CERT;
+
         const client = new Redis(config.env.REDIS_URL, {
+          ...(caCertificate === undefined ? {} : { tls: { ca: [caCertificate] } }),
           // Bağlantı kurulurken gelen komutlar kısa süre kuyruğa alınır. Kuyruk kapalı
           // olursa (enableOfflineQueue: false) bağlantı hazır olmadan gelen İLK komut
           // reddedilir ve Redis ayaktayken bile "down" raporlanır.

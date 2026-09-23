@@ -1,0 +1,62 @@
+# Terraform doğrulaması.
+#
+# `plan` **çalıştırılmaz**: gerçek bir GCP projesi ve state erişimi gerektirir ve
+# kimlik bilgisi olmadan çalıştırılamaz. `fmt` + `validate` kimlik bilgisi
+# gerektirmez ve sözdizimi/şema hatalarını, sağlayıcı sürüm uyuşmazlıklarını ve
+# eksik değişkenleri yakalar. Plan, dağıtım hattında (deploy.yml) kimlikle çalışır.
+
+name: Terraform
+
+on:
+  push:
+    branches: [main]
+    paths: ['infra/terraform/**', '.github/workflows/terraform.yml']
+  pull_request:
+    paths: ['infra/terraform/**', '.github/workflows/terraform.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: terraform-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: fmt + validate
+    runs-on: ubuntu-latest
+    # Fork PR'ları dışarıda bırakılır: `terraform init` PR'ın kontrol ettiği
+    # `required_providers`/lock dosyasına göre sağlayıcı **binary'si indirip
+    # çalıştırır**. Sır ve yazma yetkisi olmadığı için etki sınırlı, ama
+    # güvenilmeyen girdiden kod yürütmek gereksiz bir yüzeydir.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [staging, production]
+
+    defaults:
+      run:
+        working-directory: infra/terraform/envs/${{ matrix.environment }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.13.3'
+          terraform_wrapper: false
+
+      - name: Format check (tüm ağaç)
+        working-directory: infra/terraform
+        run: terraform fmt -recursive -check -diff
+
+      # `-backend=false`: state'e hiç dokunulmaz, yalnızca sağlayıcılar indirilir.
+      - name: Init (backend olmadan)
+        run: terraform init -backend=false -input=false
+
+      - name: Validate
+        run: terraform validate

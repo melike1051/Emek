@@ -6,7 +6,7 @@ import { UnitOfWork } from '../common/database/unit-of-work';
 import { BusinessException } from '../common/errors/business.exception';
 import { ErrorCode } from '../common/errors/error-codes';
 import { EventType, OutboxService } from '../common/outbox/outbox.service';
-import { STORAGE_PROVIDER, type StorageProvider } from './storage.port';
+import { StorageError, STORAGE_PROVIDER, type StorageProvider } from './storage.port';
 
 export const DOCUMENT_TYPES = [
   'BEFORE_PHOTO',
@@ -91,6 +91,30 @@ export class DocumentsService {
     private readonly config: AppConfigService,
     @Inject(STORAGE_PROVIDER) private readonly storage: StorageProvider,
   ) {}
+
+  /**
+   * `statObject`'in boyut sınırını aşan nesne için ürettiği `OBJECT_TOO_LARGE`,
+   * istemcinin gördüğü aynı doğrulama hatasına çevrilir.
+   *
+   * Adapter sınırı aşan nesneyi **okumadan** reddeder (indirip hash'lemek, yükleme
+   * sınırını bant genişliği saldırısına çevirirdi); ama bu istemci açısından hâlâ
+   * "dosya çok büyük"tür, 500 değil.
+   */
+  private async statOrTooLarge(
+    storageKey: string,
+  ): Promise<{ sha256: string; sizeBytes: number } | null> {
+    try {
+      return await this.storage.statObject(storageKey);
+    } catch (error: unknown) {
+      if (error instanceof StorageError && error.code === 'OBJECT_TOO_LARGE') {
+        throw new BusinessException(ErrorCode.VALIDATION_FAILED, {
+          clientMessage: 'Dosya boyutu sınırı aşıyor.',
+          details: { maxBytes: this.config.env.STORAGE_MAX_UPLOAD_BYTES },
+        });
+      }
+      throw error;
+    }
+  }
 
   async register(input: {
     userId: string;
@@ -178,7 +202,7 @@ export class DocumentsService {
         throw new BusinessException(ErrorCode.DOCUMENT_ALREADY_UPLOADED);
       }
 
-      const stat = await this.storage.statObject(row.storage_key);
+      const stat = await this.statOrTooLarge(row.storage_key);
       if (stat === null) {
         throw new BusinessException(ErrorCode.DOCUMENT_NOT_FOUND, {
           clientMessage: 'Dosya storage.da bulunamadı, yükleme tamamlanmamış olabilir.',
@@ -193,7 +217,8 @@ export class DocumentsService {
       // İmzalı URL'e eklenen `x-max-bytes` başlığı bir niyet beyanıdır: gerçek GCS
       // imzalı PUT'ta keyfi bir başlık boyut sınırı uygulamaz. Sunucu tarafındaki bu
       // kontrol olmadan sınır, storage adapter'ı değiştiğinde sessizce buharlaşırdı.
-      // TODO(faz-13): GCS'te bucket seviyesinde de sınır/politika uygulanacak (R-41).
+      // GCS adapter'ı sınırı aşan nesneyi hiç okumaz (`OBJECT_TOO_LARGE`) — aşağıdaki
+      // kontrol yine de kalır: sınır tek bir adapter'ın davranışına bağlı olmamalı (R-41).
       if (stat.sizeBytes > this.config.env.STORAGE_MAX_UPLOAD_BYTES) {
         throw new BusinessException(ErrorCode.VALIDATION_FAILED, {
           clientMessage: 'Dosya boyutu sınırı aşıyor.',

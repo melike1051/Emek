@@ -1,5 +1,8 @@
 # CI: lint → typecheck → unit → integration → build + güvenlik taramaları.
-# Image push ve deploy adımları Faz 13'te eklenir.
+#
+# Bu workflow `deploy.yml` tarafından da çağrılır (`workflow_call`): dağıtım
+# hattı **aynı** kalite kapılarını yeniden tanımlamaz, bu dosyayı kullanır.
+# İkinci bir kopya, zamanla birinden gevşeyen bir kapı demekti.
 #
 # Not: GitHub workflow'ları .github/workflows altında olmak zorundadır (platform kısıtı);
 # infra/github-actions ise paylaşılan composite action ve yardımcı script'ler içindir.
@@ -10,6 +13,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_call:
 
 # Varsayılan token yetkisi en aza indirilir: CI yalnızca kodu okur.
 permissions:

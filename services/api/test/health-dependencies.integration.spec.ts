@@ -1,6 +1,24 @@
 import Redis from 'ioredis';
 import { Pool } from 'pg';
+import type { AppConfigService } from '../src/common/config/app-config.service';
 import { HealthService } from '../src/health/health.service';
+
+/** Bu test bağımlılık kontrollerini ölçer; sağlayıcı raporu sabit tutulur. */
+const config = {
+  env: {
+    NODE_ENV: 'test',
+    STORAGE_PROVIDER: 'mock',
+    IDENTITY_HASH_KEY_SOURCE: 'env',
+    EVENT_TRANSPORT_TYPE: 'logging',
+    PUBSUB_EMULATOR_HOST: undefined,
+    AUDIT_ARCHIVE_PROVIDER: 'memory',
+    BIGQUERY_PROVIDER: 'mock',
+    IDENTITY_PROVIDER: 'mock',
+    PAYMENT_PROVIDER: 'mock',
+    AUTH_PROVIDER: 'mock',
+    APP_CHECK_ENABLED: false,
+  },
+} as unknown as AppConfigService;
 
 /**
  * Bağımlılık arızası davranışı. Gerçek istemcilerle, ulaşılamayan adreslere karşı çalışır:
@@ -34,7 +52,7 @@ describe('health dependency failures (integration)', () => {
 
     try {
       // İlk çağrı bilinçli olarak bağlantı kurulur kurulmaz yapılır: regresyon testi.
-      const report = await new HealthService(pool, redis).check();
+      const report = await new HealthService(pool, redis, config).check();
 
       expect(report.checks.redis.status).toBe('up');
       expect(report.status).toBe('ok');
@@ -56,7 +74,7 @@ describe('health dependency failures (integration)', () => {
     redis.on('error', () => undefined); // dinleyici olmadan 'error' süreci düşürür
 
     try {
-      const report = await new HealthService(pool, redis).check();
+      const report = await new HealthService(pool, redis, config).check();
 
       expect(report.status).toBe('degraded');
       expect(report.checks.redis.status).toBe('down');
@@ -84,7 +102,7 @@ describe('health dependency failures (integration)', () => {
 
     try {
       const startedAt = Date.now();
-      const report = await new HealthService(pool, redis).check();
+      const report = await new HealthService(pool, redis, config).check();
 
       expect(report.status).toBe('degraded');
       expect(report.checks.postgres.status).toBe('down');

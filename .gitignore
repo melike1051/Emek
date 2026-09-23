@@ -70,3 +70,16 @@ pgdata/
 # Logs
 *.log
 npm-debug.log*
+
+# --- Terraform (Faz 13) ---
+# Provider indirmeleri ve yerel state asla commit edilmez. `.terraform.lock.hcl`
+# **commit edilir**: sağlayıcı sürümünü ve hash'ini sabitler.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+# Gerçek değerler içerir; örnekleri `.example` uzantılıdır.
+backend.hcl
+*.auto.tfvars
+terraform.tfvars

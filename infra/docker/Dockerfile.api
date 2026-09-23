@@ -1,30 +1,61 @@
 # Emek core API (NestJS) — Cloud Run için stateless container.
 # Build context: repository kökü.
 #   docker build -f infra/docker/Dockerfile.api -t emek-api .
-# Production sertleştirmesi (distroless, SBOM, imza) Faz 13'te ele alınır.
+#
+# Cloud Run çalışma modeli (ADR-0023):
+# - Süreç `$PORT`'u dinler (Cloud Run enjekte eder); varsayılan 3000.
+# - SIGTERM'de Nest'in shutdown hook'ları çalışır (`bootstrap.ts` →
+#   `enableShutdownHooks`): Pub/Sub subscription'ları kapanır, pool boşaltılır.
+#   `node` PID 1 olarak çalışır ve sinyali doğrudan alır — araya kabuk girmez.
+# - Migration **başlangıçta çalışmaz**: şema değişikliği ayrı ve açık bir
+#   pipeline adımıdır (bkz. docs/architecture/deployment.md). Otomatik migration,
+#   eş zamanlı çalışan N instance'ın aynı anda şema değiştirmesi demektir.
 
 FROM node:22-bookworm-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 COPY services/api/package.json services/api/
-RUN npm ci
+COPY packages/api-contracts ./packages/api-contracts
+# `--ignore-scripts`: bağımlılıkların postinstall script'leri build makinesinde
+# çalıştırılmaz (tedarik zinciri yüzeyi). Emek'in bağımlılıkları saf JS'tir.
+RUN npm ci --ignore-scripts --no-audit --no-fund
 
 FROM node:22-bookworm-slim AS build
 WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+# Tüm /app kopyalanır: npm bazı bağımlılıkları workspace altına (services/api/node_modules)
+# yerleştirir ve yalnızca kök node_modules'ü kopyalamak sessizce eksik bir ağaç bırakır.
+COPY --from=deps /app /app
 COPY . .
 RUN npm run build --workspace=@emek/api
 
-FROM node:22-bookworm-slim AS runtime
-ENV NODE_ENV=production
+# Üretim bağımlılıkları ayrı bir aşamada kurulur: derleme araçları (tsc, jest,
+# ts-node) çalışan imaja hiç girmez.
+FROM node:22-bookworm-slim AS prod-deps
 WORKDIR /app
-
 COPY package.json package-lock.json ./
 COPY services/api/package.json services/api/
-RUN npm ci --omit=dev && npm cache clean --force
+COPY packages/api-contracts ./packages/api-contracts
+RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund && npm cache clean --force
+
+FROM node:22-bookworm-slim AS runtime
+
+ARG GIT_SHA=unknown
+LABEL org.opencontainers.image.title="emek-api" \
+      org.opencontainers.image.source="https://github.com/emek/emek" \
+      org.opencontainers.image.revision="${GIT_SHA}"
+
+ENV NODE_ENV=production \
+    PORT=3000 \
+    NPM_CONFIG_UPDATE_NOTIFIER=false
+WORKDIR /app
+
+COPY --from=prod-deps /app /app
 
 COPY --from=build /app/services/api/dist ./services/api/dist
+# Migration dosyaları imajda taşınır ama **çalıştırılmaz**: aynı imaj, ayrı bir
+# pipeline adımında migration koşucusu olarak da kullanılır (tek artefakt).
 COPY services/api/migrations ./services/api/migrations
+COPY services/api/scripts ./services/api/scripts
 
 # node imajının hazır non-root kullanıcısı; root olarak çalıştırılmaz.
 USER node

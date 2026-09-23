@@ -12,6 +12,8 @@ export const productionEnvFixture = {
   AUTH_PROVIDER: 'firebase',
   FIREBASE_PROJECT_ID: 'emek-production',
   IDENTITY_HASH_KEY_SOURCE: 'kms',
+  IDENTITY_KMS_KEY_NAME:
+    'projects/emek-production/locations/europe-west1/keyRings/emek/cryptoKeys/identity-hash/cryptoKeyVersions/1',
   IDENTITY_HASH_KEY: 'production-grade-identity-hash-key-value',
   IDENTITY_CALLBACK_SECRET: 'production-grade-callback-secret',
   PAYMENT_WEBHOOK_SECRET: 'production-grade-payment-webhook-secret',
@@ -26,4 +28,10 @@ export const productionEnvFixture = {
   FIREBASE_PROJECT_NUMBER: '123456789012',
   AUDIT_VERIFICATION_ENABLED: 'true',
   RETENTION_ENABLED: 'true',
+  // Faz 13 (ADR-0023): gerçek KMS/GCS/Pub/Sub sağlayıcıları bağlandı; production
+  // artık bellek arşivi veya 'logging' transport ile ayağa kalkamaz (R-39, R-82).
+  AUDIT_EXPORT_ENABLED: 'true',
+  AUDIT_ARCHIVE_PROVIDER: 'gcs',
+  AUDIT_ARCHIVE_BUCKET: 'emek-production-audit-archive',
+  EVENT_TRANSPORT_TYPE: 'pubsub',
 } as const;

@@ -12,20 +12,24 @@ import { AppConfigService } from '../common/config/app-config.service';
  *   anahtar değişirse aynı kişi farklı hash üretir ve tekillik sessizce bozulur.
  * - `hash_key_version` teşhis içindir (hangi kayıt hangi anahtarla üretildi), rotasyon için değil.
  *
- * Anahtar kaynağı porttur: yerelde ortam değişkeni, production'da KMS. Production'da
- * ortam değişkeni kaynağı **config seviyesinde reddedilir** (env.schema).
+ * **Port HMAC'in kendisidir, anahtar değil** (Faz 13, R-39). Önceki tasarım anahtar
+ * materyalini uygulamaya döndürüyordu; Cloud KMS MAC anahtarı non-exportable'dır ve
+ * zaten döndürülemez. Daha önemlisi: anahtarı süreç belleğine getirmek, KMS'i bir
+ * "secret store"a indirger — heap dump veya log, anahtarı sızdırır. Bu arayüzde
+ * uygulama yalnızca **mesajı** verir, MAC'i KMS hesaplar.
  */
 
-export interface IdentityHashKeyProvider {
+export interface IdentityMacProvider {
   readonly version: string;
-  key(): Promise<Buffer>;
+  /** Normalize edilmiş mesajın HMAC-SHA256 etiketini üretir. */
+  mac(message: Buffer): Promise<Buffer>;
 }
 
-export const IDENTITY_HASH_KEY_PROVIDER = Symbol('IDENTITY_HASH_KEY_PROVIDER');
+export const IDENTITY_MAC_PROVIDER = Symbol('IDENTITY_MAC_PROVIDER');
 
-/** Yerel geliştirme ve test: anahtar ortam değişkeninden gelir. */
+/** Yerel geliştirme ve test: anahtar ortam değişkeninden gelir, HMAC süreç içinde hesaplanır. */
 @Injectable()
-export class EnvIdentityHashKeyProvider implements IdentityHashKeyProvider {
+export class EnvIdentityMacProvider implements IdentityMacProvider {
   readonly version: string;
   private readonly material: Buffer;
 
@@ -34,38 +38,17 @@ export class EnvIdentityHashKeyProvider implements IdentityHashKeyProvider {
     this.version = `env:${config.env.IDENTITY_HASH_KEY_VERSION}`;
   }
 
-  async key(): Promise<Buffer> {
-    return this.material;
-  }
-}
-
-/**
- * Production anahtar kaynağı. Cloud KMS entegrasyonu Faz 13'te (Terraform ile anahtar
- * sağlandığında) yazılacak. Şimdilik açıkça başarısız olur — sessizce zayıf bir anahtara
- * düşmek, tekillik kontrolünü kâğıt üzerinde bırakırdı.
- *
- * TODO(faz-13): Cloud KMS MAC anahtarı ile imzalama.
- */
-@Injectable()
-export class KmsIdentityHashKeyProvider implements IdentityHashKeyProvider {
-  readonly version = 'kms:not-implemented';
-
-  async key(): Promise<Buffer> {
-    throw new Error(
-      'Cloud KMS identity hash anahtarı henüz bağlanmadı (Faz 13). ' +
-        'Production yapılandırması IDENTITY_HASH_KEY_SOURCE=kms ile başlatılamaz.',
-    );
+  async mac(message: Buffer): Promise<Buffer> {
+    return createHmac('sha256', this.material).update(message).digest();
   }
 }
 
 @Injectable()
 export class IdentityHasher {
-  constructor(
-    @Inject(IDENTITY_HASH_KEY_PROVIDER) private readonly keyProvider: IdentityHashKeyProvider,
-  ) {}
+  constructor(@Inject(IDENTITY_MAC_PROVIDER) private readonly macProvider: IdentityMacProvider) {}
 
   get keyVersion(): string {
-    return this.keyProvider.version;
+    return this.macProvider.version;
   }
 
   /**
@@ -81,8 +64,17 @@ export class IdentityHasher {
       throw new Error('kimlik referansı boş olamaz');
     }
 
-    const key = await this.keyProvider.key();
-    return createHmac('sha256', key).update(normalized, 'utf8').digest('hex');
+    const tag = await this.macProvider.mac(Buffer.from(normalized, 'utf8'));
+
+    // KMS HMAC-SHA256 32 baytlık etiket döner; başka bir uzunluk, anahtarın yanlış
+    // algoritmayla oluşturulduğu anlamına gelir ve sessizce kabul edilmemelidir.
+    if (tag.byteLength !== 32) {
+      throw new Error(
+        `kimlik MAC etiketi 32 bayt olmalı (HMAC-SHA256), ${tag.byteLength} bayt alındı`,
+      );
+    }
+
+    return tag.toString('hex');
   }
 
   /** Sabit zamanlı karşılaştırma: hash eşleşmesi zamanlama sızdırmamalı. */

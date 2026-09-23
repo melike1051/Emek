@@ -255,7 +255,7 @@ describe('validateEnv', () => {
   });
 
   // R-82: bellekteki arşiv süreç yeniden başladığında kaybolur; "bağımsız kopya"
-  // iddiasını taşıyamaz. Gerçek GCS arşivi Faz 13'te gelir.
+  // iddiasını taşıyamaz.
   it('production ortamında bellek arşiviyle audit dışa aktarımı reddedilir', () => {
     expect(() =>
       validateEnv({
@@ -265,5 +265,67 @@ describe('validateEnv', () => {
         AUDIT_ARCHIVE_PROVIDER: 'memory',
       }),
     ).toThrow(/AUDIT_ARCHIVE_PROVIDER/);
+  });
+
+  // --- Faz 13 (ADR-0023) ---
+
+  // R-82 kapanışı: arşiv artık gerçek. Dışa aktarımı kapalı bırakmak, doğrulanmış
+  // zincirin tek kopyasını yine veritabanında bırakırdı.
+  it('production ortamında audit dışa aktarımı zorunludur', () => {
+    expect(() =>
+      validateEnv({ ...baseEnv, ...productionEnv, AUDIT_EXPORT_ENABLED: 'false' }),
+    ).toThrow(/AUDIT_EXPORT_ENABLED/);
+  });
+
+  it('production ortamında gcs arşivi zorunludur', () => {
+    expect(() =>
+      validateEnv({
+        ...baseEnv,
+        ...productionEnv,
+        AUDIT_ARCHIVE_PROVIDER: 'memory',
+        AUDIT_EXPORT_ENABLED: 'false',
+      }),
+    ).toThrow(/AUDIT_ARCHIVE_PROVIDER/);
+  });
+
+  it('gcs arşivi bucket adı olmadan yapılandırılamaz', () => {
+    const withoutBucket: Record<string, string> = { ...baseEnv, ...productionEnv };
+    delete withoutBucket.AUDIT_ARCHIVE_BUCKET;
+
+    expect(() => validateEnv(withoutBucket)).toThrow(/AUDIT_ARCHIVE_BUCKET/);
+  });
+
+  // 'logging' transport event'i hiçbir yere yayınlamaz ama outbox kaydını
+  // "yayınlandı" diye işaretler (ADR-0010).
+  it('production ortamında pubsub transport zorunludur', () => {
+    expect(() =>
+      validateEnv({ ...baseEnv, ...productionEnv, EVENT_TRANSPORT_TYPE: 'logging' }),
+    ).toThrow(/EVENT_TRANSPORT_TYPE/);
+  });
+
+  // R-39: KMS kaynağı seçilip anahtar adı verilmemesi, hatayı ilk kimlik
+  // doğrulamasına kadar saklardı.
+  it('kms anahtar kaynağı, anahtar adı olmadan yapılandırılamaz', () => {
+    const withoutKey: Record<string, string> = { ...baseEnv, ...productionEnv };
+    delete withoutKey.IDENTITY_KMS_KEY_NAME;
+
+    expect(() => validateEnv(withoutKey)).toThrow(/IDENTITY_KMS_KEY_NAME/);
+  });
+
+  // ADR-0004 §5: rotasyon yoktur. "primary" sürüme bırakmak, KMS tarafındaki bir
+  // değişikliğin aynı kişi için farklı hash üretmesine — yani tekilliğin sessizce
+  // bozulmasına — izin verirdi.
+  it('kms anahtar adı sürüm içermek zorundadır', () => {
+    expect(() =>
+      validateEnv({
+        ...baseEnv,
+        ...productionEnv,
+        IDENTITY_KMS_KEY_NAME: 'projects/p/locations/l/keyRings/r/cryptoKeys/identity-hash',
+      }),
+    ).toThrow(/IDENTITY_KMS_KEY_NAME/);
+  });
+
+  it('geçerli production yapılandırması kabul edilir', () => {
+    expect(() => validateEnv({ ...baseEnv, ...productionEnv })).not.toThrow();
   });
 });

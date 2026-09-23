@@ -2,7 +2,7 @@
   "name": "emek",
   "version": "0.1.0",
   "private": true,
-  "description": "Emek \u2014 iki tarafl\u0131 dijital hizmet pazaryeri platformu",
+  "description": "Emek — iki taraflı dijital hizmet pazaryeri platformu",
   "engines": {
     "node": ">=20.11.0"
   },
@@ -26,12 +26,14 @@
     "migrate:up": "npm run migrate:up --workspace=@emek/api",
     "migrate:down": "npm run migrate:down --workspace=@emek/api",
     "audit:deps": "npm audit --audit-level=high",
-    "sast": "semgrep --error --metrics=off --config p/typescript --config p/security-audit --config p/secrets --exclude node_modules --exclude dist . && semgrep --error --metrics=off --config .semgrep.yml ."
+    "sast": "semgrep --error --metrics=off --config p/typescript --config p/security-audit --config p/secrets --exclude node_modules --exclude dist . && semgrep --error --metrics=off --config .semgrep.yml .",
+    "smoke": "tsx services/api/scripts/smoke-test.ts"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "eslint": "^10.11.0",
     "prettier": "^3.4.2",
+    "tsx": "^4.23.0",
     "typescript": "^6.0.0",
     "typescript-eslint": "^8.70.0"
   },

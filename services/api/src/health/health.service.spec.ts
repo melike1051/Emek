@@ -1,6 +1,24 @@
 import type Redis from 'ioredis';
 import type { Pool } from 'pg';
+import type { AppConfigService } from '../common/config/app-config.service';
 import { HealthService } from './health.service';
+
+/** Health yalnızca sağlayıcı **türlerini** raporlar; bu taklit onları sabitler. */
+const config = {
+  env: {
+    NODE_ENV: 'test',
+    STORAGE_PROVIDER: 'mock',
+    IDENTITY_HASH_KEY_SOURCE: 'env',
+    EVENT_TRANSPORT_TYPE: 'logging',
+    PUBSUB_EMULATOR_HOST: undefined,
+    AUDIT_ARCHIVE_PROVIDER: 'memory',
+    BIGQUERY_PROVIDER: 'mock',
+    IDENTITY_PROVIDER: 'mock',
+    PAYMENT_PROVIDER: 'mock',
+    AUTH_PROVIDER: 'mock',
+    APP_CHECK_ENABLED: false,
+  },
+} as unknown as AppConfigService;
 
 /** Sorgu metnine göre davranan bir Pool taklidi: postgres ve postgis kontrolleri ayırt edilebilir. */
 function createPool(behavior: {
@@ -26,7 +44,7 @@ describe('HealthService', () => {
     const { pool } = createPool({});
     const { redis } = createRedis();
 
-    const report = await new HealthService(pool, redis).check();
+    const report = await new HealthService(pool, redis, config).check();
 
     expect(report.status).toBe('ok');
     expect(report.checks.postgres.status).toBe('up');
@@ -38,7 +56,7 @@ describe('HealthService', () => {
     const { pool } = createPool({});
     const { redis } = createRedis(() => Promise.reject(new Error('ECONNREFUSED')));
 
-    const report = await new HealthService(pool, redis).check();
+    const report = await new HealthService(pool, redis, config).check();
 
     expect(report.status).toBe('degraded');
     expect(report.checks.redis.status).toBe('down');
@@ -52,7 +70,7 @@ describe('HealthService', () => {
     });
     const { redis } = createRedis();
 
-    const report = await new HealthService(pool, redis).check();
+    const report = await new HealthService(pool, redis, config).check();
 
     expect(report.status).toBe('degraded');
     expect(report.checks.postgres.status).toBe('up');
@@ -66,7 +84,7 @@ describe('HealthService', () => {
     });
     const { redis } = createRedis();
 
-    const report = await new HealthService(pool, redis).check();
+    const report = await new HealthService(pool, redis, config).check();
 
     expect(report.checks.postgres.status).toBe('down');
     expect(report.checks.postgis.status).toBe('down');
@@ -78,7 +96,7 @@ describe('HealthService', () => {
       Promise.reject(new Error('ECONNREFUSED 10.1.2.3:6379 user=admin')),
     );
 
-    const report = await new HealthService(pool, redis).check();
+    const report = await new HealthService(pool, redis, config).check();
 
     expect(report.checks.redis.reason).toBe('unreachable');
     expect(JSON.stringify(report)).not.toContain('10.1.2.3');
@@ -89,7 +107,7 @@ describe('HealthService', () => {
     const { pool } = createPool({});
     const { redis } = createRedis(() => new Promise(() => undefined));
 
-    const report = await new HealthService(pool, redis).check();
+    const report = await new HealthService(pool, redis, config).check();
 
     expect(report.checks.redis.status).toBe('down');
     expect(report.checks.redis.reason).toBe('timeout');
@@ -98,7 +116,7 @@ describe('HealthService', () => {
   it('kısa aralıklı tekrar çağrılarda bağımlılıklar yeniden yoklanmaz', async () => {
     const { pool, query } = createPool({});
     const { redis, ping } = createRedis();
-    const service = new HealthService(pool, redis);
+    const service = new HealthService(pool, redis, config);
 
     await service.check();
     await service.check();
@@ -111,10 +129,39 @@ describe('HealthService', () => {
   it('eşzamanlı çağrılar tek yoklama turunu paylaşır', async () => {
     const { pool, query } = createPool({});
     const { redis } = createRedis();
-    const service = new HealthService(pool, redis);
+    const service = new HealthService(pool, redis, config);
 
     await Promise.all([service.check(), service.check(), service.check()]);
 
     expect(query).toHaveBeenCalledTimes(2);
+  });
+
+  // Deploy sonrası asıl soru "200 mü döndü" değil, "doğru sağlayıcılarla mı ayağa
+  // kalktı"dır: mock storage ile çalışan bir ortam da 200 döner (Faz 13 smoke testi).
+  // Kimliksiz erişilebilen bir uçta commit SHA'sı yayınlamak, saldırgana hedefin
+  // tam kod sürümünü verirdi (Faz 13 güvenlik review'u, M-2).
+  it('çalışan sürümü dışarı vermez', async () => {
+    const { pool } = createPool({});
+    const { redis } = createRedis();
+
+    const report = await new HealthService(pool, redis, config).check();
+
+    expect(JSON.stringify(report)).not.toContain('revision');
+  });
+
+  it('etkin sağlayıcı türlerini raporlar', async () => {
+    const { pool } = createPool({});
+    const { redis } = createRedis();
+
+    const report = await new HealthService(pool, redis, config).check();
+
+    expect(report.providers).toMatchObject({
+      storage: 'mock',
+      eventTransport: 'logging',
+      pubsubEmulator: false,
+      auditArchive: 'memory',
+      identityHashKeySource: 'env',
+      appCheckEnabled: false,
+    });
   });
 });

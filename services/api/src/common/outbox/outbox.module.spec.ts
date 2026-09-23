@@ -30,10 +30,25 @@ describe('createEventTransport', () => {
     expect(transport).toBeInstanceOf(PubSubEventTransport);
   });
 
+  // Faz 13'ten beri config katmanı production'da 'logging' transport'u zaten
+  // reddediyor. Runtime guard yine de test edilir: iki katman birbirinin yedeğidir
+  // ve config'in ileride gevşetilmesi bu güvenceyi sessizce kaldırmamalı.
   it('production + EVENT_TRANSPORT_TYPE=logging (pubsub client yok) fırlatır', () => {
+    const config = configWith({ ...baseEnv, ...productionEnv });
+    const withLoggingTransport = new AppConfigService({
+      ...config.env,
+      EVENT_TRANSPORT_TYPE: 'logging',
+    });
+
+    expect(() => createEventTransport(withLoggingTransport, logger, null)).toThrow(
+      /EVENT_TRANSPORT_TYPE must be pubsub in production/,
+    );
+  });
+
+  it('config katmanı production + logging kombinasyonunu zaten reddeder', () => {
     expect(() =>
-      createEventTransport(configWith({ ...baseEnv, ...productionEnv }), logger, null),
-    ).toThrow(/EVENT_TRANSPORT_TYPE must be pubsub in production/);
+      validateEnv({ ...baseEnv, ...productionEnv, EVENT_TRANSPORT_TYPE: 'logging' }),
+    ).toThrow(/EVENT_TRANSPORT_TYPE/);
   });
 
   it('production + EVENT_TRANSPORT_TYPE=pubsub (pubsub client var) fırlatmaz', () => {

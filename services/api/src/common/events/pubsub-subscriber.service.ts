@@ -35,10 +35,12 @@ export class PubSubSubscriberService implements OnApplicationBootstrap, OnApplic
     @Inject(ROOT_LOGGER) private readonly logger: Logger,
   ) {}
 
-  onApplicationBootstrap(): void {
+  async onApplicationBootstrap(): Promise<void> {
     if (this.pubsub === null) {
       return;
     }
+
+    await this.assertSubscriptionsExist();
 
     for (const topic of ALL_TOPICS) {
       const subscriptionName = coreSubscriptionNameFor(topic);
@@ -58,6 +60,47 @@ export class PubSubSubscriberService implements OnApplicationBootstrap, OnApplic
       { topics: ALL_TOPICS, subscriptionCount: this.subscriptions.length },
       'Pub/Sub subscriber başlatıldı',
     );
+  }
+
+  /**
+   * Beklenen subscription'ların gerçekten var olduğunu doğrular (Faz 13).
+   *
+   * Pub/Sub istemcisi olmayan bir subscription'a sessizce abone olur: `message`
+   * olayı hiç gelmez ve servis "event tüketiyor" görünürken hiçbir şey tüketmez.
+   * Terraform topolojiyi kurar; burada kurulduğu doğrulanır.
+   *
+   * Ayrım bilinçli: **yok** olan bir subscription yapılandırma hatasıdır ve boot'u
+   * durdurur. Kontrolün kendisi hata verirse (geçici API arızası) yalnızca uyarı
+   * yazılır — geçici bir arızada crash-loop'a girmek, çalışan revizyonu da götürürdü.
+   */
+  private async assertSubscriptionsExist(): Promise<void> {
+    if (this.pubsub === null) {
+      return;
+    }
+
+    const missing: string[] = [];
+
+    for (const topic of ALL_TOPICS) {
+      const subscriptionName = coreSubscriptionNameFor(topic);
+      try {
+        const [exists] = await this.pubsub.subscription(subscriptionName).exists();
+        if (!exists) {
+          missing.push(subscriptionName);
+        }
+      } catch (error: unknown) {
+        this.logger.warn(
+          { err: error, subscriptionName },
+          'Pub/Sub subscription varlığı doğrulanamadı',
+        );
+      }
+    }
+
+    if (missing.length > 0) {
+      throw new Error(
+        `Pub/Sub subscription bulunamadı: ${missing.join(', ')} — ` +
+          'topoloji Terraform ile kurulmalı (ADR-0010 §8)',
+      );
+    }
   }
 
   async onApplicationShutdown(): Promise<void> {
