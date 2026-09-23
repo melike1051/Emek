@@ -100,6 +100,28 @@ export class DisputesService {
     private readonly bookingState: BookingStateService,
   ) {}
 
+  /** Admin izleme listesi (Faz 10). Sahiplik kapısı yoktur — operasyon triyajı. */
+  async listForAdmin(filter: {
+    status?: DisputeStatus;
+    limit: number;
+    before?: { createdAt: Date; id: string };
+  }): Promise<Dispute[]> {
+    const rows = await this.uow.query<DisputeRow>(
+      `${SELECT_DISPUTE}
+        WHERE ($1::dispute_status IS NULL OR status = $1)
+          AND ($2::timestamptz IS NULL OR (created_at, id) < ($2, $3))
+        ORDER BY created_at DESC, id DESC
+        LIMIT $4`,
+      [
+        filter.status ?? null,
+        filter.before?.createdAt ?? null,
+        filter.before?.id ?? null,
+        filter.limit,
+      ],
+    );
+    return rows.map(toDispute);
+  }
+
   async open(input: {
     bookingId: string;
     userId: string;

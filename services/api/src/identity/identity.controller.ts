@@ -8,15 +8,23 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
   Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
-import { CurrentUser, Public, type AuthenticatedUser } from '../auth/auth.decorators';
+import { CurrentUser, Public, Roles, type AuthenticatedUser } from '../auth/auth.decorators';
 import { BusinessException } from '../common/errors/business.exception';
 import { ErrorCode } from '../common/errors/error-codes';
+import { clampLimit, decodeCursor, paginate } from '../common/pagination/cursor';
 import { RateLimit } from '../common/ratelimit/rate-limit.decorator';
 import {
+  ApproveRecoveryDto,
   IdentityStatusResponseDto,
+  RecoveryDecisionResponseDto,
+  RecoveryQueueQueryDto,
+  RecoveryQueueResponseDto,
+  RecoveryRequestResponseDto,
+  RejectRecoveryDto,
   StartVerificationDto,
   StartVerificationResponseDto,
   VerificationAttemptResponseDto,
@@ -118,5 +126,64 @@ export class IdentityController {
       verifiedAt: status.record?.verifiedAt?.toISOString() ?? null,
       provider: status.record?.verificationProvider ?? null,
     };
+  }
+
+  // --- Admin: hesap kurtarma kuyruğu (Faz 10) ---
+
+  /**
+   * Kurtarma kuyruğu. SUPPORT okuyabilir (triyaj), yalnızca ADMIN karar verebilir
+   * (ADR-0013 §4 — safety operatör uçlarıyla aynı okuma/karar ayrımı).
+   */
+  @Get('recovery-requests')
+  @Roles('ADMIN', 'SUPPORT')
+  async recoveryQueue(@Query() query: RecoveryQueueQueryDto): Promise<RecoveryQueueResponseDto> {
+    const limit = clampLimit(query.limit);
+    const cursor = decodeCursor(query.cursor);
+    const rows = await this.identity.listRecoveryQueue({
+      status: query.status ?? 'PENDING_REVIEW',
+      limit: limit + 1,
+      ...(cursor !== null ? { before: cursor } : {}),
+    });
+    const page = paginate(rows, limit, (row) => ({ createdAt: row.createdAt, id: row.id }));
+    return {
+      items: page.items.map(RecoveryRequestResponseDto.from),
+      nextCursor: page.nextCursor,
+    };
+  }
+
+  /**
+   * Onay: oturum kimliğini kanonik hesaba taşır. Devralma senaryosu nedeniyle
+   * (bkz. `IdentityService.approveRecovery`) **yalnızca** operatör tetikleyebilir.
+   */
+  @Post('recovery-requests/:id/approve')
+  @Roles('ADMIN')
+  @HttpCode(HttpStatus.OK)
+  async approveRecovery(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ApproveRecoveryDto,
+  ): Promise<RecoveryDecisionResponseDto> {
+    const result = await this.identity.approveRecovery({
+      requestId: id,
+      actorUserId: user.id,
+      ...(dto.reason !== undefined ? { reason: dto.reason } : {}),
+    });
+    return { recoveredUserId: result.recoveredUserId, status: 'APPROVED' };
+  }
+
+  @Post('recovery-requests/:id/reject')
+  @Roles('ADMIN')
+  @HttpCode(HttpStatus.OK)
+  async rejectRecovery(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RejectRecoveryDto,
+  ): Promise<RecoveryDecisionResponseDto> {
+    await this.identity.rejectRecovery({
+      requestId: id,
+      actorUserId: user.id,
+      reason: dto.reason,
+    });
+    return { status: 'REJECTED' };
   }
 }

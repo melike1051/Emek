@@ -8,14 +8,18 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
   Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { CurrentUser, Public, Roles, type AuthenticatedUser } from '../auth/auth.decorators';
 import { BusinessException } from '../common/errors/business.exception';
 import { ErrorCode } from '../common/errors/error-codes';
+import { clampLimit, decodeCursor, paginate } from '../common/pagination/cursor';
 import { RateLimit } from '../common/ratelimit/rate-limit.decorator';
 import {
+  AdminPaymentListResponseDto,
+  AdminPaymentQueryDto,
   PaymentIntentResponseDto,
   PaymentResponseDto,
   PaymentWebhookResponseDto,
@@ -56,6 +60,22 @@ export class PaymentsController {
       throw new BusinessException(ErrorCode.NOT_FOUND);
     }
     return PaymentResponseDto.from(payment);
+  }
+
+  /** Admin izleme listesi. Sahiplik kapısı yoktur — bkz. `PaymentsRepository.listForAdmin`. */
+  @Get('payments/admin')
+  @Roles('ADMIN', 'SUPPORT')
+  async adminList(@Query() query: AdminPaymentQueryDto): Promise<AdminPaymentListResponseDto> {
+    const limit = clampLimit(query.limit);
+    const cursor = decodeCursor(query.cursor);
+    const rows = await this.payments.listForAdmin({
+      ...(query.status !== undefined ? { status: query.status } : {}),
+      ...(query.bookingId !== undefined ? { bookingId: query.bookingId } : {}),
+      limit: limit + 1,
+      ...(cursor !== null ? { before: cursor } : {}),
+    });
+    const page = paginate(rows, limit, (row) => ({ createdAt: row.createdAt, id: row.id }));
+    return { items: page.items.map(PaymentResponseDto.from), nextCursor: page.nextCursor };
   }
 
   /**

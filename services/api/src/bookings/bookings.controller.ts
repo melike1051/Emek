@@ -7,13 +7,17 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
 } from '@nestjs/common';
-import { CurrentUser, type AuthenticatedUser } from '../auth/auth.decorators';
+import { CurrentUser, Roles, type AuthenticatedUser } from '../auth/auth.decorators';
 import { BusinessException } from '../common/errors/business.exception';
 import { ErrorCode } from '../common/errors/error-codes';
+import { clampLimit, decodeCursor, paginate } from '../common/pagination/cursor';
 import { RateLimit } from '../common/ratelimit/rate-limit.decorator';
 import { BookingsService } from './bookings.service';
 import {
+  AdminBookingListResponseDto,
+  AdminBookingQueryDto,
   BookingHistoryResponseDto,
   BookingResponseDto,
   CancelBookingDto,
@@ -48,6 +52,26 @@ export class BookingsController {
   async list(@CurrentUser() user: AuthenticatedUser): Promise<BookingResponseDto[]> {
     const bookings = await this.bookings.listForUser(user.id);
     return bookings.map(BookingResponseDto.from);
+  }
+
+  /**
+   * Admin izleme listesi. `:id` rotasından **önce** tanımlanmalı: aksi halde
+   * `/bookings/admin` isteği `:id = "admin"` olarak yakalanır.
+   */
+  @Get('admin')
+  @Roles('ADMIN', 'SUPPORT')
+  async adminList(@Query() query: AdminBookingQueryDto): Promise<AdminBookingListResponseDto> {
+    const limit = clampLimit(query.limit);
+    const cursor = decodeCursor(query.cursor);
+    const rows = await this.bookings.listForAdmin({
+      ...(query.status !== undefined ? { status: query.status } : {}),
+      ...(query.customerId !== undefined ? { customerId: query.customerId } : {}),
+      ...(query.providerId !== undefined ? { providerId: query.providerId } : {}),
+      limit: limit + 1,
+      ...(cursor !== null ? { before: cursor } : {}),
+    });
+    const page = paginate(rows, limit, (row) => ({ createdAt: row.createdAt, id: row.id }));
+    return { items: page.items.map(BookingResponseDto.from), nextCursor: page.nextCursor };
   }
 
   @Get(':id')

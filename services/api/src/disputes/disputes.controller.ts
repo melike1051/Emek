@@ -7,15 +7,38 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
 } from '@nestjs/common';
 import { CurrentUser, Roles, type AuthenticatedUser } from '../auth/auth.decorators';
+import { clampLimit, decodeCursor, paginate } from '../common/pagination/cursor';
 import { RateLimit } from '../common/ratelimit/rate-limit.decorator';
 import { DisputesService } from './disputes.service';
-import { DisputeResponseDto, OpenDisputeDto, ResolveDisputeDto } from './dto/dispute.dto';
+import {
+  AdminDisputeListResponseDto,
+  AdminDisputeQueryDto,
+  DisputeResponseDto,
+  OpenDisputeDto,
+  ResolveDisputeDto,
+} from './dto/dispute.dto';
 
 @Controller()
 export class DisputesController {
   constructor(private readonly disputes: DisputesService) {}
+
+  /** Admin izleme kuyruğu. Sahiplik kapısı yoktur — operasyon triyajı. */
+  @Get('disputes/admin')
+  @Roles('ADMIN', 'SUPPORT')
+  async adminList(@Query() query: AdminDisputeQueryDto): Promise<AdminDisputeListResponseDto> {
+    const limit = clampLimit(query.limit);
+    const cursor = decodeCursor(query.cursor);
+    const rows = await this.disputes.listForAdmin({
+      ...(query.status !== undefined ? { status: query.status } : {}),
+      limit: limit + 1,
+      ...(cursor !== null ? { before: cursor } : {}),
+    });
+    const page = paginate(rows, limit, (row) => ({ createdAt: row.createdAt, id: row.id }));
+    return { items: page.items.map(DisputeResponseDto.from), nextCursor: page.nextCursor };
+  }
 
   /** Uyuşmazlık açmak taraflara açıktır. */
   @Post('bookings/:id/disputes')

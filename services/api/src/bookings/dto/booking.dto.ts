@@ -1,5 +1,7 @@
 import { Type } from 'class-transformer';
 import { IsDate, IsIn, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { CursorQueryDto } from '../../common/pagination/cursor-query.dto';
+import { BOOKING_STATUSES, type BookingStatus } from '../state/booking-status';
 import type { Booking, BookingHistoryEntry } from '../bookings.service';
 
 export class CreateBookingDto {
@@ -78,4 +80,25 @@ export class BookingHistoryResponseDto {
       createdAt: entry.createdAt.toISOString(),
     };
   }
+}
+
+// --- Admin: rezervasyon izleme (Faz 10) ---
+
+export class AdminBookingQueryDto extends CursorQueryDto {
+  @IsOptional()
+  @IsIn(BOOKING_STATUSES)
+  status?: BookingStatus;
+
+  @IsOptional()
+  @IsUUID()
+  customerId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  providerId?: string;
+}
+
+export class AdminBookingListResponseDto {
+  items!: BookingResponseDto[];
+  nextCursor!: string | null;
 }

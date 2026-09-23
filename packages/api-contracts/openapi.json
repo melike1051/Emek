@@ -189,6 +189,18 @@
         "tags": ["Providers"]
       }
     },
+    "/api/v1/providers/me/submit": {
+      "post": {
+        "operationId": "ProvidersController_submit",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Providers"]
+      }
+    },
     "/api/v1/providers/me/skills": {
       "get": {
         "operationId": "ProvidersController_skills",
@@ -401,6 +413,122 @@
         "tags": ["Providers"]
       }
     },
+    "/api/v1/providers/queue": {
+      "get": {
+        "operationId": "ProvidersController_queue",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Providers"]
+      }
+    },
+    "/api/v1/providers/{userId}/approve": {
+      "post": {
+        "operationId": "ProvidersController_approve",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Providers"]
+      }
+    },
+    "/api/v1/providers/{userId}/reject": {
+      "post": {
+        "operationId": "ProvidersController_reject",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RejectProviderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Providers"]
+      }
+    },
+    "/api/v1/providers/{userId}/suspend": {
+      "post": {
+        "operationId": "ProvidersController_suspend",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuspendProviderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Providers"]
+      }
+    },
+    "/api/v1/providers/{userId}/reinstate": {
+      "post": {
+        "operationId": "ProvidersController_reinstate",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Providers"]
+      }
+    },
     "/api/v1/verification/session": {
       "post": {
         "operationId": "IdentityController_startSession",
@@ -460,6 +588,80 @@
       "get": {
         "operationId": "IdentityController_status",
         "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Identity"]
+      }
+    },
+    "/api/v1/verification/recovery-requests": {
+      "get": {
+        "operationId": "IdentityController_recoveryQueue",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Identity"]
+      }
+    },
+    "/api/v1/verification/recovery-requests/{id}/approve": {
+      "post": {
+        "operationId": "IdentityController_approveRecovery",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveRecoveryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Identity"]
+      }
+    },
+    "/api/v1/verification/recovery-requests/{id}/reject": {
+      "post": {
+        "operationId": "IdentityController_rejectRecovery",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RejectRecoveryDto"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": ""
@@ -601,6 +803,18 @@
       },
       "get": {
         "operationId": "BookingsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Bookings"]
+      }
+    },
+    "/api/v1/bookings/admin": {
+      "get": {
+        "operationId": "BookingsController_adminList",
         "parameters": [],
         "responses": {
           "200": {
@@ -775,6 +989,18 @@
         "tags": ["Payments"]
       }
     },
+    "/api/v1/payments/admin": {
+      "get": {
+        "operationId": "PaymentsController_adminList",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Payments"]
+      }
+    },
     "/api/v1/payments/{id}/release": {
       "post": {
         "operationId": "PaymentsController_release",
@@ -858,6 +1084,18 @@
           }
         },
         "tags": ["Payments"]
+      }
+    },
+    "/api/v1/disputes/admin": {
+      "get": {
+        "operationId": "DisputesController_adminList",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Disputes"]
       }
     },
     "/api/v1/bookings/{id}/disputes": {
@@ -1236,6 +1474,18 @@
         "tags": ["Matching"]
       }
     },
+    "/api/v1/matching/admin/stats": {
+      "get": {
+        "operationId": "MatchingController_stats",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Matching"]
+      }
+    },
     "/api/v1/bookings/{id}/safety-session": {
       "get": {
         "operationId": "SafetyController_sessionForBooking",
@@ -1435,6 +1685,18 @@
         "tags": ["Safety"]
       }
     },
+    "/api/v1/safety/operator/events": {
+      "get": {
+        "operationId": "SafetyController_listEvents",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Safety"]
+      }
+    },
     "/api/v1/safety/operator/sessions/{id}/evaluate": {
       "post": {
         "operationId": "SafetyController_evaluate",
@@ -1454,6 +1716,84 @@
           }
         },
         "tags": ["Safety"]
+      }
+    },
+    "/api/v1/ops/health": {
+      "get": {
+        "operationId": "OpsController_health",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Ops"]
+      }
+    },
+    "/api/v1/ops/dead-letter": {
+      "get": {
+        "operationId": "OpsController_listDeadLetters",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Ops"]
+      }
+    },
+    "/api/v1/ops/dead-letter/{id}/resolve": {
+      "post": {
+        "operationId": "OpsController_resolveDeadLetter",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Ops"]
+      }
+    },
+    "/api/v1/ops/notification-jobs": {
+      "get": {
+        "operationId": "OpsController_listNotificationJobs",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Ops"]
+      }
+    },
+    "/api/v1/ops/notification-jobs/{id}/retry": {
+      "post": {
+        "operationId": "OpsController_retryNotificationJob",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Ops"]
       }
     }
   },
@@ -1511,7 +1851,23 @@
         "type": "object",
         "properties": {}
       },
+      "RejectProviderDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "SuspendProviderDto": {
+        "type": "object",
+        "properties": {}
+      },
       "StartVerificationDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "ApproveRecoveryDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "RejectRecoveryDto": {
         "type": "object",
         "properties": {}
       },

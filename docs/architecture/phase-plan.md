@@ -590,14 +590,84 @@ Outbox/publisher/`processed_events` **Faz 2'de kuruldu**; bu fazda topoloji, con
 
 ---
 
-## Faz 10 — Admin / Operations (API)
+## Faz 10 — Admin / Operations (API) ✅
 
 **Kapsam:** verification queue; provider yönetimi/onayı; booking operasyonları; ödeme operasyonları;
 safety event yönetimi; dispute çözümü; matching analitiği; sistem sağlığı. Tüm admin aksiyonları
 audit'li ve en az yetki ilkesine göre yetkilendirilmiş. **Görsel panel yok (Faz 15).**
 
-**Exit:** her admin aksiyonu `audit_logs`'ta; SUPPORT rolü yıkıcı aksiyon yapamıyor (test);
-hassas veri erişimi loglanıyor.
+Faz 5/7/8'de payment release/refund/reauthorize, dispute resolve ve safety operatör uçları zaten
+`ADMIN`'e bağlanmıştı; Faz 10 bu temel üzerine **sekiz** alt kapsamı tamamladı:
+
+- **Identity:** `GET /verification/recovery-requests` (kuyruk) + `POST .../approve`, `/reject` —
+  `IdentityService.approveRecovery/rejectRecovery` (Faz 3'te yazılmış, hiç açılmamıştı) artık
+  `ADMIN` rolüne bağlı; `SUPPORT` okur, karar veremez.
+- **Provider onayı:** merkezî transition map (`provider-transitions.ts`, ADR-0006 deseniyle
+  aynı) — `DRAFT →(PROVIDER) PENDING_REVIEW →(ADMIN) APPROVED/REJECTED`, `REJECTED →(PROVIDER)`
+  yeniden başvuru, `APPROVED ⇄(ADMIN) SUSPENDED`. Önceden bu akış hiç yoktu (yalnızca `DRAFT`
+  oluşturma vardı) — bu alt kapsam sıfırdan yazıldı.
+- **Booking/ödeme/dispute operasyonları:** `GET /bookings/admin`, `/payments/admin`,
+  `/disputes/admin` — sahiplik kapısı olmadan durum/taraf filtresiyle izleme; keyset (cursor)
+  sayfalama (`common/pagination/cursor.ts`).
+- **Safety event yönetimi:** `GET /safety/operator/events` — Faz 8'in oturum merkezli
+  görünümünden bağımsız, `safety_events.seq` (global, monotonik) ile triyaj.
+- **Matching analitiği:** `GET /matching/admin/stats` — `matching_runs` üzerinden özet
+  (bozulma oranı, strateji dağılımı); ham skor bileşenleri hâlâ yalnızca `GET matching/runs/:id`'de
+  (T-19 gerekçesi korunuyor).
+- **Sistem sağlığı:** yeni `ops` modülü — `GET /ops/health` (outbox/DLQ/bildirim işi özeti),
+  `GET/POST /ops/dead-letter` (liste + operasyonel kapatma), `GET/POST /ops/notification-jobs`
+  (liste + `FAILED` → `PENDING` yeniden kuyruklama). `DeadLetterService`'e `list`/`resolve`
+  eklendi (Faz 9'da yalnızca `record`/`unresolvedCount` vardı).
+
+**Exit kriterleri (durum):**
+
+- ✅ Her admin aksiyonu (`approve`/`reject`/`suspend`/`reinstate`/DLQ `resolve`/bildirim `retry`)
+  `audit_logs`'a aynı transaction'da yazılıyor. DLQ/bildirim işi id'leri `BIGSERIAL`'dır —
+  `audit_logs.entity_id` UUID olduğundan bu iki aksiyon id'yi `entity_id` yerine `new_value`'da
+  taşıyor (aksi hâlde tip hatasıyla 500 dönerdi — geliştirme sırasında bulunup düzeltildi).
+- ✅ `SUPPORT` sekiz alt kapsamın hepsinde okuyabiliyor ama hiçbirinde karar/yazma aksiyonu
+  tetikleyemiyor (403) — `admin.integration.spec.ts` her alt kapsamda bunu ayrı test ediyor.
+  Booking/dispute/payment operasyonlarında yıkıcı aksiyon zaten Faz 4/5'te `resolveActor`/`@Roles`
+  ile `SUPPORT`'a kapalıydı; bu faz yalnızca izleme (read) yüzeyini ekledi.
+- ⚠️ **Hassas veri erişimi loglanıyor** kriteri, Faz 8'in `SAFETY_LOCATION_ACCESSED` desenini
+  (ham koordinat okuma → zorunlu `reason` + her okumada audit) genişletmedi: Faz 10'un yeni
+  liste uçları (booking/payment/dispute/DLQ/bildirim işi) event-catalog §1 gereği PII taşımayan
+  kayıtlardır ve booking/payment/dispute'un kendi taraf-görünümü zaten hiç audit'lenmiyordu —
+  bu yüzden per-read audit eklenmedi (var olan davranışla tutarlı). Gerçekten hassas tek okuma
+  (ham konum) zaten Faz 8'de kapatılmıştı.
+- ✅ 328 → **343 core unit** (cursor pagination + provider transition map testleri) ve
+  350 → **361 core integration** (18 → 19 suite, yeni `admin.integration.spec.ts` 11 senaryo);
+  migration değişikliği yok (tüm alt kapsamlar mevcut şemayı kullandı); lint/format/typecheck/build
+  temiz, `npm audit` 0; OpenAPI sözleşmesi yeniden üretildi (80 yol).
+
+**Geliştirme sırasında bulunan hatalar:**
+
+| Hata                                                                                            | Kök neden                                                                                         | Çözüm                                                                                                                  |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Kurtarma/sağlayıcı durum filtresi `enum = $1::text` ile 500 veriyordu                           | Postgres enum ile text arasında `=` operatörü yok; parametre değil, **kolon** metne çevrilmeliydi | `status::text = $1` / `state::text = $1` (diğer admin listelerinde enum'a cast edilen parametre deseni zaten doğruydu) |
+| DLQ/bildirim işi audit'i `entity_id` UUID sütununa `BIGSERIAL` id yazmaya çalışıp 500 veriyordu | `audit_logs.entity_id` UUID; bu iki varlığın kimliği sayısal                                      | `entityId` verilmiyor; id `newValue`'da taşınıyor                                                                      |
+| Kurtarma kuyruğu varsayılan olarak **tüm** durumları (yalnızca bekleyenleri değil) döndürüyordu | Controller `status` filtresini yalnızca istemci gönderdiğinde geçiyordu, varsayılan yoktu         | Provider kuyruğuyla aynı desen: `status ?? 'PENDING_REVIEW'`                                                           |
+| DLQ/bildirim işi id'si için geçersiz girdi (`"abc"`) ham Postgres tip hatasıyla 500 dönüyordu   | `@Param('id')` doğrulamasız string; id BIGSERIAL olduğu için `ParseUUIDPipe` de uygun değildi     | `ParseIntPipe` (bağımsız review bulgusu, aynı faz içinde kapatıldı)                                                    |
+
+**Bilinçli olarak kapsam dışı bırakılan / bir sonraki faza taşınan:**
+
+- **R-76 (kritik, açık):** `NotificationJobConsumer` `BookingCreated` dışındaki şablonlarda
+  gerçek alıcı yerine `bookingId`'yi `recipient_user_id`'ye yazıyor (Faz 9'dan kalma, kodda
+  zaten yorumla işaretliydi). Faz 10'un kapsamı admin **görünürlüğü** ve manuel yeniden
+  kuyruklamaydı, alıcı çözümleme mantığının kendisi değil — düzeltme booking'den gerçek
+  taraf kimliklerinin okunmasını gerektiriyor ve gerçek teslimattan (R-77) önce kapanmalı.
+- **R-77:** Bildirim işlerinin gerçek teslimatı (push/SMS/email adapter'ı + worker) hâlâ
+  bağlanmadı; Faz 10 yalnızca `notification_jobs`'ı okunur/yeniden kuyruklanabilir yaptı.
+- **R-78:** Sağlayıcı hizmet bölgesi için serbest poligon (GeoJSON/KML) içe aktarımı
+  eklenmedi — talep somutlaşırsa ayrı bir operasyon aracı olarak yapılır.
+- Görsel admin paneli yok (bilinçli — Faz 15'e ait, phase-plan zaten böyle tanımlıyor).
+
+**Bu fazda alınan tasarım kararı:** admin liste uçları (`bookings/admin`, `payments/admin`,
+`disputes/admin`, `providers/queue`, `verification/recovery-requests`, `ops/dead-letter`,
+`ops/notification-jobs`) hepsi aynı keyset (cursor) sayfalama yardımcısını
+(`common/pagination/cursor.ts`) paylaşıyor — coding-conventions.md §4'ün "liste endpoint'leri
+sayfalanır" kuralı bu fazdan önce hiçbir listede uygulanmıyordu; Faz 10 yeni uçlarda uygulandı,
+mevcut listeler (ör. `GET /bookings`) geriye dönük değiştirilmedi (kapsam dışı refactor).
 
 ---
 

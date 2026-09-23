@@ -140,6 +140,37 @@ export class PaymentsRepository {
     return row === undefined ? null : toPayment(row);
   }
 
+  /**
+   * Admin izleme listesi (Faz 10). Sahiplik kapısı yoktur — bkz.
+   * `BookingsRepository.listForAdmin` gerekçesi.
+   */
+  async listForAdmin(filter: {
+    status?: PaymentStatus;
+    bookingId?: string;
+    limit: number;
+    before?: { createdAt: Date; id: string };
+  }): Promise<Array<Payment & { createdAt: Date }>> {
+    const rows = await this.uow.query<PaymentRow & { created_at: Date }>(
+      `SELECT id, booking_id, provider, external_payment_id, amount_minor, currency,
+              refunded_minor, status, authorized_at, authorization_expires_at,
+              reauthorization_count, released_at, failure_code, frozen_from_status, created_at
+         FROM payments
+        WHERE ($1::payment_status IS NULL OR status = $1)
+          AND ($2::uuid IS NULL OR booking_id = $2)
+          AND ($3::timestamptz IS NULL OR (created_at, id) < ($3, $4))
+        ORDER BY created_at DESC, id DESC
+        LIMIT $5`,
+      [
+        filter.status ?? null,
+        filter.bookingId ?? null,
+        filter.before?.createdAt ?? null,
+        filter.before?.id ?? null,
+        filter.limit,
+      ],
+    );
+    return rows.map((row) => ({ ...toPayment(row), createdAt: row.created_at }));
+  }
+
   /** Sahiplik sorgunun içindedir: taraf olmayan kullanıcı ödemeyi göremez (404). */
   async findForBookingAsParticipant(bookingId: string, userId: string): Promise<Payment | null> {
     const rows = await this.uow.query<PaymentRow>(

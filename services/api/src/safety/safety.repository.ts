@@ -235,6 +235,12 @@ export interface SafetyEventRecord {
   details: Record<string, unknown>;
 }
 
+export interface OperatorEventRecord extends SafetyEventRecord {
+  sessionId: string;
+  bookingId: string;
+  seq: string;
+}
+
 export interface AssessmentRecord {
   id: string;
   riskLevel: RiskLevel;
@@ -1021,6 +1027,62 @@ export class SafetyRepository {
 
     return rows.map((row) => ({
       id: row.id,
+      eventType: row.event_type,
+      source: row.source,
+      riskLevel: row.risk_level,
+      ruleId: row.rule_id,
+      ruleVersion: row.rule_version,
+      modelVersion: row.model_version,
+      anomalyScore: row.anomaly_score === null ? null : Number(row.anomaly_score),
+      occurredAt: row.occurred_at,
+      details: row.details,
+    }));
+  }
+
+  /**
+   * Oturumdan bağımsız olay triyajı (admin/SUPPORT, Faz 10).
+   *
+   * `seq` tüm oturumlar arasında **global** ve monotonik (BIGINT IDENTITY) —
+   * `created_at` gibi eşit zaman damgası riskiyle uğraşmadan tek sütunlu keyset
+   * sayfalama sağlar.
+   */
+  async listEventsForOperator(filter: {
+    minRisk?: RiskLevel;
+    type?: SafetyEventType;
+    beforeSeq?: string;
+    limit: number;
+  }): Promise<OperatorEventRecord[]> {
+    const rows = await this.uow.query<{
+      id: string;
+      seq: string;
+      session_id: string;
+      booking_id: string;
+      event_type: SafetyEventType;
+      source: SafetyEventSource;
+      risk_level: RiskLevel;
+      rule_id: string | null;
+      rule_version: string | null;
+      model_version: string | null;
+      anomaly_score: string | null;
+      occurred_at: Date;
+      details: Record<string, unknown>;
+    }>(
+      `SELECT id, seq::text, session_id, booking_id, event_type, source, risk_level,
+              rule_id, rule_version, model_version, anomaly_score::text, occurred_at, details
+         FROM safety_events
+        WHERE ($1::safety_risk_level IS NULL OR risk_level >= $1::safety_risk_level)
+          AND ($2::safety_event_type IS NULL OR event_type = $2)
+          AND ($3::bigint IS NULL OR seq < $3)
+        ORDER BY seq DESC
+        LIMIT $4`,
+      [filter.minRisk ?? null, filter.type ?? null, filter.beforeSeq ?? null, filter.limit],
+    );
+
+    return rows.map((row) => ({
+      id: row.id,
+      seq: row.seq,
+      sessionId: row.session_id,
+      bookingId: row.booking_id,
       eventType: row.event_type,
       source: row.source,
       riskLevel: row.risk_level,

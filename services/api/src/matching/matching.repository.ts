@@ -452,6 +452,76 @@ export class MatchingRepository {
     );
     return rows[0]?.display_name ?? null;
   }
+
+  /**
+   * Eşleştirme analitiği özeti (admin, Faz 10).
+   *
+   * Ham skor bileşenleri burada **yoktur** — `GET matching/runs/:requestId` zaten
+   * tekil çalıştırmanın tam ayrıntısını verir (T-19 gerekçesiyle yalnızca ADMIN'e
+   * açık). Bu uç operasyonel bir özet sunar: kaç çalıştırma bozulmuş modda bitti,
+   * hangi strateji ne sıklıkta kullanıldı.
+   */
+  async adminStats(since: Date): Promise<{
+    totalRuns: number;
+    degradedRuns: number;
+    byStrategy: Array<{ strategy: string; count: number }>;
+    byDegradedReason: Array<{ reason: string; count: number }>;
+    avgCandidateCount: number;
+    avgRetrievalMs: number;
+    avgDecisionMs: number;
+  }> {
+    const [totals, byStrategy, byDegradedReason] = await Promise.all([
+      this.uow.query<{
+        total_runs: string;
+        degraded_runs: string;
+        avg_candidate_count: string | null;
+        avg_retrieval_ms: string | null;
+        avg_decision_ms: string | null;
+      }>(
+        `SELECT count(*)::text AS total_runs,
+                count(*) FILTER (WHERE degraded_reason IS NOT NULL)::text AS degraded_runs,
+                avg(candidate_count)::text AS avg_candidate_count,
+                avg(retrieval_ms)::text AS avg_retrieval_ms,
+                avg(decision_ms)::text AS avg_decision_ms
+           FROM matching_runs
+          WHERE created_at >= $1`,
+        [since],
+      ),
+      this.uow.query<{ strategy: string; count: string }>(
+        `SELECT strategy::text, count(*)::text AS count
+           FROM matching_runs
+          WHERE created_at >= $1
+          GROUP BY strategy
+          ORDER BY count(*) DESC`,
+        [since],
+      ),
+      this.uow.query<{ reason: string; count: string }>(
+        `SELECT degraded_reason::text AS reason, count(*)::text AS count
+           FROM matching_runs
+          WHERE created_at >= $1 AND degraded_reason IS NOT NULL
+          GROUP BY degraded_reason
+          ORDER BY count(*) DESC`,
+        [since],
+      ),
+    ]);
+
+    const totalsRow = totals[0];
+    return {
+      totalRuns: Number(totalsRow?.total_runs ?? 0),
+      degradedRuns: Number(totalsRow?.degraded_runs ?? 0),
+      byStrategy: byStrategy.map((row) => ({ strategy: row.strategy, count: Number(row.count) })),
+      byDegradedReason: byDegradedReason.map((row) => ({
+        reason: row.reason,
+        count: Number(row.count),
+      })),
+      avgCandidateCount:
+        totalsRow?.avg_candidate_count === null ? 0 : Number(totalsRow?.avg_candidate_count ?? 0),
+      avgRetrievalMs:
+        totalsRow?.avg_retrieval_ms === null ? 0 : Number(totalsRow?.avg_retrieval_ms ?? 0),
+      avgDecisionMs:
+        totalsRow?.avg_decision_ms === null ? 0 : Number(totalsRow?.avg_decision_ms ?? 0),
+    };
+  }
 }
 
 /**

@@ -196,6 +196,68 @@ export class IdentityRepository {
         };
   }
 
+  /**
+   * Kurtarma kuyruğu (admin).
+   *
+   * Varsayılan olarak yalnızca `PENDING_REVIEW` döner — operatörün göreceği kuyruk
+   * budur. `status` verilirse geçmiş kararlar da (denetim amaçlı) sorgulanabilir.
+   */
+  async listRecoveryRequests(filter: {
+    status?: 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED';
+    limit: number;
+    before?: { createdAt: Date; id: string };
+  }): Promise<
+    Array<{
+      id: string;
+      requesterUserId: string;
+      targetUserId: string;
+      status: 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED';
+      assuranceLevel: AssuranceLevel;
+      createdAt: Date;
+      decidedAt: Date | null;
+      decidedBy: string | null;
+      decisionReason: string | null;
+    }>
+  > {
+    const rows = await this.uow.query<{
+      id: string;
+      requester_user_id: string;
+      target_user_id: string;
+      status: 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED';
+      assurance_level: AssuranceLevel;
+      created_at: Date;
+      decided_at: Date | null;
+      decided_by: string | null;
+      decision_reason: string | null;
+    }>(
+      `SELECT id, requester_user_id, target_user_id, status, assurance_level,
+              created_at, decided_at, decided_by, decision_reason
+         FROM account_recovery_requests
+        WHERE ($1::text IS NULL OR status::text = $1)
+          AND ($2::timestamptz IS NULL OR (created_at, id) < ($2, $3))
+        ORDER BY created_at DESC, id DESC
+        LIMIT $4`,
+      [
+        filter.status ?? null,
+        filter.before?.createdAt ?? null,
+        filter.before?.id ?? null,
+        filter.limit,
+      ],
+    );
+
+    return rows.map((row) => ({
+      id: row.id,
+      requesterUserId: row.requester_user_id,
+      targetUserId: row.target_user_id,
+      status: row.status,
+      assuranceLevel: row.assurance_level,
+      createdAt: row.created_at,
+      decidedAt: row.decided_at,
+      decidedBy: row.decided_by,
+      decisionReason: row.decision_reason,
+    }));
+  }
+
   async decideRecoveryRequest(
     client: PoolClient,
     input: {

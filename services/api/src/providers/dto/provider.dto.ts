@@ -10,12 +10,15 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
+import { CursorQueryDto } from '../../common/pagination/cursor-query.dto';
 import {
+  PROVIDER_STATES,
   SKILL_LEVELS,
   type ProviderProfile,
   type ProviderService,
   type ProviderServiceArea,
   type ProviderSkill,
+  type ProviderState,
   type SkillLevel,
 } from '../providers.service';
 
@@ -183,4 +186,31 @@ export class ProviderServiceAreaResponseDto {
       active: area.active,
     };
   }
+}
+
+// --- Admin: sağlayıcı onay kuyruğu (Faz 10) ---
+
+export class ProviderQueueQueryDto extends CursorQueryDto {
+  @IsOptional()
+  @IsIn(PROVIDER_STATES)
+  state?: ProviderState;
+}
+
+export class ProviderQueueResponseDto {
+  items!: ProviderProfileResponseDto[];
+  nextCursor!: string | null;
+}
+
+export class RejectProviderDto {
+  @IsString()
+  @MinLength(3)
+  @MaxLength(500)
+  reason!: string;
+}
+
+export class SuspendProviderDto {
+  @IsString()
+  @MinLength(3)
+  @MaxLength(500)
+  reason!: string;
 }

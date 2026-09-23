@@ -20,8 +20,18 @@ import type { AnomalyOutcome } from '../anomaly.port';
 import type { EvaluationResult } from '../safety-evaluation.service';
 import type { IngestResult } from '../telemetry.service';
 import { PANIC_CATEGORIES, type PanicCategory, type PanicResult } from '../panic.service';
-import { RISK_LEVELS, type RiskLevel } from '../safety.constants';
-import type { AssessmentRecord, SafetyEventRecord, SafetySession } from '../safety.repository';
+import {
+  RISK_LEVELS,
+  SAFETY_EVENT_TYPES,
+  type RiskLevel,
+  type SafetyEventType,
+} from '../safety.constants';
+import type {
+  AssessmentRecord,
+  OperatorEventRecord,
+  SafetyEventRecord,
+  SafetySession,
+} from '../safety.repository';
 import { isPanicActive } from '../safety.repository';
 
 /** Tek pakette en fazla örnek: cihaz uykusu sonrası tampon boşaltma için yeterli, flood için değil. */
@@ -384,4 +394,64 @@ export class OperatorLocationsResponseDto {
     distanceMeters: number;
     geofenceState: string;
   }[];
+}
+
+// --- Admin: oturumdan bağımsız olay triyajı (Faz 10) ---
+
+export class OperatorEventQueryDto {
+  @IsOptional()
+  @IsIn(RISK_LEVELS)
+  minRisk?: RiskLevel;
+
+  @IsOptional()
+  @IsIn(SAFETY_EVENT_TYPES)
+  type?: SafetyEventType;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(500)
+  @Type(() => Number)
+  limit?: number;
+
+  @IsOptional()
+  @IsString()
+  cursor?: string;
+}
+
+export class OperatorEventResponseDto {
+  id!: string;
+  sessionId!: string;
+  bookingId!: string;
+  eventType!: string;
+  source!: string;
+  riskLevel!: string;
+  ruleId!: string | null;
+  ruleVersion!: string | null;
+  modelVersion!: string | null;
+  anomalyScore!: number | null;
+  occurredAt!: string;
+  details!: Record<string, unknown>;
+
+  static from(record: OperatorEventRecord): OperatorEventResponseDto {
+    return {
+      id: record.id,
+      sessionId: record.sessionId,
+      bookingId: record.bookingId,
+      eventType: record.eventType,
+      source: record.source,
+      riskLevel: record.riskLevel,
+      ruleId: record.ruleId,
+      ruleVersion: record.ruleVersion,
+      modelVersion: record.modelVersion,
+      anomalyScore: record.anomalyScore,
+      occurredAt: record.occurredAt.toISOString(),
+      details: record.details,
+    };
+  }
+}
+
+export class OperatorEventListResponseDto {
+  items!: OperatorEventResponseDto[];
+  nextCursor!: string | null;
 }

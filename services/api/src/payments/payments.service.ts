@@ -97,6 +97,16 @@ export class PaymentsService {
     @Inject(PAYMENT_PROVIDER) private readonly provider: PaymentProvider,
   ) {}
 
+  /** Admin izleme listesi (Faz 10) — bkz. `PaymentsRepository.listForAdmin`. */
+  async listForAdmin(filter: {
+    status?: PaymentStatus;
+    bookingId?: string;
+    limit: number;
+    before?: { createdAt: Date; id: string };
+  }): Promise<Array<Payment & { createdAt: Date }>> {
+    return this.repository.listForAdmin(filter);
+  }
+
   /**
    * Ödeme niyeti oluşturur ve yetkilendirmeyi alır.
    *

@@ -1,5 +1,14 @@
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsUUID } from 'class-validator';
+import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  ArrayUnique,
+  IsArray,
+  IsInt,
+  IsOptional,
+  IsUUID,
+  Min,
+} from 'class-validator';
 import type { MatchOutcome } from '../matching.service';
 
 /**
@@ -100,4 +109,27 @@ export class MatchRunResponseDto {
   eligibleCount!: number;
   createdAt!: string;
   candidates!: MatchRunCandidateDto[];
+}
+
+// --- Admin: eşleştirme analitiği (Faz 10) ---
+
+export class MatchingStatsQueryDto {
+  /** Kaç günlük pencere özetlenecek — varsayılan 7. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  sinceDays?: number;
+}
+
+export class MatchingStatsResponseDto {
+  sinceDays!: number;
+  totalRuns!: number;
+  degradedRuns!: number;
+  degradedRate!: number;
+  byStrategy!: Array<{ strategy: string; count: number }>;
+  byDegradedReason!: Array<{ reason: string; count: number }>;
+  avgCandidateCount!: number;
+  avgRetrievalMs!: number;
+  avgDecisionMs!: number;
 }

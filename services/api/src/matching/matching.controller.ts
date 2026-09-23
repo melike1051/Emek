@@ -7,13 +7,20 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
 } from '@nestjs/common';
 import { CurrentUser, Roles, type AuthenticatedUser } from '../auth/auth.decorators';
 import { BusinessException } from '../common/errors/business.exception';
 import { ErrorCode } from '../common/errors/error-codes';
 import { RateLimit } from '../common/ratelimit/rate-limit.decorator';
 import { BookingRequestsService } from '../requests/booking-requests.service';
-import { MatchBatchDto, MatchResultResponseDto, MatchRunResponseDto } from './dto/matching.dto';
+import {
+  MatchBatchDto,
+  MatchResultResponseDto,
+  MatchRunResponseDto,
+  MatchingStatsQueryDto,
+  MatchingStatsResponseDto,
+} from './dto/matching.dto';
 import { MatchingRepository } from './matching.repository';
 import { MatchingService } from './matching.service';
 
@@ -147,6 +154,29 @@ export class MatchingController {
         proposedEnd: result.proposedEnd?.toISOString() ?? null,
         explanation: result.explanation,
       })),
+    };
+  }
+
+  /**
+   * Eşleştirme analitiği özeti (Faz 10) — operasyonel sağlık, tekil kararın
+   * ayrıntısı değil (bkz. `run()` ve T-19 gerekçesi).
+   */
+  @Get('matching/admin/stats')
+  @Roles('ADMIN', 'SUPPORT')
+  async stats(@Query() query: MatchingStatsQueryDto): Promise<MatchingStatsResponseDto> {
+    const sinceDays = query.sinceDays ?? 7;
+    const since = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000);
+    const stats = await this.repository.adminStats(since);
+    return {
+      sinceDays,
+      totalRuns: stats.totalRuns,
+      degradedRuns: stats.degradedRuns,
+      degradedRate: stats.totalRuns === 0 ? 0 : stats.degradedRuns / stats.totalRuns,
+      byStrategy: stats.byStrategy,
+      byDegradedReason: stats.byDegradedReason,
+      avgCandidateCount: stats.avgCandidateCount,
+      avgRetrievalMs: stats.avgRetrievalMs,
+      avgDecisionMs: stats.avgDecisionMs,
     };
   }
 

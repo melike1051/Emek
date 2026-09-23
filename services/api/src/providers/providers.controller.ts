@@ -15,15 +15,20 @@ import { CurrentUser, Roles, type AuthenticatedUser } from '../auth/auth.decorat
 import { RateLimit } from '../common/ratelimit/rate-limit.decorator';
 import { BusinessException } from '../common/errors/business.exception';
 import { ErrorCode } from '../common/errors/error-codes';
+import { clampLimit, decodeCursor, paginate } from '../common/pagination/cursor';
 import {
   AddProviderServiceDto,
   AddServiceAreaDto,
   AddProviderSkillDto,
   CreateProviderProfileDto,
   ProviderProfileResponseDto,
+  ProviderQueueQueryDto,
+  ProviderQueueResponseDto,
   ProviderServiceAreaResponseDto,
   ProviderServiceResponseDto,
   ProviderSkillResponseDto,
+  RejectProviderDto,
+  SuspendProviderDto,
   UpdateProviderProfileDto,
 } from './dto/provider.dto';
 import { AvailabilityService } from './availability.service';
@@ -72,6 +77,19 @@ export class ProvidersController {
     @Body() dto: UpdateProviderProfileDto,
   ): Promise<ProviderProfileResponseDto> {
     const profile = await this.providers.update(user.id, dto);
+    return ProviderProfileResponseDto.from(profile);
+  }
+
+  /**
+   * Profili incelemeye gönderir (`DRAFT`/`REJECTED` → `PENDING_REVIEW`).
+   *
+   * Onay/ret her zaman operatöre aittir; bu uç yalnızca kuyruğa girer.
+   */
+  @Post('me/submit')
+  @Roles('PROVIDER')
+  @HttpCode(HttpStatus.OK)
+  async submit(@CurrentUser() user: AuthenticatedUser): Promise<ProviderProfileResponseDto> {
+    const profile = await this.providers.submitForReview(user.id);
     return ProviderProfileResponseDto.from(profile);
   }
 
@@ -215,5 +233,75 @@ export class ProvidersController {
     // Silme daima kendi profilinden yapılır: yol parametresi yalnızca yetkinliği belirtir,
     // sahibi belirtmez (IDOR yüzeyi açılmaz).
     await this.providers.removeSkill(user.id, skillId);
+  }
+
+  // --- Admin: sağlayıcı onay kuyruğu (Faz 10) ---
+
+  /** Onay kuyruğu. SUPPORT triyaj için okur, karar yalnızca ADMIN'e açıktır. */
+  @Get('queue')
+  @Roles('ADMIN', 'SUPPORT')
+  async queue(@Query() query: ProviderQueueQueryDto): Promise<ProviderQueueResponseDto> {
+    const limit = clampLimit(query.limit);
+    const cursor = decodeCursor(query.cursor);
+    const rows = await this.providers.listByState({
+      state: query.state ?? 'PENDING_REVIEW',
+      limit: limit + 1,
+      ...(cursor !== null ? { before: cursor } : {}),
+    });
+    const page = paginate(rows, limit, (row) => ({ createdAt: row.createdAt, id: row.userId }));
+    return {
+      items: page.items.map(ProviderProfileResponseDto.from),
+      nextCursor: page.nextCursor,
+    };
+  }
+
+  @Post(':userId/approve')
+  @Roles('ADMIN')
+  @HttpCode(HttpStatus.OK)
+  async approve(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('userId', ParseUUIDPipe) userId: string,
+  ): Promise<ProviderProfileResponseDto> {
+    const profile = await this.providers.approve(userId, user.id);
+    return ProviderProfileResponseDto.from(profile);
+  }
+
+  @Post(':userId/reject')
+  @Roles('ADMIN')
+  @HttpCode(HttpStatus.OK)
+  async reject(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Body() dto: RejectProviderDto,
+  ): Promise<ProviderProfileResponseDto> {
+    const profile = await this.providers.reject(userId, user.id, dto.reason);
+    return ProviderProfileResponseDto.from(profile);
+  }
+
+  /**
+   * Askıya alma: onaylı bir sağlayıcıyı pazaryerinden geri çeker (ör. şikayet
+   * incelemesi). Eşleştirme yalnızca `APPROVED` durumundaki sağlayıcıları görür.
+   */
+  @Post(':userId/suspend')
+  @Roles('ADMIN')
+  @HttpCode(HttpStatus.OK)
+  async suspend(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Body() dto: SuspendProviderDto,
+  ): Promise<ProviderProfileResponseDto> {
+    const profile = await this.providers.suspend(userId, user.id, dto.reason);
+    return ProviderProfileResponseDto.from(profile);
+  }
+
+  @Post(':userId/reinstate')
+  @Roles('ADMIN')
+  @HttpCode(HttpStatus.OK)
+  async reinstate(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('userId', ParseUUIDPipe) userId: string,
+  ): Promise<ProviderProfileResponseDto> {
+    const profile = await this.providers.reinstate(userId, user.id);
+    return ProviderProfileResponseDto.from(profile);
   }
 }

@@ -183,7 +183,7 @@ Bu yapıyı değiştirmek gerekirse önce `docs/architecture/adr/` altında ADR 
 | 7   | Matching & Optimization: retrieval, constraints, scoring, OR-Tools, explainability, benchmark                                                                   |               |
 | 8   | Safety: sessions, geofence, telemetry, rules + anomaly, panic flow                                                                                              | ✅ tamamlandı |
 | 9   | Event-driven: Pub/Sub, contracts, retries, DLQ, idempotency                                                                                                     | ✅ tamamlandı |
-| 10  | Admin/Operations API                                                                                                                                            |               |
+| 10  | Admin/Operations API                                                                                                                                            | ✅ tamamlandı |
 | 11  | Analytics: BigQuery pipeline, metrikler                                                                                                                         |               |
 | 12  | Security hardening                                                                                                                                              |               |
 | 13  | DevOps: Terraform, Cloud Run, staging/production                                                                                                                |               |

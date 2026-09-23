@@ -40,6 +40,7 @@ işaretli olanlar); domain kodları kendi fazında, ilgili modülle birlikte ekl
 | `VERIFICATION_SESSION_EXPIRED`      | 409  | Doğrulama oturumu süresi doldu                                      | 3    |
 | `VERIFICATION_FAILED`               | 422  | Sağlayıcı doğrulamayı reddetti                                      | 3    |
 | `RECOVERY_NOT_ALLOWED`              | 403  | Recovery ön koşulları sağlanmadı                                    | 3    |
+| `RECOVERY_REQUEST_NOT_PENDING`      | 409  | Kurtarma talebi zaten karara bağlanmış (admin onay/ret, Faz 10)     | 3    |
 | `PROVIDER_NOT_AVAILABLE`            | 409  | Sağlayıcı istenen aralıkta müsait değil                             | 4    |
 | `BOOKING_CONFLICT`                  | 409  | Çakışan rezervasyon var                                             | 4    |
 | `INVALID_STATE_TRANSITION`          | 409  | Bu durumdan hedef duruma geçiş tanımlı değil                        | 4    |

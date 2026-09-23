@@ -70,6 +70,25 @@ ve testlenir.
 | `POST /safety/operator/sessions/:id/risk`                            | —                                           | —                          | `ADMIN`                           | gerekçe zorunlu; `EMERGENCY`'den inmek paniği çözer                                                  |
 | `POST /safety/operator/sessions/:id/close`, `/evaluate`              | —                                           | —                          | `ADMIN`                           | audit'li                                                                                             |
 
+## Faz 10 endpoint matrisi (admin/ops)
+
+Ortak desen: read (liste/kuyruk) `ADMIN`+`SUPPORT`'a açık (triyaj), karar/yazma yalnızca
+`ADMIN`'e — Faz 8'in operatör uçlarıyla aynı ayrım. Sahiplik kapısı yoktur (operasyon
+tanımı gereği üçüncü taraf erişimidir); her karar `audit_logs`'a yazılır.
+
+| Endpoint                                                               | Rol                | Not                                                                                       |
+| ---------------------------------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------- |
+| `GET /verification/recovery-requests`                                  | `ADMIN`, `SUPPORT` | varsayılan yalnızca `PENDING_REVIEW`; keyset sayfalama                                    |
+| `POST /verification/recovery-requests/:id/approve`, `/reject`          | `ADMIN`            | devralma senaryosu nedeniyle yalnızca operatör (bkz. `IdentityService.approveRecovery`)   |
+| `GET /providers/queue`                                                 | `ADMIN`, `SUPPORT` | varsayılan `PENDING_REVIEW`                                                               |
+| `POST /providers/:userId/approve`, `/reject`, `/suspend`, `/reinstate` | `ADMIN`            | merkezî transition map (`provider-transitions.ts`); geçersiz geçiş 409                    |
+| `POST /providers/me/submit`                                            | `PROVIDER`         | self-servis: `DRAFT`/`REJECTED` → `PENDING_REVIEW`                                        |
+| `GET /bookings/admin`, `/payments/admin`, `/disputes/admin`            | `ADMIN`, `SUPPORT` | sahiplik kapısı yok; durum/taraf filtresiyle izleme                                       |
+| `GET /safety/operator/events`                                          | `ADMIN`, `SUPPORT` | oturumdan bağımsız, `seq` ile global keyset sayfalama; salt okunur                        |
+| `GET /matching/admin/stats`                                            | `ADMIN`, `SUPPORT` | özet metrik; ham skor bileşenleri yok (T-19 aynı gerekçe)                                 |
+| `GET /ops/health`, `/dead-letter`, `/notification-jobs`                | `ADMIN`, `SUPPORT` | outbox/DLQ/bildirim işi durumu; payload'larda PII yok (event-catalog §1)                  |
+| `POST /ops/dead-letter/:id/resolve`, `/notification-jobs/:id/retry`    | `ADMIN`            | id BIGSERIAL (`ParseIntPipe`); audit `entity_id` UUID olduğundan id `newValue`'da taşınır |
+
 ## Veri erişim katmanı
 
 Yetki kontrolü yalnızca controller'da değil, sorgularda da uygulanır: profil okuma/güncelleme
@@ -78,12 +97,12 @@ verisini döndüremez (ADR-0013 §3).
 
 ## Sonraki fazlarda genişleyecek
 
-| Faz | Eklenecek                                                                                         |
-| --- | ------------------------------------------------------------------------------------------------- |
-| 3   | verification endpoint'leri; `VERIFICATION_REQUIRED` ile seviye bazlı yetki                        |
-| 4   | booking sahipliği (müşteri ↔ sağlayıcı iki taraflı erişim), state machine yetkileri               |
-| 5   | ✅ ödeme ve dispute aksiyonları eklendi; `SUPPORT` kısıtları Faz 10 admin API'siyle test edilecek |
-| 7   | ✅ eşleştirme uçları eklendi; skor bileşenleri `ADMIN` dışına kapalı (T-19)                       |
-| 8   | ✅ safety uçları eklendi; ham konum yalnızca `ADMIN` + audit, iç risk mantığı taraflara kapalı    |
-| 10  | admin/ops endpoint'leri; hassas veri erişimi için ayrı ve loglanan yetki                          |
-| 12  | App Check zorunluluğu, oran sınırı genişletme, abuse senaryoları                                  |
+| Faz | Eklenecek                                                                                                                            |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| 3   | verification endpoint'leri; `VERIFICATION_REQUIRED` ile seviye bazlı yetki                                                           |
+| 4   | booking sahipliği (müşteri ↔ sağlayıcı iki taraflı erişim), state machine yetkileri                                                  |
+| 5   | ✅ ödeme ve dispute aksiyonları eklendi; `SUPPORT` kısıtları Faz 10 admin API testleriyle doğrulandı                                 |
+| 7   | ✅ eşleştirme uçları eklendi; skor bileşenleri `ADMIN` dışına kapalı (T-19)                                                          |
+| 8   | ✅ safety uçları eklendi; ham konum yalnızca `ADMIN` + audit, iç risk mantığı taraflara kapalı                                       |
+| 10  | ✅ admin/ops endpoint'leri eklendi (yukarıdaki tablo); `SUPPORT` her alt kapsamda read-only doğrulandı (`admin.integration.spec.ts`) |
+| 12  | App Check zorunluluğu, oran sınırı genişletme, abuse senaryoları                                                                     |

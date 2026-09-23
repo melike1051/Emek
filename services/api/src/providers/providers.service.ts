@@ -1,10 +1,16 @@
 import { Injectable } from '@nestjs/common';
+import type { PoolClient } from 'pg';
 import { AuditAction, AuditService } from '../common/audit/audit.service';
 import { UnitOfWork } from '../common/database/unit-of-work';
 import { BusinessException } from '../common/errors/business.exception';
 import { ErrorCode } from '../common/errors/error-codes';
 import { EventType, OutboxService } from '../common/outbox/outbox.service';
 import { UsersRepository } from '../users/users.repository';
+import {
+  findProviderTransition,
+  isProviderActorAllowed,
+  type ProviderTransitionActor,
+} from './state/provider-transitions';
 
 /** PostgreSQL check_violation. */
 const CHECK_VIOLATION = '23514';
@@ -470,7 +476,8 @@ export class ProvidersService {
    * gelebilecek en basit ve her zaman geçerli geometridir; birbirine değmeyen
    * bölgeler **birden fazla kayıtla** ifade edilir (migration notu).
    *
-   * Serbest poligon içe aktarımı operasyon aracıdır ve Faz 10'a aittir.
+   * Serbest poligon içe aktarımı Faz 10'a alınmadı (kapsam dışı bırakıldı,
+   * ihtiyaç somutlaşırsa ayrı bir operasyon aracı olarak eklenir — R-78).
    */
   async addServiceArea(
     userId: string,
@@ -550,6 +557,130 @@ export class ProvidersService {
         entityId: areaId,
         actorUserId: userId,
       });
+    });
+  }
+
+  /**
+   * Onay kuyruğu (admin, Faz 10).
+   *
+   * Varsayılan olarak yalnızca inceleme bekleyenler döner — operatörün kuyruğu budur.
+   */
+  async listByState(filter: {
+    state?: ProviderState;
+    limit: number;
+    before?: { createdAt: Date; id: string };
+  }): Promise<ProviderProfile[]> {
+    const rows = await this.uow.query<ProviderRow>(
+      `${SELECT_PROFILE}
+        WHERE ($1::text IS NULL OR state::text = $1)
+          AND ($2::timestamptz IS NULL OR (created_at, user_id) < ($2, $3))
+        ORDER BY created_at DESC, user_id DESC
+        LIMIT $4`,
+      [
+        filter.state ?? null,
+        filter.before?.createdAt ?? null,
+        filter.before?.id ?? null,
+        filter.limit,
+      ],
+    );
+    return rows.map(toProfile);
+  }
+
+  /**
+   * Sağlayıcı profilini incelemeye gönderir (`DRAFT`/`REJECTED` → `PENDING_REVIEW`).
+   *
+   * Self-servistir: profil sahibi kendi başvurusunu ilerletir. Karar (onay/ret) her
+   * zaman operatöre aittir — bu metod yalnızca kuyruğa girer.
+   */
+  async submitForReview(userId: string): Promise<ProviderProfile> {
+    return this.applyTransition({
+      userId,
+      to: 'PENDING_REVIEW',
+      actor: 'PROVIDER',
+      actorUserId: userId,
+    });
+  }
+
+  /** Onay: sağlayıcı pazaryerinde görünür ve eşleştirmeye aday olur. */
+  async approve(userId: string, actorUserId: string): Promise<ProviderProfile> {
+    return this.applyTransition({ userId, to: 'APPROVED', actor: 'ADMIN', actorUserId });
+  }
+
+  async reject(userId: string, actorUserId: string, reason: string): Promise<ProviderProfile> {
+    return this.applyTransition({ userId, to: 'REJECTED', actor: 'ADMIN', actorUserId, reason });
+  }
+
+  /**
+   * Askıya alma: onaylı bir sağlayıcıyı pazaryerinden **geriye dönüşle** çeker.
+   * `matching.repository.ts` yalnızca `APPROVED` durumundaki sağlayıcıları aday
+   * havuzuna alır — askıya alınan sağlayıcı bu sorgudan otomatik düşer.
+   */
+  async suspend(userId: string, actorUserId: string, reason: string): Promise<ProviderProfile> {
+    return this.applyTransition({ userId, to: 'SUSPENDED', actor: 'ADMIN', actorUserId, reason });
+  }
+
+  async reinstate(userId: string, actorUserId: string): Promise<ProviderProfile> {
+    return this.applyTransition({ userId, to: 'APPROVED', actor: 'ADMIN', actorUserId });
+  }
+
+  /**
+   * Merkezî geçiş uygulayıcısı (ADR-0006'daki booking deseniyle aynı): geçerlilik
+   * ve aktör kontrolü tek yerde yapılır, controller'a veya çağıran metoda dağıtılmaz.
+   */
+  private async applyTransition(input: {
+    userId: string;
+    to: ProviderState;
+    actor: ProviderTransitionActor;
+    actorUserId: string;
+    reason?: string;
+  }): Promise<ProviderProfile> {
+    return this.uow.withTransaction(async (client: PoolClient) => {
+      const current = await client.query<Pick<ProviderRow, 'state'>>(
+        `SELECT state FROM provider_profiles WHERE user_id = $1 FOR UPDATE`,
+        [input.userId],
+      );
+      const currentRow = current.rows[0];
+      if (currentRow === undefined) {
+        throw new BusinessException(ErrorCode.PROFILE_NOT_FOUND);
+      }
+
+      const rule = findProviderTransition(currentRow.state, input.to);
+      if (rule === undefined) {
+        throw new BusinessException(ErrorCode.INVALID_STATE_TRANSITION, {
+          clientMessage: 'Bu işlem sağlayıcının mevcut durumunda yapılamaz.',
+          details: { from: currentRow.state, to: input.to },
+        });
+      }
+      if (!isProviderActorAllowed(rule, input.actor)) {
+        throw new BusinessException(ErrorCode.FORBIDDEN);
+      }
+
+      const updated = await client.query<ProviderRow>(
+        `UPDATE provider_profiles
+            SET state = $2
+          WHERE user_id = $1
+          RETURNING user_id, display_name, bio, experience_years, rating_avg, rating_count,
+                    max_daily_bookings, state, created_at, updated_at`,
+        [input.userId, input.to],
+      );
+      const row = updated.rows[0];
+      if (row === undefined) {
+        throw new Error('sağlayıcı durumu güncellenemedi');
+      }
+
+      await this.audit.record(client, {
+        action: AuditAction.PROVIDER_STATE_CHANGED,
+        entityType: 'provider_profile',
+        entityId: input.userId,
+        actorUserId: input.actorUserId,
+        oldValue: { state: currentRow.state },
+        newValue: {
+          state: input.to,
+          ...(input.reason !== undefined ? { reason: input.reason } : {}),
+        },
+      });
+
+      return toProfile(row);
     });
   }
 }

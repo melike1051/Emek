@@ -259,6 +259,42 @@ export class BookingsService {
     return row === undefined ? null : toBooking(row);
   }
 
+  /**
+   * Admin izleme listesi (Faz 10).
+   *
+   * Sahiplik kapısı yoktur: operasyonun tüm rezervasyonları filtreleyip
+   * izleyebilmesi gerekir (destek talebi, dispute triyajı, anomali araştırması).
+   * `SUPPORT` da okur (ADR-0013 §4); yalnızca yıkıcı aksiyonlar `ADMIN`'e kapalıdır.
+   */
+  async listForAdmin(filter: {
+    status?: BookingStatus;
+    customerId?: string;
+    providerId?: string;
+    limit: number;
+    before?: { createdAt: Date; id: string };
+  }): Promise<Array<Booking & { createdAt: Date }>> {
+    const rows = await this.uow.query<BookingRow & { created_at: Date }>(
+      `SELECT id, request_id, customer_id, provider_id, service_id, address_id,
+              scheduled_start, scheduled_end, price_minor, currency, status, created_at
+         FROM bookings
+        WHERE ($1::booking_status IS NULL OR status = $1)
+          AND ($2::uuid IS NULL OR customer_id = $2)
+          AND ($3::uuid IS NULL OR provider_id = $3)
+          AND ($4::timestamptz IS NULL OR (created_at, id) < ($4, $5))
+        ORDER BY created_at DESC, id DESC
+        LIMIT $6`,
+      [
+        filter.status ?? null,
+        filter.customerId ?? null,
+        filter.providerId ?? null,
+        filter.before?.createdAt ?? null,
+        filter.before?.id ?? null,
+        filter.limit,
+      ],
+    );
+    return rows.map((row) => ({ ...toBooking(row), createdAt: row.created_at }));
+  }
+
   async listForUser(userId: string): Promise<Booking[]> {
     const rows = await this.uow.query<BookingRow>(
       `${SELECT_BOOKING} WHERE customer_id = $1 OR provider_id = $1

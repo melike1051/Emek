@@ -18,6 +18,7 @@ import {
 } from './identity-provider.port';
 import {
   isAtLeastAssurance,
+  type AssuranceLevel,
   type IdentityRecord,
   type VerificationAttempt,
   type VerificationLevel,
@@ -444,11 +445,37 @@ export class IdentityService {
   }
 
   /**
+   * Kurtarma kuyruğu (admin, Faz 10).
+   *
+   * Varsayılan olarak yalnızca bekleyen talepler döner: operatörün karar vermesi
+   * gereken kuyruk budur. Geçmiş kararları görmek için `status` açıkça verilir.
+   */
+  async listRecoveryQueue(filter: {
+    status?: 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED';
+    limit: number;
+    before?: { createdAt: Date; id: string };
+  }): Promise<
+    Array<{
+      id: string;
+      requesterUserId: string;
+      targetUserId: string;
+      status: 'PENDING_REVIEW' | 'APPROVED' | 'REJECTED';
+      assuranceLevel: AssuranceLevel;
+      createdAt: Date;
+      decidedAt: Date | null;
+      decidedBy: string | null;
+      decisionReason: string | null;
+    }>
+  > {
+    return this.repository.listRecoveryRequests(filter);
+  }
+
+  /**
    * Kurtarma talebini onaylar ve oturum kimliğini kanonik hesaba taşır.
    *
    * **Operatör aksiyonudur**: kimlik eşleşmesi tek başına yeterli değildir (yukarıdaki
-   * devralma senaryosu). Admin API'si bu metodu Faz 10'da `ADMIN` rolüne bağlı olarak
-   * açacak; imza şimdiden operatör kimliğini zorunlu tutar ki audit'te "kim onayladı"
+   * devralma senaryosu). Admin API'si bu metodu `ADMIN` rolüne bağlı olarak açar
+   * (Faz 10); imza operatör kimliğini zorunlu tutar ki audit'te "kim onayladı"
    * bilgisi her zaman bulunsun.
    */
   async approveRecovery(input: {
@@ -512,7 +539,7 @@ export class IdentityService {
     });
   }
 
-  /** Kurtarma talebini reddeder (operatör aksiyonu, Faz 10 admin API'si). */
+  /** Kurtarma talebini reddeder (operatör aksiyonu, Faz 10 admin API'si üzerinden çağrılır). */
   async rejectRecovery(input: {
     requestId: string;
     actorUserId: string;

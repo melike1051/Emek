@@ -1,6 +1,8 @@
-import { IsOptional, IsString, Matches, MaxLength } from 'class-validator';
+import { IsIn, IsOptional, IsString, IsUUID, Matches, MaxLength } from 'class-validator';
+import { CursorQueryDto } from '../../common/pagination/cursor-query.dto';
 import type { Payment } from '../payments.repository';
 import type { PaymentIntentView } from '../payments.service';
+import { PAYMENT_STATUSES, type PaymentStatus } from '../state/payment-status';
 
 /**
  * Ödeme başlatma gövdesi **boştur**: tutar rezervasyondan okunur.
@@ -76,4 +78,21 @@ export class PaymentIntentResponseDto {
 /** Webhook yanıtı: sağlayıcıya yalnızca "alındı" bilgisi döner. */
 export class PaymentWebhookResponseDto {
   received!: boolean;
+}
+
+// --- Admin: ödeme izleme (Faz 10) ---
+
+export class AdminPaymentQueryDto extends CursorQueryDto {
+  @IsOptional()
+  @IsIn(PAYMENT_STATUSES)
+  status?: PaymentStatus;
+
+  @IsOptional()
+  @IsUUID()
+  bookingId?: string;
+}
+
+export class AdminPaymentListResponseDto {
+  items!: PaymentResponseDto[];
+  nextCursor!: string | null;
 }

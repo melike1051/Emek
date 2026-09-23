@@ -16,6 +16,9 @@ import { RateLimit } from '../common/ratelimit/rate-limit.decorator';
 import { ParticipantRateLimiter } from './participant-rate-limiter';
 import {
   EvaluationResponseDto,
+  OperatorEventListResponseDto,
+  OperatorEventQueryDto,
+  OperatorEventResponseDto,
   OperatorLocationQueryDto,
   OperatorLocationsResponseDto,
   OperatorSessionDetailDto,
@@ -49,6 +52,23 @@ const TELEMETRY_PER_USER_PER_MINUTE = 60;
 /** Operatör görünümünde döndürülen en fazla değerlendirme/olay/oturum. */
 const OPERATOR_HISTORY_LIMIT = 100;
 const OPERATOR_LIST_LIMIT = 200;
+
+/** `safety_events.seq` tek sütunlu, global sıra — opak cursor bunun base64'üdür. */
+function encodeSeqCursor(seq: string): string {
+  return Buffer.from(seq, 'utf8').toString('base64');
+}
+
+function decodeSeqCursor(value: string | undefined): string | null {
+  if (value === undefined || value.length === 0) {
+    return null;
+  }
+  try {
+    const decoded = Buffer.from(value, 'base64').toString('utf8');
+    return /^[0-9]+$/.test(decoded) ? decoded : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Safety API (ADR-0019 §9).
@@ -238,6 +258,31 @@ export class SafetyController {
       reason: dto.reason,
     });
     return OperatorSessionSummaryDto.from(session);
+  }
+
+  /**
+   * Oturumdan bağımsız olay triyajı (Faz 10) — safety event yönetimi.
+   *
+   * `listOpen`/`detail` oturum merkezlidir; bir operatörün "son 1 saatteki tüm
+   * HIGH_RISK olayları" gibi olay merkezli bir sorgusu için oturumları tek tek
+   * gezmesi gerekmez. SUPPORT okur, hiçbir yazma yoktur (bu uç salt okunur).
+   */
+  @Get('safety/operator/events')
+  @Roles('ADMIN', 'SUPPORT')
+  async listEvents(@Query() query: OperatorEventQueryDto): Promise<OperatorEventListResponseDto> {
+    const limit = query.limit ?? 100;
+    const beforeSeq = decodeSeqCursor(query.cursor);
+    const rows = await this.repository.listEventsForOperator({
+      ...(query.minRisk !== undefined ? { minRisk: query.minRisk } : {}),
+      ...(query.type !== undefined ? { type: query.type } : {}),
+      ...(beforeSeq !== null ? { beforeSeq } : {}),
+      limit: limit + 1,
+    });
+    const hasMore = rows.length > limit;
+    const items = hasMore ? rows.slice(0, limit) : rows;
+    const last = items[items.length - 1];
+    const nextCursor = hasMore && last !== undefined ? encodeSeqCursor(last.seq) : null;
+    return { items: items.map(OperatorEventResponseDto.from), nextCursor };
   }
 
   /** Anında değerlendirme — operasyon ve Ar-Ge; izleyiciyi beklemeden. */

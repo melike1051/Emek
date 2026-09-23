@@ -1,5 +1,19 @@
 import { IsIn, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
-import { DISPUTE_REASONS, type Dispute, type DisputeReason } from '../disputes.service';
+import { CursorQueryDto } from '../../common/pagination/cursor-query.dto';
+import {
+  DISPUTE_REASONS,
+  type Dispute,
+  type DisputeReason,
+  type DisputeStatus,
+} from '../disputes.service';
+
+const DISPUTE_STATUSES = [
+  'OPEN',
+  'UNDER_REVIEW',
+  'RESOLVED_CUSTOMER',
+  'RESOLVED_PROVIDER',
+  'WITHDRAWN',
+] as const;
 
 export class OpenDisputeDto {
   @IsIn(DISPUTE_REASONS)
@@ -54,4 +68,17 @@ export class DisputeResponseDto {
       // bilgisini vermek gereksiz bir çatışma yüzeyidir; operasyon audit'ten görür.
     };
   }
+}
+
+// --- Admin: uyuşmazlık kuyruğu (Faz 10) ---
+
+export class AdminDisputeQueryDto extends CursorQueryDto {
+  @IsOptional()
+  @IsIn(DISPUTE_STATUSES)
+  status?: DisputeStatus;
+}
+
+export class AdminDisputeListResponseDto {
+  items!: DisputeResponseDto[];
+  nextCursor!: string | null;
 }
