@@ -7,6 +7,8 @@ import { AuthModule } from './auth/auth.module';
 import { RolesGuard } from './auth/roles.guard';
 import { BookingsModule } from './bookings/bookings.module';
 import { CatalogModule } from './catalog/catalog.module';
+import { AppCheckGuard } from './common/appcheck/app-check.guard';
+import { AppCheckModule } from './common/appcheck/app-check.module';
 import { AuditModule } from './common/audit/audit.module';
 import { RedisModule } from './common/cache/redis.module';
 import { AppConfigModule } from './common/config/app-config.module';
@@ -19,6 +21,8 @@ import { EventsModule } from './common/events/events.module';
 import { OutboxModule } from './common/outbox/outbox.module';
 import { RateLimitGuard } from './common/ratelimit/rate-limit.guard';
 import { RateLimitModule } from './common/ratelimit/rate-limit.module';
+import { UserRateLimitGuard } from './common/ratelimit/user-rate-limit.guard';
+import { SecurityModule } from './common/security/security.module';
 import { CustomersModule } from './customers/customers.module';
 import { DisputesModule } from './disputes/disputes.module';
 import { DocumentsModule } from './documents/documents.module';
@@ -44,6 +48,8 @@ import { UsersModule } from './users/users.module';
     EventsModule,
     IdempotencyModule,
     RateLimitModule,
+    AppCheckModule,
+    SecurityModule,
     HealthModule,
     AuthModule,
     UsersModule,
@@ -64,11 +70,15 @@ import { UsersModule } from './users/users.module';
     AnalyticsModule,
   ],
   providers: [
-    // Guard sırası önemlidir: oran sınırı → kimlik → rol.
+    // Guard sırası önemlidir: oran sınırı → App Check → kimlik → rol → kullanıcı kotası.
     // Oran sınırı en önde olmalı ki kimlik doğrulama maliyeti abuse ile tüketilemesin.
+    // App Check kimlikten önce gelir: uygulamadan gelmeyen trafik JWKS/DB maliyetine
+    // hiç ulaşmamalı. Kullanıcı kotası en sonda, çünkü `request.user` ancak orada var.
     { provide: APP_GUARD, useClass: RateLimitGuard },
+    { provide: APP_GUARD, useClass: AppCheckGuard },
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    { provide: APP_GUARD, useClass: UserRateLimitGuard },
     { provide: APP_INTERCEPTOR, useClass: IdempotencyInterceptor },
   ],
 })

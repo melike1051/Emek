@@ -37,6 +37,36 @@ export const envSchema = z
 
     REDIS_URL: redisUrlSchema,
 
+    /**
+     * Önümüzde duran **güvenilen** ters proxy sayısı (R-53, ADR-0022).
+     *
+     * `X-Forwarded-For` istemci tarafından yazılabilir; bu sayı, zincirin sağından
+     * kaç hop'un bizim altyapımıza ait olduğunu söyler. Semantiği Express'in
+     * `trust proxy: <n>` ayarıyla aynıdır ama karar `resolveClientIp`'tedir:
+     * Express'in `trust proxy` ayarı **açılmaz**, çünkü naif kullanımı en soldaki
+     * (saldırgan kontrolündeki) girdiyi seçer.
+     *
+     * 0 = hiçbir başlığa güvenilmez, yalnızca soket adresi. Cloud Run arkasında
+     * doğru değer 2'dir ("istemci, google-lb" + soket); Faz 13'te gerçek topoloji
+     * üzerinde doğrulanacak (TODO: R-53 kapanışı dağıtımla birlikte).
+     */
+    TRUSTED_PROXY_HOP_COUNT: z.coerce.number().int().min(0).max(10).default(0),
+
+    /**
+     * Firebase App Check zorunluluğu (ADR-0022).
+     *
+     * Açıkken `@SkipAppCheck()` ile işaretlenmemiş her HTTP rotası geçerli bir
+     * App Check token'ı ister. Geliştirme ve Faz 16 öncesi testler için kapalıdır;
+     * production'da zorunlu açıktır.
+     */
+    APP_CHECK_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
+    APP_CHECK_PROVIDER: z.enum(['firebase', 'mock']).default('mock'),
+    /** App Check token'ının issuer/audience iddiası proje **numarasını** taşır. */
+    FIREBASE_PROJECT_NUMBER: z.string().min(1).default('000000000000'),
+
     IDENTITY_PROVIDER: providerSchema.default('mock'),
     PAYMENT_PROVIDER: providerSchema.default('mock'),
 
@@ -241,6 +271,70 @@ export const envSchema = z
     RECONCILIATION_STUCK_COMMAND_MINUTES: z.coerce.number().int().min(1).default(15),
     RECONCILIATION_AUTH_EXPIRY_GRACE_MINUTES: z.coerce.number().int().min(1).default(60),
     RECONCILIATION_RELEASE_PENDING_GRACE_MINUTES: z.coerce.number().int().min(1).default(120),
+
+    // --- Security hardening (Faz 12, ADR-0022) ---
+    /**
+     * Periyodik audit hash zinciri doğrulaması.
+     *
+     * Zincir tamper-**evident**'tır: kopukluk ancak birisi baktığında görünür.
+     * Bu iş "birisi"dir. Kapalıyken zincir yazılmaya devam eder, yalnızca
+     * otomatik kontrol yapılmaz.
+     */
+    AUDIT_VERIFICATION_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
+    AUDIT_VERIFICATION_INTERVAL_MS: z.coerce.number().int().min(1000).default(3600000),
+    /** Tek turda doğrulanacak azami satır; tüm tabloyu her turda taramak ölçeklenmez. */
+    AUDIT_VERIFICATION_BATCH_SIZE: z.coerce.number().int().min(1).max(100000).default(5000),
+    /**
+     * Retention-locked audit dışa aktarımı (ADR-0013 §8).
+     *
+     * Doğrulanmış zincir parçaları değiştirilemez depolamaya yazılır; veritabanı
+     * ele geçirilse bile bağımsız bir kopya kalır. Kapalıyken yalnızca doğrulama
+     * çalışır, dışa aktarım yapılmaz.
+     */
+    AUDIT_EXPORT_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
+    /**
+     * Arşiv sağlayıcısı. `memory` bellekte tutar ve süreç yeniden başladığında
+     * kaybolur — "bağımsız kopya" iddiasını taşıyamaz, yalnızca geliştirme içindir.
+     *
+     * Gerçek GCS uygulaması ve bucket retention policy'si **Faz 13**'e aittir
+     * (R-82). Bu yüzden production'da dışa aktarım zorunlu tutulmaz; zorunlu olan
+     * doğrulamadır.
+     */
+    AUDIT_ARCHIVE_PROVIDER: z.enum(['memory', 'gcs']).default('memory'),
+    /**
+     * Arşiv nesnesinin silinemeyeceği süre (gün).
+     * TODO(legal): denetim izi saklama süresi hukuk görüşüyle kesinleşecek (A-04).
+     */
+    AUDIT_EXPORT_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(3650),
+
+    /**
+     * Retention silme işi (T-24). Kapalıyken hiçbir veri otomatik silinmez.
+     *
+     * Saklama süreleri docs/security/data-retention-inventory.md ile aynı
+     * kaynaktan gelir; TODO(legal) işaretli süreler hukuk görüşüyle kesinleşecek.
+     */
+    RETENTION_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
+    RETENTION_INTERVAL_MS: z.coerce.number().int().min(1000).default(3600000),
+    RETENTION_BATCH_SIZE: z.coerce.number().int().min(1).max(10000).default(500),
+    /** Kapatılmış hesabın anonimleştirilmesine kadar geçen süre (KVKK, R-38). */
+    RETENTION_DELETED_USER_DAYS: z.coerce.number().int().min(1).max(3650).default(30),
+    /** İşlenmiş event tekilleştirme kayıtları; teslim penceresinden uzun olmalı. */
+    RETENTION_PROCESSED_EVENT_DAYS: z.coerce.number().int().min(1).max(365).default(30),
+    /** Çözülmüş dead-letter kayıtları. */
+    RETENTION_DEAD_LETTER_DAYS: z.coerce.number().int().min(1).max(365).default(90),
+    /** Doğrulama denemesi kayıtları (brute-force analizi için gereken süre kadar). */
+    RETENTION_VERIFICATION_ATTEMPT_DAYS: z.coerce.number().int().min(1).max(3650).default(180),
+    /** Dışa aktarılmış analytics event'leri; BigQuery kanonik kopyadır. */
+    RETENTION_ANALYTICS_EVENT_DAYS: z.coerce.number().int().min(1).max(3650).default(90),
   })
   .superRefine((env, ctx) => {
     // ADR-0005 / ADR-0009: mock sağlayıcılar production'da seçilemez.
@@ -311,6 +405,69 @@ export const envSchema = z
         code: z.ZodIssueCode.custom,
         path: ['STORAGE_PROVIDER'],
         message: 'STORAGE_PROVIDER production ortamında gcs olmalı',
+      });
+    }
+
+    // Cloud Run arkasında proxy sayısı ayarlanmazsa IP bazlı oran sınırı tek global
+    // kovaya çöker: tek bir istemci tüm kullanıcıların kotasını tüketir (R-53).
+    if (env.TRUSTED_PROXY_HOP_COUNT === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['TRUSTED_PROXY_HOP_COUNT'],
+        message:
+          'TRUSTED_PROXY_HOP_COUNT production ortamında açıkça ayarlanmalı (Cloud Run: 2) — ADR-0022',
+      });
+    }
+
+    // App Check kapalıyken istemci bütünlüğü iddiası yoktur; production'da zorunlu.
+    if (!env.APP_CHECK_ENABLED) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['APP_CHECK_ENABLED'],
+        message: 'APP_CHECK_ENABLED production ortamında true olmalı (ADR-0022)',
+      });
+    }
+
+    if (env.APP_CHECK_PROVIDER === 'mock') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['APP_CHECK_PROVIDER'],
+        message: 'APP_CHECK_PROVIDER=mock production ortamında kullanılamaz',
+      });
+    }
+
+    if (env.APP_CHECK_ENABLED && env.FIREBASE_PROJECT_NUMBER === '000000000000') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['FIREBASE_PROJECT_NUMBER'],
+        message: 'FIREBASE_PROJECT_NUMBER production ortamında gerçek proje numarası olmalı',
+      });
+    }
+
+    // Zincir tamper-evident'tır: kimse bakmazsa kopukluk görünmez.
+    if (!env.AUDIT_VERIFICATION_ENABLED) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['AUDIT_VERIFICATION_ENABLED'],
+        message: 'AUDIT_VERIFICATION_ENABLED production ortamında true olmalı (ADR-0013 §8)',
+      });
+    }
+
+    if (env.AUDIT_EXPORT_ENABLED && env.AUDIT_ARCHIVE_PROVIDER === 'memory') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['AUDIT_ARCHIVE_PROVIDER'],
+        message:
+          'AUDIT_ARCHIVE_PROVIDER=memory ile dışa aktarım üretimde anlamsızdır (R-82, Faz 13)',
+      });
+    }
+
+    // Belgelenmiş saklama süresi, uygulanmayan saklama süresidir (T-24, R-38).
+    if (!env.RETENTION_ENABLED) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['RETENTION_ENABLED'],
+        message: 'RETENTION_ENABLED production ortamında true olmalı (KVKK, R-38)',
       });
     }
 

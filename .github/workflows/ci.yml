@@ -1,5 +1,5 @@
-# Faz 1 CI: lint → typecheck → unit → integration → build.
-# Security scan (SAST/dependency), image push ve deploy adımları Faz 12-13'te eklenir.
+# CI: lint → typecheck → unit → integration → build + güvenlik taramaları.
+# Image push ve deploy adımları Faz 13'te eklenir.
 #
 # Not: GitHub workflow'ları .github/workflows altında olmak zorundadır (platform kısıtı);
 # infra/github-actions ise paylaşılan composite action ve yardımcı script'ler içindir.
@@ -144,3 +144,58 @@ jobs:
 
       - name: Build AI service image
         run: docker build -f infra/docker/Dockerfile.ai -t emek-ai:ci .
+
+  security:
+    name: Güvenlik taraması (dependency + SAST)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      # Bağımlılık taraması **bloklayıcıdır** (Faz 12 exit kriteri): high/critical bir
+      # açık, gerekçeli bir istisna olmadan main'e giremez. İstisna mekanizması
+      # `overrides` + ADR-0015'teki gerekçedir; gerekçesiz bir override CI'ı geçmez
+      # çünkü override kaldırıldığında audit yine düşer.
+      - name: Dependency audit (npm)
+        run: npm audit --audit-level=high
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install semgrep
+        run: pip install semgrep==1.177.0
+
+      # `--error` bulguyu sıfır olmayan çıkış koduna çevirir: tarama raporlayıcı
+      # değil, kapıdır. Gerekçeli istisnalar kodda `nosemgrep` ile işaretlenir ve
+      # code review'da görünür olur.
+      - name: SAST (semgrep — kayıt defteri paketleri)
+        run: >-
+          semgrep --error --metrics=off
+          --config p/typescript --config p/security-audit --config p/secrets
+          --exclude node_modules --exclude dist .
+
+      # Emek'e özgü kurallar: mimari kararların ihlalleri (R-53 proxy güveni,
+      # audit append-only, SQL tanımlayıcı enterpolasyonu).
+      - name: SAST (semgrep — Emek kuralları)
+        run: semgrep --error --metrics=off --config .semgrep.yml .
+
+      # AI servisinin bağımlılıkları da bloklayıcıdır. `--no-emit-project` yerel
+      # paketi dışarıda bırakır: `emek-ai` PyPI'da yoktur ve `--strict` onu
+      # "denetlenemedi" diye hata sayardı.
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Python dependency audit (pip-audit)
+        working-directory: services/ai
+        run: |
+          uv export --no-hashes --no-emit-project --all-groups -o requirements-audit.txt
+          uvx pip-audit -r requirements-audit.txt --strict

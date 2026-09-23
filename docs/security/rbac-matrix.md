@@ -88,6 +88,17 @@ tanımı gereği üçüncü taraf erişimidir); her karar `audit_logs`'a yazıl�
 | `GET /matching/admin/stats`                                            | `ADMIN`, `SUPPORT` | özet metrik; ham skor bileşenleri yok (T-19 aynı gerekçe)                                 |
 | `GET /ops/health`, `/dead-letter`, `/notification-jobs`                | `ADMIN`, `SUPPORT` | outbox/DLQ/bildirim işi durumu; payload'larda PII yok (event-catalog §1)                  |
 | `POST /ops/dead-letter/:id/resolve`, `/notification-jobs/:id/retry`    | `ADMIN`            | id BIGSERIAL (`ParseIntPipe`); audit `entity_id` UUID olduğundan id `newValue`'da taşınır |
+| `GET /ops/audit-chain`                                                 | `ADMIN`, `SUPPORT` | son doğrulama durumu; salt okunur. Triyajın ilk sorusu "denetim izi sağlam mı" olabilir   |
+| `POST /ops/audit-chain/verify`                                         | `ADMIN`            | iş yükü üretir ve checkpoint yazar; audit satırlarını değiştirmez                         |
+| `POST /ops/retention/sweep`                                            | `ADMIN`            | **veri siler** — `SUPPORT` yıkıcı işlem yapamaz (ADR-0013 §4)                             |
+
+## İstemci bütünlüğü katmanı (App Check)
+
+Guard sırası: **oran sınırı → App Check → kimlik → rol → kullanıcı kotası** (ADR-0022).
+App Check yetkilendirme değildir; bu tablodaki hiçbir kuralın yerine geçmez, yalnızca
+önüne eklenir. `@SkipAppCheck()` yalnızca istemci uygulamasından gelmeyen uçlara
+uygulanır: `POST /payments/webhook`, `POST /verification/callback`, `GET /health/*`.
+Bu uçların doğrulama modeli HMAC imzasıdır.
 
 ## Veri erişim katmanı
 
@@ -97,12 +108,13 @@ verisini döndüremez (ADR-0013 §3).
 
 ## Sonraki fazlarda genişleyecek
 
-| Faz | Eklenecek                                                                                                                            |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| 3   | verification endpoint'leri; `VERIFICATION_REQUIRED` ile seviye bazlı yetki                                                           |
-| 4   | booking sahipliği (müşteri ↔ sağlayıcı iki taraflı erişim), state machine yetkileri                                                  |
-| 5   | ✅ ödeme ve dispute aksiyonları eklendi; `SUPPORT` kısıtları Faz 10 admin API testleriyle doğrulandı                                 |
-| 7   | ✅ eşleştirme uçları eklendi; skor bileşenleri `ADMIN` dışına kapalı (T-19)                                                          |
-| 8   | ✅ safety uçları eklendi; ham konum yalnızca `ADMIN` + audit, iç risk mantığı taraflara kapalı                                       |
-| 10  | ✅ admin/ops endpoint'leri eklendi (yukarıdaki tablo); `SUPPORT` her alt kapsamda read-only doğrulandı (`admin.integration.spec.ts`) |
-| 12  | App Check zorunluluğu, oran sınırı genişletme, abuse senaryoları                                                                     |
+| Faz | Eklenecek                                                                                                                                                                       |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 3   | verification endpoint'leri; `VERIFICATION_REQUIRED` ile seviye bazlı yetki                                                                                                      |
+| 4   | booking sahipliği (müşteri ↔ sağlayıcı iki taraflı erişim), state machine yetkileri                                                                                             |
+| 5   | ✅ ödeme ve dispute aksiyonları eklendi; `SUPPORT` kısıtları Faz 10 admin API testleriyle doğrulandı                                                                            |
+| 7   | ✅ eşleştirme uçları eklendi; skor bileşenleri `ADMIN` dışına kapalı (T-19)                                                                                                     |
+| 8   | ✅ safety uçları eklendi; ham konum yalnızca `ADMIN` + audit, iç risk mantığı taraflara kapalı                                                                                  |
+| 10  | ✅ admin/ops endpoint'leri eklendi (yukarıdaki tablo); `SUPPORT` her alt kapsamda read-only doğrulandı (`admin.integration.spec.ts`)                                            |
+| 12  | ✅ App Check zorunluluğu (`@SkipAppCheck()` istisnaları), kullanıcı başına oran sınırı, ops audit-chain/retention uçları; kurtarma onayında **bağımsız operatör** kuralı (R-36) |
+| 13  | Cloud SQL rol ayrımı (migration ≠ uygulama kullanıcısı, T-35); IAM least privilege                                                                                              |

@@ -12,6 +12,7 @@ import {
 import { CurrentUser, Roles, type AuthenticatedUser } from '../auth/auth.decorators';
 import { clampLimit, decodeCursor, paginate } from '../common/pagination/cursor';
 import { RateLimit } from '../common/ratelimit/rate-limit.decorator';
+import { UserRateLimit } from '../common/ratelimit/user-rate-limit.decorator';
 import { DisputesService } from './disputes.service';
 import {
   AdminDisputeListResponseDto,
@@ -44,6 +45,7 @@ export class DisputesController {
   @Post('bookings/:id/disputes')
   @HttpCode(HttpStatus.CREATED)
   @RateLimit({ name: 'dispute-open', limit: 10, windowSeconds: 60 })
+  @UserRateLimit({ name: 'dispute-open', limit: 10, windowSeconds: 3600 })
   async open(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,

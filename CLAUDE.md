@@ -128,7 +128,24 @@ Bu yapıyı değiştirmek gerekirse önce `docs/architecture/adr/` altında ADR 
   - ownership, **deny by default**. Yetki kontrolü veri erişim katmanında da uygulanır.
 - Secret'lar Secret Manager'da, anahtarlar KMS'te. Repoda hiçbir secret bulunmaz.
 - Kritik işlemler `audit_logs`'a işlemle **aynı transaction'da** yazılır; tablo append-only
-  (uygulama rolüne UPDATE/DELETE yok) ve hash zinciriyle tamper-evident. Rate limiting Redis/gateway'de.
+  (uygulama rolüne UPDATE/DELETE yok) ve hash zinciriyle tamper-evident.
+- Zincir tamper-**evident**'tır: doğrulayan bir iş olmadan kopukluk görünmez.
+  `AuditVerificationService` artımlı doğrular ve `audit_chain_checkpoints`'a yazar;
+  doğrulama tarihsel kayıtları **değiştirmez**, kopukluk bulununca sessizce ilerlemez.
+- Guard sırası sabittir: **oran sınırı → App Check → kimlik → rol → kullanıcı kotası**
+  (ADR-0022). App Check yetkilendirme değildir; `@SkipAppCheck()` yalnızca istemci
+  uygulamasından gelmeyen uçlara (webhook, callback, health) uygulanır.
+- İstemci adresi **asla** `request.ip` veya ham `X-Forwarded-For` değildir:
+  `resolveClientIp(request, TRUSTED_PROXY_HOP_COUNT)` kullanılır. Express `trust proxy`
+  açılmaz (R-53). Oran sınırının iki katmanı da **fail-closed**'dır; panik ucu hiç
+  sınırlanmaz (ADR-0008 §3).
+- Saklama süresi belgelemekle uygulanmış olmaz: her hassas veri sınıfının **silen bir
+  işi** vardır (`data-retention-inventory.md`). Hesap kapatma satırı silmez,
+  anonimleştirir — mali ve denetim referansları korunmak zorundadır.
+- `identity_hash` anahtarının **rotasyonu yoktur** (ADR-0004 §5). Anahtar değişmek
+  zorunda kalırsa izlenecek yol `docs/security/identity-key-migration.md`'dedir ve
+  otomatik değildir.
+- Kurtarma talebini onaylayan operatör, talebin **tarafı olamaz** (R-36).
 - Hukuki doğrulama gerektiren her nokta kodda ve dokümanda `TODO(legal)` ile işaretlenir.
 
 **Event-Driven & Consumers (Faz 9)**
@@ -185,7 +202,7 @@ Bu yapıyı değiştirmek gerekirse önce `docs/architecture/adr/` altında ADR 
 | 9   | Event-driven: Pub/Sub, contracts, retries, DLQ, idempotency                                                                                                     | ✅ tamamlandı |
 | 10  | Admin/Operations API                                                                                                                                            | ✅ tamamlandı |
 | 11  | Analytics: BigQuery pipeline, metrikler                                                                                                                         | ✅ tamamlandı |
-| 12  | Security hardening                                                                                                                                              |               |
+| 12  | Security hardening: proxy güveni (R-53), App Check, audit zincir doğrulama, retention, SAST/dependency gate                                                     | ✅ tamamlandı |
 | 13  | DevOps: Terraform, Cloud Run, staging/production                                                                                                                |               |
 | 14  | Performance & reliability                                                                                                                                       |               |
 | 15  | **Web frontend** (bundan önce frontend geliştirilmez)                                                                                                           |               |
@@ -208,6 +225,8 @@ npm run dev --workspace=@emek/api                         # core API (watch)
 npm run seed:catalog --workspace=@emek/api                # hizmet katalogu referans verisi
 npm run contracts:generate --workspace=@emek/api          # OpenAPI sözleşmesini yeniden üret
 npm run lint && npm run typecheck && npm test             # hızlı kontrol (altyapı gerekmez)
+npm run audit:deps                                        # bağımlılık taraması (CI'da bloklayıcı)
+npm run sast                                              # SAST: semgrep (kayıt defteri + Emek kuralları)
 npm run test:integration                                  # gerçek Postgres+Redis gerektirir
 cd services/ai && uv run pytest                           # AI servisi testleri
 cd services/ai && uv run ruff check . && uv run mypy app  # AI lint + typecheck
@@ -218,18 +237,22 @@ ADR-0015), Python 3.12 + uv. Build `tsc` iledir; `@nestjs/cli` kullanılmaz.
 
 ## 8. Doküman haritası
 
-| Dosya                                       | İçerik                                                         |
-| ------------------------------------------- | -------------------------------------------------------------- |
-| `docs/architecture/initial-assessment.md`   | Mevcut durum, boşluk analizi, anti-hedefler                    |
-| `docs/architecture/adr/`                    | Architecture Decision Record'lar (0001-0019)                   |
-| `docs/api/error-codes.md`                   | Business error kodları                                         |
-| `docs/architecture/local-development.md`    | Kurulum, komutlar, sorun giderme                               |
-| `docs/database/schema.md`                   | Şema, invariant'lar, migration kuralları                       |
-| `docs/architecture/phase-plan.md`           | Faz planı, çıktılar, exit kriterleri                           |
-| `docs/architecture/coding-conventions.md`   | Kod/commit/naming konvansiyonları                              |
-| `docs/architecture/event-catalog.md`        | Event sözlüğü ve şema kuralları                                |
-| `docs/architecture/analytics.md`            | BigQuery export pipeline, metrik view'ları, ödeme mutabakatı   |
-| `docs/testing/test-strategy.md`             | Test seviyeleri, zorunlu senaryolar, coverage eşiği            |
-| `docs/security/data-protection-baseline.md` | Veri sınıflandırma, KVKK, retention                            |
-| `docs/research/technical-risks.md`          | Teknik riskler, varsayımlar, hukuki doğrulama gereken noktalar |
-| `docs/research/research-metrics.md`         | TÜBİTAK Ar-Ge metrikleri ve deney çerçevesi                    |
+| Dosya                                         | İçerik                                                         |
+| --------------------------------------------- | -------------------------------------------------------------- |
+| `docs/architecture/initial-assessment.md`     | Mevcut durum, boşluk analizi, anti-hedefler                    |
+| `docs/architecture/adr/`                      | Architecture Decision Record'lar (0001-0022)                   |
+| `docs/api/error-codes.md`                     | Business error kodları                                         |
+| `docs/architecture/local-development.md`      | Kurulum, komutlar, sorun giderme                               |
+| `docs/database/schema.md`                     | Şema, invariant'lar, migration kuralları                       |
+| `docs/architecture/phase-plan.md`             | Faz planı, çıktılar, exit kriterleri                           |
+| `docs/architecture/coding-conventions.md`     | Kod/commit/naming konvansiyonları                              |
+| `docs/architecture/event-catalog.md`          | Event sözlüğü ve şema kuralları                                |
+| `docs/architecture/analytics.md`              | BigQuery export pipeline, metrik view'ları, ödeme mutabakatı   |
+| `docs/testing/test-strategy.md`               | Test seviyeleri, zorunlu senaryolar, coverage eşiği            |
+| `docs/security/data-protection-baseline.md`   | Veri sınıflandırma, KVKK, retention                            |
+| `docs/security/rbac-matrix.md`                | Endpoint → rol/sahiplik matrisi                                |
+| `docs/security/data-retention-inventory.md`   | Hassas veri envanteri, saklama süreleri, **silen işler**       |
+| `docs/security/penetration-test-checklist.md` | Sızma testi koşu listesi ve bugünkü durumu                     |
+| `docs/security/identity-key-migration.md`     | Identity HMAC anahtarı göç prosedürü (rotasyon yok)            |
+| `docs/research/technical-risks.md`            | Teknik riskler, varsayımlar, hukuki doğrulama gereken noktalar |
+| `docs/research/research-metrics.md`           | TÜBİTAK Ar-Ge metrikleri ve deney çerçevesi                    |

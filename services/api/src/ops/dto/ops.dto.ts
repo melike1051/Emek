@@ -113,3 +113,27 @@ export class NotificationJobListResponseDto {
   items!: NotificationJobResponseDto[];
   nextCursor!: string | null;
 }
+
+/**
+ * Audit zinciri doğrulama sonucu (Faz 12).
+ *
+ * `status` operasyonel bir bulgudur, HTTP hatası değil: kopukluk tespit edildiğinde
+ * uç 200 döner ve bulguyu **gösterir**. Hata olarak dönmek, operatörün bulguyu
+ * göremeden generic bir 500 görmesine yol açardı.
+ */
+export class AuditChainStatusResponseDto {
+  status!: 'OK' | 'BROKEN';
+  rowsVerified!: number;
+  verifiedThroughId!: string | null;
+  brokenAtId!: string | null;
+  exportedStorageKey!: string | null;
+}
+
+/** Retention taramasının sildiği/anonimleştirdiği satır sayıları (Faz 12). */
+export class RetentionSweepResponseDto {
+  anonymizedUsers!: number;
+  processedEvents!: number;
+  deadLetterEvents!: number;
+  verificationAttempts!: number;
+  analyticsEvents!: number;
+}

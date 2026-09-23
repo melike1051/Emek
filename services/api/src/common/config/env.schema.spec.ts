@@ -1,24 +1,9 @@
 import { EnvValidationError, validateEnv } from './env.schema';
+import { productionEnvFixture as productionEnv } from './production-env.fixture';
 
 const baseEnv = {
   DATABASE_URL: 'postgres://emek:secret@localhost:5432/emek',
   REDIS_URL: 'redis://localhost:6379',
-};
-
-/** Production'da geçerli olması gereken asgari yapılandırma. */
-const productionEnv = {
-  NODE_ENV: 'production',
-  IDENTITY_PROVIDER: 'live',
-  PAYMENT_PROVIDER: 'live',
-  AUTH_PROVIDER: 'firebase',
-  FIREBASE_PROJECT_ID: 'emek-production',
-  IDENTITY_HASH_KEY_SOURCE: 'kms',
-  IDENTITY_HASH_KEY: 'production-grade-identity-hash-key-value',
-  IDENTITY_CALLBACK_SECRET: 'production-grade-callback-secret',
-  PAYMENT_WEBHOOK_SECRET: 'production-grade-payment-webhook-secret',
-  STORAGE_PROVIDER: 'gcs',
-  STORAGE_SIGNING_SECRET: 'production-grade-storage-signing-secret',
-  AI_SERVICE_API_KEY: 'production-grade-ai-service-key',
 };
 
 describe('validateEnv', () => {
@@ -225,5 +210,60 @@ describe('validateEnv', () => {
       expect(error).toBeInstanceOf(EnvValidationError);
       expect((error as Error).message).not.toContain(secret);
     }
+  });
+  // --- Faz 12 güvenlik yapılandırması (ADR-0022) ---
+
+  // R-53: proxy sayısı ayarlanmazsa Cloud Run arkasında IP sınırı tek global kovaya
+  // çöker. Sessiz varsayılanla production'a çıkmak, sınırı olmayan bir sistemi
+  // "sınırlı" sanmaktır.
+  it('production ortamında TRUSTED_PROXY_HOP_COUNT ayarlanmadan başlanamaz', () => {
+    expect(() =>
+      validateEnv({ ...baseEnv, ...productionEnv, TRUSTED_PROXY_HOP_COUNT: '0' }),
+    ).toThrow(/TRUSTED_PROXY_HOP_COUNT/);
+  });
+
+  it('production ortamında App Check zorunludur', () => {
+    expect(() => validateEnv({ ...baseEnv, ...productionEnv, APP_CHECK_ENABLED: 'false' })).toThrow(
+      /APP_CHECK_ENABLED/,
+    );
+  });
+
+  it('production ortamında mock App Check doğrulayıcısı reddedilir', () => {
+    expect(() => validateEnv({ ...baseEnv, ...productionEnv, APP_CHECK_PROVIDER: 'mock' })).toThrow(
+      /APP_CHECK_PROVIDER/,
+    );
+  });
+
+  it('production ortamında yerel varsayılan proje numarası reddedilir', () => {
+    expect(() =>
+      validateEnv({ ...baseEnv, ...productionEnv, FIREBASE_PROJECT_NUMBER: '000000000000' }),
+    ).toThrow(/FIREBASE_PROJECT_NUMBER/);
+  });
+
+  // Zincir tamper-evident'tır: doğrulama kapalıysa kopukluk hiç görünmez.
+  it('production ortamında audit zinciri doğrulaması zorunludur', () => {
+    expect(() =>
+      validateEnv({ ...baseEnv, ...productionEnv, AUDIT_VERIFICATION_ENABLED: 'false' }),
+    ).toThrow(/AUDIT_VERIFICATION_ENABLED/);
+  });
+
+  // R-38: belgelenmiş ama uygulanmayan saklama süresi, saklama politikası değildir.
+  it('production ortamında retention işi zorunludur', () => {
+    expect(() => validateEnv({ ...baseEnv, ...productionEnv, RETENTION_ENABLED: 'false' })).toThrow(
+      /RETENTION_ENABLED/,
+    );
+  });
+
+  // R-82: bellekteki arşiv süreç yeniden başladığında kaybolur; "bağımsız kopya"
+  // iddiasını taşıyamaz. Gerçek GCS arşivi Faz 13'te gelir.
+  it('production ortamında bellek arşiviyle audit dışa aktarımı reddedilir', () => {
+    expect(() =>
+      validateEnv({
+        ...baseEnv,
+        ...productionEnv,
+        AUDIT_EXPORT_ENABLED: 'true',
+        AUDIT_ARCHIVE_PROVIDER: 'memory',
+      }),
+    ).toThrow(/AUDIT_ARCHIVE_PROVIDER/);
   });
 });

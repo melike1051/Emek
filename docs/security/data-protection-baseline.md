@@ -140,9 +140,14 @@ Bütünlük mekanizması (ADR-0013, **Faz 2'de kurulur**):
 
 - Silme/anonimleştirme talebi: finansal ve hukuki saklama yükümlülüğü olan kayıtlar
   (ödeme, dispute, audit) korunur; diğer kişisel alanlar anonimleştirilir. Kesin kapsam `TODO(legal)`.
-- Veri taşınabilirliği ve erişim talebi için export yolu Faz 12'de tanımlanır.
-- Retention tabloları ve süreleri Faz 12'de tek listede toplanır ve **çalışan bir job ile
-  gerçekten uygulanır** (T-24).
+- **Faz 12'de yapıldı:** retention tabloları ve süreleri tek listede toplandı
+  (`data-retention-inventory.md`) ve `RetentionService` ile **gerçekten uygulanıyor**
+  (T-24). Hesap kapatma `deleted_at` saatini başlatır; süre dolunca profil adı
+  pseudonime döner, biyografi ve açık adres kaldırılır, koordinat kabalaştırılır.
+  Kayıt silinmez — `bookings`/`payments`/`audit_logs` ona atıfta bulunur.
+- **Faz 12'de yapılmadı:** veri taşınabilirliği/erişim talebi için kullanıcıya dönük
+  export yolu. Bu bir ürün akışıdır (kimlik doğrulama + teslim kanalı gerektirir) ve
+  güvenlik sertleştirme kapsamına sığmadı; API yüzeyiyle birlikte Faz 15'e taşındı.
 
 ## 9. Hukuki doğrulama bekleyen noktalar
 
@@ -157,3 +162,7 @@ Ayrıntı ve takip: `docs/research/technical-risks.md`.
 - `TODO(legal)`: kanıt fotoğrafı/dokümanı saklama süresi ve uyuşmazlık sonrası imha.
 - `TODO(legal)`: uyuşmazlık kararlarının ve ödeme kayıtlarının zorunlu saklama süresi
   (ticari/vergisel mevzuat) ile KVKK silme talebinin kesişimi.
+- `TODO(legal)`: KVKK'nın "silme" talebinin **anonimleştirme** ile karşılanıp
+  karşılanmadığı (Faz 12'de uygulanan yöntem budur — R-38).
+- `TODO(legal)`: denetim izi (`audit_logs`) ve retention-locked arşivin saklama süresi
+  (`AUDIT_EXPORT_RETENTION_DAYS` varsayılanı bir **öneridir**, hukuki gereklilik değil).

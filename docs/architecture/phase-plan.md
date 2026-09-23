@@ -719,7 +719,7 @@ kapsamındadır; Faz 11 altyapıyı doğru ve test edilmiş kurmaktan sorumludur
 
 ---
 
-## Faz 12 — Security Hardening
+## Faz 12 — Security Hardening ✅
 
 **Kapsam:** RBAC yeniden gözden geçirme; Secret Manager/IAM/KMS; App Check zorunluluğu;
 rate limiting + abuse senaryoları; audit tamlığı; hassas veri envanteri ve retention uygulanması;
@@ -727,9 +727,55 @@ dependency scanning + SAST; audit hash zinciri doğrulama işi + retention-locke
 (rol ayrımı Faz 2'de kuruldu — ADR-0013); identity HMAC anahtarı için **re-verification migration
 prosedürü** (rotasyon bir seçenek değil — ADR-0004 §5); penetration test checklist.
 
-**Exit:** SAST/dependency scan CI'da bloklayıcı; kritik/high bulgu yok veya gerekçeli istisna;
-abuse senaryoları test edildi; retention gerçekten siliyor (T-24); audit hash zinciri kopukluğu
-tespit ediliyor (T-36).
+**Exit kriterleri (durum):**
+
+- ✅ SAST ve bağımlılık taraması CI'da **bloklayıcı**: `npm audit --audit-level=high`,
+  `pip-audit --strict`, `semgrep --error` (kayıt defteri paketleri + `.semgrep.yml`).
+- ✅ Kritik/high bulgu yok. Tek gerekçeli istisna `multer` override'ıdır (R-35) ve
+  gerekliliği bu fazda **ölçülerek** doğrulandı: override kaldırıldığında 4 high
+  advisory geri geliyor, üst paket (`@nestjs/platform-express@11.2.5`) hâlâ savunmasız
+  sürümü bildiriyor. SAST'ta üç `nosemgrep` istisnası var, üçü de kodda gerekçeli.
+- ✅ Abuse senaryoları test edildi: başlık sahteciliğiyle oran sınırı atlatılamıyor
+  (R-53), kullanıcı kotası hesapları birbirinden ayırıyor, iki katman da fail-closed.
+- ✅ Retention **gerçekten siliyor** (T-24): süresi dolmuş hesabın profil adı, açık
+  adresi ve tam koordinatı kaldırılıyor; süresi dolmamış ve aktif hesaplara
+  dokunulmuyor; tarama idempotent ve audit'li.
+- ✅ Audit hash zinciri kopukluğu tespit ediliyor (T-36): değiştirilmiş satır bulunuyor,
+  doğrulama tarihsel kayıtları değiştirmiyor, kopukluktan sonra sessizce ilerlenmiyor.
+- ✅ App Check backend desteği ve zorunluluğu var; istisnalar (webhook, callback, health)
+  açıkça işaretli ve imza modelini koruyor. Mobil taraf **Faz 16**.
+- ✅ Hassas veri envanteri tek belgede (`data-retention-inventory.md`); her satırın
+  saklama süresi ve **silen işi** yazılı, "silen iş yok" satırları gerekçeli.
+- ✅ Identity HMAC anahtarı göç prosedürü belgeli (`identity-key-migration.md`);
+  otomatik rotasyon eklenmedi (ADR-0004 §5).
+- ✅ Penetration test checklist (`penetration-test-checklist.md`) — 16 başlık, her madde
+  ya bir teste ya da bir faza bağlı.
+- ✅ 375 unit + 405 integration test (AI servisi 249 pytest); lint/typecheck/format/build
+  temiz; migration up/down/up temiz; `npm audit`, `pip-audit`, semgrep (204 + 5 kural)
+  sıfır bulgu.
+
+**Bu fazda alınan tasarım kararları:** ADR-0022 (proxy güveni, App Check, zincir
+doğrulama, retention, bağımsız operatör onayı).
+
+**Faz 12'de bulunan güvenlik açığı ve çözümü:**
+
+| Bulgu                                                                                                                                                                                                                                                       | Şiddet | Çözüm                                                                                                                                                            |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Kurtarma talebini onaylayanın bağımsızlığı zorlanmıyordu (R-36).** ADMIN rolü elde eden bir saldırgan kendi açtığı kurtarma talebini kendisi onaylayarak Faz 3'te kaldırılan devralma yolunu geri getirebilirdi; operatör onayı bir formaliteye dönüşürdü | HIGH   | `approveRecovery` onaylayanın talep sahibi veya hedef hesap olmasını reddediyor; ret talebi **kapatmıyor** (başka operatör inceleyebilmeli). İki regresyon testi |
+| **IP oran sınırı `request.ip` okuyordu** ve proxy güveni yapılandırılmamıştı: Cloud Run arkasında tek global kova (R-53)                                                                                                                                    | MEDIUM | `resolveClientIp` + `TRUSTED_PROXY_HOP_COUNT`; `trust proxy` bilinçli olarak kapalı ve SAST kuralıyla korunuyor. 10 unit + 1 integration testi                   |
+| **Kullanıcı başına kota yoktu:** tek hesap paylaşılan IP kovasını tüketebilirdi                                                                                                                                                                             | MEDIUM | `UserRateLimitGuard` + 9 pahalı uçta `@UserRateLimit`                                                                                                            |
+| **`markDeleted` saklama saatini başlatmıyordu:** silme talebinin anı kayıtlı olmadığı için hiçbir retention uygulanamazdı (R-38)                                                                                                                            | MEDIUM | `users.deleted_at`/`anonymized_at` + `RetentionService.anonymizeDeletedUsers`                                                                                    |
+| **Audit zinciri hiç doğrulanmıyordu:** tamper-evident bir kayıt kimse bakmazsa tamper-_silent_'tır                                                                                                                                                          | MEDIUM | Artımlı doğrulama + checkpoint tablosu + ops uçları + zamanlayıcı                                                                                                |
+| **`productionEnv` test fixture'ı iki dosyada kopyalanmıştı** ve yeni zorunlu ayar eklendiğinde ayrıştı                                                                                                                                                      | LOW    | Tek `production-env.fixture.ts`                                                                                                                                  |
+
+**Faz 12'de kapanan riskler:** R-53 (uygulama tarafı; topoloji doğrulaması Faz 13),
+R-38 (anonimleştirme uygulandı; hukuki yeterlilik TODO(legal)).
+
+**Faz 12'de taşınan riskler:** R-35 (override hâlâ gerekli, ölçüldü), R-36 (bağımsız
+onay eklendi; `HIGH` güvencenin gerçekten canlılık içerdiği sağlayıcı sözleşmesine
+bağlı), R-39 (KMS adapter'ı Faz 13), R-66 (safety telemetri sınırı hâlâ süreç içi), yeni R-82
+(retention-locked arşiv Faz 13), R-83 (storage/BigQuery lifecycle Faz 13), R-84
+(App Check uçtan uca Faz 16).
 
 ---
 

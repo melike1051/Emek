@@ -127,6 +127,59 @@ describe('admin / operations API (integration)', () => {
       return { targetUserId: row.rows[0]?.target_user_id as string };
     }
 
+    /**
+     * R-36: operatör onayı bağımsız bir kontroldür.
+     *
+     * Faz 3 otomatik devri kaldırdı ama onaylayanın talebin tarafı olup olmadığı
+     * kontrol edilmiyordu: ADMIN rolü elde eden bir saldırgan kendi kurtarma
+     * talebini kendisi onaylayarak devralma yolunu geri getirebilirdi.
+     */
+    it('kurtarma talebini açan kişi ADMIN olsa bile kendi talebini onaylayamaz', async () => {
+      await createPendingRequest('self1');
+
+      const requester = await pool.query<{ id: string; requester_user_id: string }>(
+        `SELECT id, requester_user_id FROM account_recovery_requests
+          WHERE status = 'PENDING_REVIEW'`,
+      );
+      const requestId = requester.rows[0]!.id;
+      // Saldırgan senaryosu: kabuk hesap ADMIN yetkisi kazanıyor.
+      await grant(requester.rows[0]!.requester_user_id, 'ADMIN');
+
+      await http()
+        .post(`${PREFIX}/verification/recovery-requests/${requestId}/approve`)
+        .set('authorization', bearer('adm-shell-self1'))
+        .expect(403);
+
+      // Talep kapanmaz: başka bir operatör hâlâ inceleyebilmeli.
+      const after = await pool.query<{ status: string }>(
+        `SELECT status FROM account_recovery_requests WHERE id = $1`,
+        [requestId],
+      );
+      expect(after.rows[0]!.status).toBe('PENDING_REVIEW');
+
+      // Oturum kimliği taşınmamış olmalı.
+      const moved = await pool.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM auth_subjects
+          WHERE provider_subject = 'adm-shell-self1' AND user_id = $1`,
+        [requester.rows[0]!.requester_user_id],
+      );
+      expect(moved.rows[0]!.count).toBe('1');
+    });
+
+    it('hedef hesap ADMIN olsa bile kendi hesabına yapılan kurtarmayı onaylayamaz', async () => {
+      const { targetUserId } = await createPendingRequest('self2');
+      await grant(targetUserId, 'ADMIN');
+
+      const row = await pool.query<{ id: string }>(
+        `SELECT id FROM account_recovery_requests WHERE status = 'PENDING_REVIEW'`,
+      );
+
+      await http()
+        .post(`${PREFIX}/verification/recovery-requests/${row.rows[0]!.id}/approve`)
+        .set('authorization', bearer('adm-owner-self2'))
+        .expect(403);
+    });
+
     it('ADMIN kuyruğu görür ve onaylar; SUPPORT görür ama onaylayamaz', async () => {
       const { targetUserId } = await createPendingRequest('rec1');
 

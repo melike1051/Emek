@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { CurrentUser, type AuthenticatedUser } from '../auth/auth.decorators';
 import { RateLimit } from '../common/ratelimit/rate-limit.decorator';
+import { UserRateLimit } from '../common/ratelimit/user-rate-limit.decorator';
 import { CreateReviewDto, ReviewResponseDto } from './dto/review.dto';
 import { ReviewsService } from './reviews.service';
 
@@ -20,6 +21,7 @@ export class ReviewsController {
   @Post('bookings/:id/review')
   @HttpCode(HttpStatus.CREATED)
   @RateLimit({ name: 'review-create', limit: 20, windowSeconds: 60 })
+  @UserRateLimit({ name: 'review-create', limit: 20, windowSeconds: 3600 })
   async create(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,

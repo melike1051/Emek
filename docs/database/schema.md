@@ -434,6 +434,7 @@ Bunlar Faz 1'de **bilinçli olarak yok**; ilgili domain ile birlikte gelir:
 | 8   | ✅ `safety_sessions`, `location_events` (partition + retention), `safety_events`, `safety_risk_assessments`                                                   |
 | 9   | ✅ `dead_letter_events`, `notification_jobs`, `analytics_events`                                                                                              |
 | 11  | ✅ `payment_reconciliation_runs`, `payment_reconciliation_discrepancies`, `analytics_events.export_claimed_until`                                             |
+| 12  | ✅ `audit_chain_checkpoints`, `audit_exports`, `users.deleted_at` / `users.anonymized_at`                                                                     |
 
 ## Faz 9 tabloları — event-driven ve asenkron işlemler
 
@@ -541,6 +542,50 @@ kalır (mutabakat dahili bir tutarlılık taramasıdır, BigQuery'ye gitmez).
 - Kısmi `UNIQUE (payment_id, discrepancy_type) WHERE resolved_at IS NULL`:
   `dead_letter_events` ile aynı desen — aynı ödeme+tip için tek açık kayıt.
 - Kısmi indeks `(detected_at) WHERE resolved_at IS NULL` — çözülmemiş bulgu taraması.
+
+## Faz 12 tabloları — denetim izi doğrulaması ve retention (ADR-0022)
+
+### `audit_chain_checkpoints` — artımlı zincir doğrulaması
+
+Faz 2'nin `audit_chain_broken_at()` fonksiyonu tabloyu **baştan** tarar; saatlik bir iş
+için ölçeklenmez. `audit_chain_verify_range(from_id, expected_prev, limit)` bir aralığı
+doğrular, bu tablo da en son doğrulanan satırı ve hash'ini tutar. Bir sonraki tur bu
+hash'i beklenen `prev_hash` olarak kullanır — böylece yalnızca yeni satırlar değil,
+**zaten doğrulanmış geçmişin yeniden yazılması** da yakalanır.
+
+| Kolon                                  | Not                                                           |
+| -------------------------------------- | ------------------------------------------------------------- |
+| `verified_through_id`, `verified_hash` | doğrulanmış son satır ve hash'i; bir sonraki turun başlangıcı |
+| `rows_verified`                        | bu turda doğrulanan satır sayısı (gözlemlenebilirlik)         |
+| `broken_at_id`, `status`               | `OK` / `BROKEN`; CHECK ile tutarlı olmak zorunda              |
+
+Tablo **append-only**'dir (`audit_logs_immutable` trigger'ı paylaşılır): doğrulama
+geçmişi de kanıttır, sonradan "hep OK'ti" diye düzeltilememelidir. Yeni satır yokken
+checkpoint yazılmaz — her tur aynı noktayı tekrarlamak tabloyu gürültüyle doldururdu.
+
+### `audit_exports` — retention-locked dışa aktarım kaydı (ADR-0013 §8)
+
+Doğrulanmış zincir parçaları JSONL olarak değişmez depolamaya yazılır; bu tablo aralığı,
+satır sayısını, parça özetini (`sha256`) ve nesne anahtarını tutar. Nesne ile kayıt
+birbirini doğrular: biri değiştirilirse özet tutmaz. `storage_key` UNIQUE ve tablo
+append-only.
+
+**Yalnızca doğrulanmış aralık arşivlenir.** Bozuk bir parçayı "kanıt" diye değişmez
+depolamaya yazmak, kanıtı değersizleştirirdi.
+
+Gerçek GCS arşivi ve bucket retention policy'si **Faz 13**'e aittir (R-82); bugün yalnızca
+bellek uygulaması bağlıdır ve production config'i dışa aktarımı onunla reddeder.
+
+### `users.deleted_at` / `users.anonymized_at` — retention saati (R-38)
+
+Faz 3'te `markDeleted` yalnızca durum ve iletişim alanlarını değiştiriyordu; silme
+talebinin **ne zaman** geldiği kayıtlı olmadığı için hiçbir saklama süresi
+uygulanamıyordu. `deleted_at` saati başlatır (tekrarlanan kapatma çağrısı onu
+**sıfırlamaz**), `anonymized_at` sonucu işaretler ve ikinci bir turun aynı hesabı tekrar
+işlemesini engeller. `CHECK (anonymized_at IS NULL OR deleted_at IS NOT NULL)`.
+
+Satır **silinmez**: `audit_logs`, `bookings` ve `payments` ona atıfta bulunur. Ayrıntı ve
+kapsam: `docs/security/data-retention-inventory.md`.
 
 ## Migration kuralları
 

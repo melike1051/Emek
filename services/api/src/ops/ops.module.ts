@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { SecurityModule } from '../common/security/security.module';
 import { NotificationJobsRepository } from './notification-jobs.repository';
 import { OpsController } from './ops.controller';
 import { OpsService } from './ops.service';
@@ -10,6 +11,7 @@ import { OpsService } from './ops.service';
  * edilmez. `AuditModule`/`DatabaseModule` de Global'dır.
  */
 @Module({
+  imports: [SecurityModule],
   controllers: [OpsController],
   providers: [OpsService, NotificationJobsRepository],
 })

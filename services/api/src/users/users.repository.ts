@@ -203,8 +203,15 @@ export class UsersRepository {
    * taşıyabilsin (tekillik index'i DELETED kayıtları da kapsıyor — schema.md).
    */
   async markDeleted(client: PoolClient, userId: string): Promise<void> {
+    // `deleted_at` retention saatini başlatır (Faz 12): profil verisinin
+    // anonimleştirilmesi bu andan itibaren sayılır. Zaten kapatılmış bir hesabın
+    // saati **sıfırlanmaz** — aksi halde tekrarlanan bir kapatma çağrısı
+    // anonimleştirmeyi süresiz erteleyebilirdi.
     await client.query(
-      `UPDATE users SET status = 'DELETED', email = NULL, phone = NULL WHERE id = $1`,
+      `UPDATE users
+          SET status = 'DELETED', email = NULL, phone = NULL,
+              deleted_at = COALESCE(deleted_at, now())
+        WHERE id = $1`,
       [userId],
     );
   }

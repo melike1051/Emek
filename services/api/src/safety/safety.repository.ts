@@ -854,6 +854,9 @@ export class SafetyRepository {
   ): Promise<void> {
     const [column, value] =
       'sessionId' in target ? ['id', target.sessionId] : ['booking_id', target.bookingId];
+    // `column` hemen yukarıdaki
+    // ternary'den gelen iki sabit değerden biridir ('id' | 'booking_id').
+    // nosemgrep: emek-no-string-interpolated-sql
     await client.query(
       `UPDATE safety_sessions
           SET retention_expires_at = GREATEST(

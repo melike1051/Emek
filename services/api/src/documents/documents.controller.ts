@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { CurrentUser, type AuthenticatedUser } from '../auth/auth.decorators';
 import { RateLimit } from '../common/ratelimit/rate-limit.decorator';
+import { UserRateLimit } from '../common/ratelimit/user-rate-limit.decorator';
 import { DocumentsService } from './documents.service';
 import {
   ConfirmUploadDto,
@@ -32,6 +33,7 @@ export class DocumentsController {
   @Post('documents')
   @HttpCode(HttpStatus.CREATED)
   @RateLimit({ name: 'document-register', limit: 60, windowSeconds: 60 })
+  @UserRateLimit({ name: 'document-register', limit: 60, windowSeconds: 300 })
   async register(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: RegisterDocumentDto,
@@ -67,6 +69,9 @@ export class DocumentsController {
   /** Kısa ömürlü indirme URL'i. Her erişim audit'lenir. */
   @Get('documents/:id/download-url')
   @RateLimit({ name: 'document-download', limit: 120, windowSeconds: 60 })
+  // İmzalı URL üretimi kanıt dosyalarına erişimdir: numaralandırma denemeleri
+  // hesap başına sınırlanır ve her erişim zaten audit'lenir.
+  @UserRateLimit({ name: 'document-download', limit: 60, windowSeconds: 300 })
   async downloadUrl(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,

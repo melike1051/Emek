@@ -24,7 +24,9 @@
     "infra:reset": "docker compose -f infra/docker/docker-compose.yml down -v",
     "infra:setup:events": "PUBSUB_EMULATOR_HOST=localhost:8085 npx tsx services/api/scripts/setup-pubsub.ts",
     "migrate:up": "npm run migrate:up --workspace=@emek/api",
-    "migrate:down": "npm run migrate:down --workspace=@emek/api"
+    "migrate:down": "npm run migrate:down --workspace=@emek/api",
+    "audit:deps": "npm audit --audit-level=high",
+    "sast": "semgrep --error --metrics=off --config p/typescript --config p/security-audit --config p/secrets --exclude node_modules --exclude dist . && semgrep --error --metrics=off --config .semgrep.yml ."
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

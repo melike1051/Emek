@@ -1763,6 +1763,42 @@
         "tags": ["Ops"]
       }
     },
+    "/api/v1/ops/audit-chain": {
+      "get": {
+        "operationId": "OpsController_auditChainStatus",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Ops"]
+      }
+    },
+    "/api/v1/ops/audit-chain/verify": {
+      "post": {
+        "operationId": "OpsController_verifyAuditChain",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Ops"]
+      }
+    },
+    "/api/v1/ops/retention/sweep": {
+      "post": {
+        "operationId": "OpsController_sweepRetention",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Ops"]
+      }
+    },
     "/api/v1/ops/notification-jobs": {
       "get": {
         "operationId": "OpsController_listNotificationJobs",

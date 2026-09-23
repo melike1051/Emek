@@ -303,6 +303,10 @@ export class MatchingRepository {
       tuples.push(`(${placeholders.join(', ')})`);
     }
 
+    // `tuples` yalnızca yukarıda
+    // üretilen `$N` yer tutucularından oluşur (sabit 18'lik bloklar); aday verisi
+    // `values` dizisiyle parametreli geçer.
+    // nosemgrep: emek-no-string-interpolated-sql
     await client.query(
       `INSERT INTO booking_match_results
          (run_id, request_id, provider_id, rank,

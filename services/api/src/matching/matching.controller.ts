@@ -13,6 +13,7 @@ import { CurrentUser, Roles, type AuthenticatedUser } from '../auth/auth.decorat
 import { BusinessException } from '../common/errors/business.exception';
 import { ErrorCode } from '../common/errors/error-codes';
 import { RateLimit } from '../common/ratelimit/rate-limit.decorator';
+import { UserRateLimit } from '../common/ratelimit/user-rate-limit.decorator';
 import { BookingRequestsService } from '../requests/booking-requests.service';
 import {
   MatchBatchDto,
@@ -45,6 +46,9 @@ export class MatchingController {
   @Post('booking-requests/:id/match')
   @HttpCode(HttpStatus.CREATED)
   @RateLimit({ name: 'matching-run', limit: 10, windowSeconds: 60 })
+  // Eşleştirme pahalıdır (aday sorgusu + OR-Tools): IP kovası paylaşıldığı için
+  // hesap başına ayrı kota şart (R-53).
+  @UserRateLimit({ name: 'matching-run', limit: 20, windowSeconds: 300 })
   async match(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,

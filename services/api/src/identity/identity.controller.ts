@@ -16,7 +16,9 @@ import { CurrentUser, Public, Roles, type AuthenticatedUser } from '../auth/auth
 import { BusinessException } from '../common/errors/business.exception';
 import { ErrorCode } from '../common/errors/error-codes';
 import { clampLimit, decodeCursor, paginate } from '../common/pagination/cursor';
+import { SkipAppCheck } from '../common/appcheck/app-check.decorators';
 import { RateLimit } from '../common/ratelimit/rate-limit.decorator';
+import { UserRateLimit } from '../common/ratelimit/user-rate-limit.decorator';
 import {
   ApproveRecoveryDto,
   IdentityStatusResponseDto,
@@ -45,6 +47,7 @@ export class IdentityController {
   @Post('session')
   @HttpCode(HttpStatus.CREATED)
   @RateLimit({ name: 'verification-session', limit: 10, windowSeconds: 60 })
+  @UserRateLimit({ name: 'verification-session', limit: 5, windowSeconds: 3600 })
   async startSession(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: StartVerificationDto,
@@ -100,6 +103,8 @@ export class IdentityController {
   @Post('callback')
   @Public()
   @HttpCode(HttpStatus.OK)
+  // Çağıran kimlik sağlayıcısıdır; mobil uygulama yoktur. Doğrulama modeli imzadır.
+  @SkipAppCheck()
   @RateLimit({ name: 'verification-callback', limit: 120, windowSeconds: 60 })
   async callback(
     @Req() request: Request & { rawBody?: Buffer },

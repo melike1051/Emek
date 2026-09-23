@@ -494,6 +494,28 @@ export class IdentityService {
         throw new BusinessException(ErrorCode.RECOVERY_REQUEST_NOT_PENDING);
       }
 
+      /*
+       * Operatör onayı **bağımsız** bir kontroldür (R-36).
+       *
+       * Faz 3'te otomatik devir kaldırıldı ve taşıma operatör onayına bağlandı; ama
+       * onaylayanın talebin tarafı olamayacağı hiçbir yerde zorlanmıyordu. ADMIN rolü
+       * taşıyan bir saldırgan kendi açtığı kurtarma talebini kendisi onaylayarak
+       * kaldırılmış olan devralma yolunu geri getirebilirdi — kontrol bir formaliteye
+       * dönüşürdü. Hedef hesabın kendi talebini onaylaması da aynı şekilde bağımsız
+       * değildir.
+       *
+       * Ret **audit'e yazılmaz ve talebi kapatmaz**: talep geçerli olabilir, yalnızca
+       * bu onaylayan uygun değildir. Başka bir operatör inceleyebilmeli.
+       */
+      if (
+        input.actorUserId === request.requesterUserId ||
+        input.actorUserId === request.targetUserId
+      ) {
+        throw new BusinessException(ErrorCode.RECOVERY_NOT_ALLOWED, {
+          clientMessage: 'Kendi kurtarma talebinizi onaylayamazsınız.',
+        });
+      }
+
       // Onay anında tekrar kontrol: talep açıldıktan sonra kabuk hesap veri oluşturmuş olabilir.
       if (await this.repository.hasOwnData(request.requesterUserId, client)) {
         await this.repository.decideRecoveryRequest(client, {

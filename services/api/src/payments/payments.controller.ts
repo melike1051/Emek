@@ -16,7 +16,9 @@ import { CurrentUser, Public, Roles, type AuthenticatedUser } from '../auth/auth
 import { BusinessException } from '../common/errors/business.exception';
 import { ErrorCode } from '../common/errors/error-codes';
 import { clampLimit, decodeCursor, paginate } from '../common/pagination/cursor';
+import { SkipAppCheck } from '../common/appcheck/app-check.decorators';
 import { RateLimit } from '../common/ratelimit/rate-limit.decorator';
+import { UserRateLimit } from '../common/ratelimit/user-rate-limit.decorator';
 import {
   AdminPaymentListResponseDto,
   AdminPaymentQueryDto,
@@ -41,6 +43,7 @@ export class PaymentsController {
   @Post('bookings/:id/payment')
   @HttpCode(HttpStatus.CREATED)
   @RateLimit({ name: 'payment-authorize', limit: 10, windowSeconds: 60 })
+  @UserRateLimit({ name: 'payment-authorize', limit: 10, windowSeconds: 300 })
   async authorize(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -134,6 +137,8 @@ export class PaymentsController {
   @Post('payments/webhook')
   @Public()
   @HttpCode(HttpStatus.OK)
+  // Çağıran ödeme kuruluşudur; mobil uygulama yoktur. Doğrulama modeli imzadır.
+  @SkipAppCheck()
   @RateLimit({ name: 'payment-webhook', limit: 300, windowSeconds: 60 })
   async webhook(
     @Req() request: Request & { rawBody?: Buffer },

@@ -479,11 +479,14 @@ describe('identity verification (integration)', () => {
         await pool.query<{ id: string }>(`SELECT id FROM account_recovery_requests`)
       ).rows[0]?.id as string;
 
+      // Onaylayan, talebin tarafı olamaz (R-36, ADR-0022 §6): bağımsız bir operatör.
+      const operatorId = await register('id-approve-operator');
+
       const auditFrom = await currentAuditMaxId(pool);
       // Operatör aksiyonu: admin API'si Faz 10'da bu servisi açacak.
       const result = await app
         .get(IdentityService)
-        .approveRecovery({ requestId, actorUserId: ownerId, reason: 'belge incelendi' });
+        .approveRecovery({ requestId, actorUserId: operatorId, reason: 'belge incelendi' });
 
       expect(result.recoveredUserId).toBe(ownerId);
 
@@ -513,7 +516,7 @@ describe('identity verification (integration)', () => {
     });
 
     it('aynı talep ikinci kez onaylanamaz', async () => {
-      const ownerId = await register('id-twice-owner');
+      await register('id-twice-owner');
       await verifyIdentity('id-twice-owner', '77771111222');
       await register('id-twice-new');
       await verifyIdentity('id-twice-new', '77771111222', {
@@ -525,10 +528,11 @@ describe('identity verification (integration)', () => {
         await pool.query<{ id: string }>(`SELECT id FROM account_recovery_requests`)
       ).rows[0]?.id as string;
 
+      const operatorId = await register('id-twice-operator');
       const service = app.get(IdentityService);
-      await service.approveRecovery({ requestId, actorUserId: ownerId });
+      await service.approveRecovery({ requestId, actorUserId: operatorId });
 
-      await expect(service.approveRecovery({ requestId, actorUserId: ownerId })).rejects.toThrow(
+      await expect(service.approveRecovery({ requestId, actorUserId: operatorId })).rejects.toThrow(
         /karara bağlanmış/,
       );
     });

@@ -1,0 +1,78 @@
+# Emek'e özgü SAST kuralları (Faz 12).
+#
+# Bu dosya, kayıt defterindeki genel paketlerin (p/typescript, p/security-audit,
+# p/secrets) **üstüne** gelir. Buradaki kurallar genel güvenlik açıklarını değil,
+# bu repoda alınmış kararların ihlallerini yakalar: bir mimari kararın kod
+# incelemesinde gözden kaçması, CI'da yakalanmasından daha pahalıdır.
+
+rules:
+  - id: emek-no-express-trust-proxy
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: >-
+      Express'in `trust proxy` ayarı açılmamalıdır (R-53, ADR-0022). Naif kullanımı
+      X-Forwarded-For listesinin en solundaki (saldırgan kontrolündeki) adresi seçer ve
+      IP bazlı oran sınırı atlatılabilir hale gelir. İstemci adresi
+      `resolveClientIp(request, TRUSTED_PROXY_HOP_COUNT)` ile çözümlenir.
+    patterns:
+      - pattern-either:
+          - pattern: $APP.set('trust proxy', ...)
+          - pattern: $APP.enable('trust proxy')
+
+  - id: emek-no-raw-request-ip-for-rate-limit
+    languages: [typescript]
+    severity: ERROR
+    message: >-
+      `request.ip` doğrudan kullanılmamalıdır: Express yapılandırmasına bağlı olarak
+      sahte bir başlıktan gelebilir. `resolveClientIp()` kullanın (R-53).
+    paths:
+      include:
+        - '**/common/ratelimit/**'
+    pattern: $REQ.ip
+
+  - id: emek-no-string-interpolated-sql
+    languages: [typescript]
+    severity: ERROR
+    message: >-
+      SQL metnine tanımlayıcı enterpolasyonu yapılıyor. Değerler her zaman parametreli
+      sorguyla ($1, $2) geçirilmelidir. Tablo/sütun adı gerçekten gerekiyorsa sabit bir
+      beyaz listeden gelmeli ve satır `nosemgrep` ile gerekçelendirilmelidir.
+      SCREAMING_CASE sabitleri (paylaşılan SELECT parçaları) kapsam dışıdır: bunlar
+      modül düzeyinde sabittir ve istek verisi taşıyamaz.
+    paths:
+      include:
+        - '**/services/api/src/**'
+      exclude:
+        - '*.spec.ts'
+    # Desen yerine kaynak regex'i: semgrep'in şablon dizgisi desenleri (`...${$X}...`)
+    # çok satırlı ve jenerik (`query<T>()`) çağrılarda sessizce eşleşmiyordu — yani
+    # kural var görünüp hiçbir şeyi korumuyordu.
+    pattern-regex: \.query(<[^>()]*>)?\(\s*`[^`]*\$\{(?![A-Z][A-Z0-9_]*\})
+
+  - id: emek-no-audit-log-mutation
+    languages: [typescript, javascript]
+    severity: ERROR
+    message: >-
+      `audit_logs` append-only'dir (ADR-0013). UPDATE/DELETE veritabanı trigger'ıyla
+      da engellenir; uygulamada denemek bir tasarım hatasının işaretidir.
+    patterns:
+      - pattern-regex: (UPDATE|DELETE\s+FROM)\s+audit_logs
+    paths:
+      include:
+        - '**/services/api/src/**'
+
+  - id: emek-no-console-logging
+    languages: [typescript]
+    severity: WARNING
+    message: >-
+      `console` yerine yapılandırılmış logger kullanılmalıdır: `console` redaksiyon
+      katmanından geçmez ve PII sızdırabilir (ADR-0013 §10).
+    paths:
+      include:
+        - '**/services/api/src/**'
+      exclude:
+        - '*.spec.ts'
+    pattern-either:
+      - pattern: console.log(...)
+      - pattern: console.error(...)
+      - pattern: console.warn(...)

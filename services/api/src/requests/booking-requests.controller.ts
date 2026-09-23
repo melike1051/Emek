@@ -12,6 +12,7 @@ import { CurrentUser, type AuthenticatedUser } from '../auth/auth.decorators';
 import { BusinessException } from '../common/errors/business.exception';
 import { ErrorCode } from '../common/errors/error-codes';
 import { RateLimit } from '../common/ratelimit/rate-limit.decorator';
+import { UserRateLimit } from '../common/ratelimit/user-rate-limit.decorator';
 import { BookingRequestsService } from './booking-requests.service';
 import {
   BookingRequestResponseDto,
@@ -33,6 +34,8 @@ export class BookingRequestsController {
   @Post('from-text')
   @HttpCode(HttpStatus.CREATED)
   @RateLimit({ name: 'request-from-text', limit: 20, windowSeconds: 60 })
+  // Serbest metin NLP servisini çağırır: hesap başına kota maliyeti sınırlar.
+  @UserRateLimit({ name: 'request-from-text', limit: 30, windowSeconds: 300 })
   async fromText(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateRequestFromTextDto,

@@ -14,6 +14,7 @@ import { BusinessException } from '../common/errors/business.exception';
 import { ErrorCode } from '../common/errors/error-codes';
 import { clampLimit, decodeCursor, paginate } from '../common/pagination/cursor';
 import { RateLimit } from '../common/ratelimit/rate-limit.decorator';
+import { UserRateLimit } from '../common/ratelimit/user-rate-limit.decorator';
 import { BookingsService } from './bookings.service';
 import {
   AdminBookingListResponseDto,
@@ -32,6 +33,7 @@ export class BookingsController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @RateLimit({ name: 'booking-create', limit: 30, windowSeconds: 60 })
+  @UserRateLimit({ name: 'booking-create', limit: 20, windowSeconds: 300 })
   async create(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateBookingDto,
