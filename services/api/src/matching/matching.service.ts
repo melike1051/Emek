@@ -46,6 +46,23 @@ const MATCHABLE_STATUSES = new Set(['CREATED', 'MATCHING']);
  */
 const MIN_MATCHING_CONFIDENCE = 0.6;
 
+/**
+ * Motorun erişilemezlik nedeni → `matching_runs.degraded_reason`.
+ *
+ * Üçü de aynı yedek yola düşer ama **aynı şey değildir** ve tek bir etikete
+ * indirgenirse olay incelemesi yanlış yere bakar:
+ *   - `CONTRACT_MISMATCH` → şema ayrışması (bizim hatamız, kesinti değil),
+ *   - `CIRCUIT_OPEN`      → motora hiç gidilmedi (core'un koruması),
+ *   - `TIMEOUT`/`TRANSPORT`/`INVALID_RESPONSE` → motora gidildi, olmadı.
+ */
+const FALLBACK_DEGRADED_REASON = {
+  CONTRACT_MISMATCH: 'ENGINE_CONTRACT_MISMATCH',
+  CIRCUIT_OPEN: 'ENGINE_CIRCUIT_OPEN',
+  TIMEOUT: 'ENGINE_UNAVAILABLE',
+  TRANSPORT: 'ENGINE_UNAVAILABLE',
+  INVALID_RESPONSE: 'ENGINE_UNAVAILABLE',
+} as const satisfies Record<string, MatchingDegradedReason>;
+
 export interface MatchOutcome {
   runId: string;
   requestId: string;
@@ -362,11 +379,10 @@ export class MatchingService {
       weightsVersion: FALLBACK_WEIGHTS_VERSION,
       objectiveVersion: FALLBACK_OBJECTIVE_VERSION,
       strategy: 'RANKED_FALLBACK',
-      // Sözleşme uyuşmazlığı ayrı etiketlenir: kesinti gibi kaydedilseydi,
-      // "AI servisi ne sıklıkla düşüyor" grafiği aslında bir şema hatasını
-      // gösterirdi ve kimse doğru yere bakmazdı.
-      degradedReason:
-        outcome.reason === 'CONTRACT_MISMATCH' ? 'ENGINE_CONTRACT_MISMATCH' : 'ENGINE_UNAVAILABLE',
+      // Sözleşme uyuşmazlığı ve açık devre ayrı etiketlenir: hepsi kesinti gibi
+      // kaydedilseydi, "AI servisi ne sıklıkla düşüyor" grafiği bir şema hatasını
+      // ve core'un kendi korumasını da motor kesintisi sayardı.
+      degradedReason: FALLBACK_DEGRADED_REASON[outcome.reason],
       routingProvider: 'none',
       optimizationRuntimeMs: null,
       rankings,
@@ -653,7 +669,7 @@ export class MatchingService {
       selectedProviderName:
         assignment === null
           ? null
-          : await this.repository.findProviderDisplayName(assignment.providerId),
+          : await this.repository.findProviderDisplayName(assignment.providerId, client),
       scheduledStart: assignment?.scheduledStart ?? null,
       scheduledEnd: assignment?.scheduledEnd ?? null,
       explanation: selected?.explanation ?? [],

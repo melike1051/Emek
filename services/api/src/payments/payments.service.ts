@@ -1035,7 +1035,7 @@ export class PaymentsService {
       return { commandId: reusable.commandId, key: reusable.idempotencyKey };
     }
 
-    const attempt = (await this.repository.countCommands(paymentId, operation)) + 1;
+    const attempt = (await this.repository.countCommands(paymentId, operation, client)) + 1;
     const key = this.idempotencyKey(paymentId, operation, attempt);
     const reservation = await this.repository.reserveCommand(client, {
       paymentId,

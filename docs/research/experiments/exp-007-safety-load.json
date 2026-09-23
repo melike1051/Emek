@@ -1,0 +1,101 @@
+{
+  "experiment": "EXP-007-safety",
+  "label": "local benchmark",
+  "generated_at": "2026-09-23T14:22:18.919Z",
+  "environment": {
+    "platform": "darwin 25.6.0",
+    "cpus": 10,
+    "node": "v22.23.2",
+    "anomaly_service": "erişilemez (127.0.0.1:9) — bozulmuş mod",
+    "note": "Postgres x86_64 emülasyonlu; uygulama/DB/istemci aynı makinede."
+  },
+  "results": {
+    "s07a_batch_size": [
+      {
+        "batch_size": 1,
+        "samples": 20,
+        "p50_ms": 6.8,
+        "p95_ms": 16.2,
+        "max_ms": 107.7,
+        "accepted_samples": 20,
+        "rows_written": 20,
+        "per_sample_p50_ms": 6.8
+      },
+      {
+        "batch_size": 5,
+        "samples": 20,
+        "p50_ms": 7.1,
+        "p95_ms": 8.6,
+        "max_ms": 9.8,
+        "accepted_samples": 100,
+        "rows_written": 100,
+        "per_sample_p50_ms": 1.42
+      },
+      {
+        "batch_size": 10,
+        "samples": 20,
+        "p50_ms": 6.5,
+        "p95_ms": 8.4,
+        "max_ms": 10.9,
+        "accepted_samples": 200,
+        "rows_written": 200,
+        "per_sample_p50_ms": 0.65
+      },
+      {
+        "batch_size": 20,
+        "samples": 20,
+        "p50_ms": 6.5,
+        "p95_ms": 9.7,
+        "max_ms": 10.5,
+        "accepted_samples": 400,
+        "rows_written": 400,
+        "per_sample_p50_ms": 0.33
+      }
+    ],
+    "s07b_concurrent": {
+      "sessions": 20,
+      "batch_size": 20,
+      "window_ms": 376,
+      "samples": 20,
+      "p50_ms": 157.7,
+      "p95_ms": 354.7,
+      "max_ms": 375.7,
+      "http_ok": 20,
+      "http_other": 0,
+      "accepted_samples": 400,
+      "rows_written": 400,
+      "accepted_samples_per_second": 1062.6
+    },
+    "s07c_partitions": {
+      "note": "DEFAULT partition’a düşen satır partition düşürmeyle temizlenemez (R-69).",
+      "partitions": [
+        {
+          "name": "location_events_202609",
+          "rows": 780
+        },
+        {
+          "name": "location_events_202610",
+          "rows": 0
+        },
+        {
+          "name": "location_events_default",
+          "rows": 0
+        }
+      ],
+      "default_partition_rows": 0
+    },
+    "s08_panic_under_load": {
+      "note": "Telemetri yükü sürerken basılan panik; anomali servisi erişilemez (bozulmuş mod).",
+      "samples": 10,
+      "p50_ms": 9.8,
+      "p95_ms": 54.8,
+      "max_ms": 88.4
+    },
+    "r66_process_local_rate_limit": {
+      "note": "Süreç içi, kullanıcı başına 60/dk. Çok instance’ta toplam sınır N katıdır — R-66 açık kalır.",
+      "attempts": 70,
+      "passed_limiter": 60,
+      "rate_limited_429": 10
+    }
+  }
+}

@@ -179,6 +179,50 @@ describe('HttpAnomalyClient devre kesici', () => {
 
     await client.assess(features, start + 31_000);
     expect(fetchMock).toHaveBeenCalledTimes(6);
+
+    // Deneme de düştü → kapı **yeniden kapanır**. Serbest bırakılsaydı izleyici
+    // turundaki tüm oturumlar aynı anda geçer ve her biri tam zaman aşımını öderdi
+    // (Faz 14 code review). Yeniden kapanmak için 5 hata daha gerekmez.
+    for (let index = 0; index < 3; index += 1) {
+      await expect(client.assess(features, start + 31_001)).resolves.toEqual({
+        status: 'UNAVAILABLE',
+        reason: 'CIRCUIT_OPEN',
+      });
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+  });
+
+  it('başarılı deneme devreyi kapatır', async () => {
+    const fetchMock = jest.fn().mockRejectedValue(new Error('ECONNREFUSED'));
+    global.fetch = fetchMock;
+    const client = new HttpAnomalyClient(config, logger);
+    const start = 1_000_000;
+
+    for (let index = 0; index < 5; index += 1) {
+      await client.assess(features, start);
+    }
+    await expect(client.assess(features, start + 1000)).resolves.toEqual({
+      status: 'UNAVAILABLE',
+      reason: 'CIRCUIT_OPEN',
+    });
+
+    // Servis geri gelir; deneme tutar → devre kapanır ve sonraki istek de çağrı yapar.
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          model_version: 'anomaly-deviation-v1',
+          anomaly_score: 0.1,
+          quality: 0.9,
+          contributions: [],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    await client.assess(features, start + 31_000);
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+
+    await client.assess(features, start + 31_001);
+    expect(fetchMock).toHaveBeenCalledTimes(7);
   });
 
   it('sözleşme hatası (4xx) devreyi açmaz', async () => {

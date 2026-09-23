@@ -1224,8 +1224,9 @@ export class SafetyRepository {
   }
 
   /** Aylık partition'ı hazırlar (yoksa oluşturur). DEFAULT'ta veri varsa null. */
-  async ensureLocationPartition(target: Date): Promise<string | null> {
-    const rows = await this.uow.query<{ name: string | null }>(
+  async ensureLocationPartition(target: Date, client?: PoolClient): Promise<string | null> {
+    const rows = await this.uow.queryOn<{ name: string | null }>(
+      client,
       `SELECT safety_ensure_location_partition($1) AS name`,
       [target],
     );

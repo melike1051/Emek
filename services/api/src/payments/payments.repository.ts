@@ -408,8 +408,9 @@ export class PaymentsRepository {
     return { commandId: row.id, idempotencyKey: row.idempotency_key, inFlight: row.in_flight };
   }
 
-  async countCommands(paymentId: string, operation: string): Promise<number> {
-    const rows = await this.uow.query<{ count: string }>(
+  async countCommands(paymentId: string, operation: string, client?: PoolClient): Promise<number> {
+    const rows = await this.uow.queryOn<{ count: string }>(
+      client,
       `SELECT count(*)::text AS count FROM payment_commands
         WHERE payment_id = $1 AND operation = $2`,
       [paymentId, operation],

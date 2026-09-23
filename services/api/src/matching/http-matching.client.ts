@@ -18,6 +18,11 @@ import {
   type MatchingStrategy,
 } from './matching.port';
 
+/** Art arda bu kadar altyapı hatasından sonra devre açılır (anomali istemcisiyle aynı). */
+const CIRCUIT_FAILURE_THRESHOLD = 5;
+/** Devrenin kapalı kalma süresi; dolunca tek bir deneme yapılır (yarı açık). */
+const CIRCUIT_OPEN_MS = 30_000;
+
 /**
  * AI servisine HTTP ile bağlanan matching istemcisi.
  *
@@ -43,7 +48,78 @@ export class HttpMatchingClient implements MatchingClient {
     @Inject(ROOT_LOGGER) private readonly logger: Logger,
   ) {}
 
-  async solve(input: { demands: MatchingDemand[]; optimize: boolean }): Promise<MatchingOutcome> {
+  /**
+   * Devre kesici — `HttpAnomalyClient` ile **aynı** desen ve aynı gerekçe (Faz 8).
+   *
+   * Faz 14 ölçümü (EXP-007 §S-11) bunu zorunlu kıldı: motor **asılı kaldığında**
+   * (bağlantı kabul ediliyor, yanıt hiç gelmiyor) her eşleştirme isteği zaman aşımı
+   * bütçesinin tamamını ödüyordu — sağlıklı p50 ~10 ms iken 1038 ms. Sonuç zaten
+   * bozulmuş moda düşecekti; kullanıcı bu bedeli **her istekte** yeniden ödüyordu.
+   *
+   * Reddedilen bağlantı (hızlı hata) bu sorunu üretmez; ölçülen ve düzeltilen şey
+   * sessizce asılı kalan bağımlılıktır.
+   *
+   * **Gerçek yarı-açık.** Süre dolduğunda kapı kendiliğinden açılmaz: deneme
+   * yapılmadan **önce** pencere yeniden ileri atılır, böylece o anda uçuşta olan
+   * diğer istekler geçemez. Aksi hâlde kesici "tek deneme" değil, 30 saniyede bir
+   * tekrarlanan **eşzamanlı sel** olurdu ve her seli N× tam zaman aşımı öderdik —
+   * yani düzeltilmek istenen maliyet görev döngüsüne çevrilmiş olurdu.
+   *
+   * Yalnızca **altyapı** hataları (`TIMEOUT`, `TRANSPORT`) devreyi açar. Sözleşme
+   * hataları (4xx → `CONTRACT_MISMATCH`) ve geçersiz yanıt (`INVALID_RESPONSE`)
+   * açmaz: onlar kesinti değil, şema ayrışmasıdır ve susturulmak yerine her
+   * istekte görünür kalmalıdır.
+   */
+  private consecutiveFailures = 0;
+  private openUntil = 0;
+
+  async solve(
+    input: { demands: MatchingDemand[]; optimize: boolean },
+    now: number = Date.now(),
+  ): Promise<MatchingOutcome> {
+    if (now < this.openUntil) {
+      return { status: 'UNAVAILABLE', reason: 'CIRCUIT_OPEN' };
+    }
+
+    // Pencere dolmuş ama devre hâlâ açıksa bu istek **deneme**dir: kapı, sonuç
+    // belli olana kadar kapalı tutulur.
+    const isProbe = this.openUntil > 0;
+    if (isProbe) {
+      this.openUntil = now + CIRCUIT_OPEN_MS;
+    }
+
+    const outcome = await this.call(input);
+
+    const infrastructureFailure =
+      outcome.status === 'UNAVAILABLE' &&
+      (outcome.reason === 'TIMEOUT' || outcome.reason === 'TRANSPORT');
+
+    if (!infrastructureFailure) {
+      // Başarı (ya da kesinti olmayan bir hata) devreyi kapatır: deneme tuttu.
+      this.consecutiveFailures = 0;
+      this.openUntil = 0;
+      return outcome;
+    }
+
+    if (isProbe) {
+      // Deneme de düştü; pencere yukarıda zaten yeniden kuruldu.
+      return outcome;
+    }
+
+    this.consecutiveFailures += 1;
+    if (this.consecutiveFailures >= CIRCUIT_FAILURE_THRESHOLD) {
+      this.openUntil = now + CIRCUIT_OPEN_MS;
+      this.consecutiveFailures = 0;
+      this.logger.warn({ openMs: CIRCUIT_OPEN_MS }, 'matching servisi devre kesicisi açıldı');
+    }
+
+    return outcome;
+  }
+
+  private async call(input: {
+    demands: MatchingDemand[];
+    optimize: boolean;
+  }): Promise<MatchingOutcome> {
     const controller = new AbortController();
     const timeout = setTimeout(() => {
       controller.abort();

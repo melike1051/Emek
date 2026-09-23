@@ -188,26 +188,26 @@ Bu yapıyı değiştirmek gerekirse önce `docs/architecture/adr/` altında ADR 
 
 ## 6. Faz sırası (özet)
 
-| Faz | Kapsam                                                                                                                                                          | Durum         |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
-| 0   | Repository & architecture audit, ADR, konvansiyonlar, test stratejisi, faz planı                                                                                | ✅ tamamlandı |
-| 1   | Foundation: monorepo, NestJS, FastAPI, Postgres+PostGIS, Redis, Docker, CI, migration, health                                                                   | ✅ tamamlandı |
-| 2   | Core backend: auth, users, roles, RBAC, profiller, service catalog, skills, error handling + **audit (rol ayrımı/hash zinciri), outbox, idempotency altyapısı** | ✅ tamamlandı |
-| 3   | Identity: adapter, identity_records, unique identity, recovery, verification levels                                                                             | ✅ tamamlandı |
-| 4   | Provider & Booking: availability, PostGIS service areas, booking state machine                                                                                  | ✅ tamamlandı |
-| 5   | Payment & Digital Proof: adapter, webhook idempotency, documents, disputes                                                                                      | ✅ tamamlandı |
-| 6   | Python AI/NLP: structured extraction, versiyonlama, evaluation dataset                                                                                          |               |
-| 7   | Matching & Optimization: retrieval, constraints, scoring, OR-Tools, explainability, benchmark                                                                   |               |
-| 8   | Safety: sessions, geofence, telemetry, rules + anomaly, panic flow                                                                                              | ✅ tamamlandı |
-| 9   | Event-driven: Pub/Sub, contracts, retries, DLQ, idempotency                                                                                                     | ✅ tamamlandı |
-| 10  | Admin/Operations API                                                                                                                                            | ✅ tamamlandı |
-| 11  | Analytics: BigQuery pipeline, metrikler                                                                                                                         | ✅ tamamlandı |
-| 12  | Security hardening: proxy güveni (R-53), App Check, audit zincir doğrulama, retention, SAST/dependency gate                                                     | ✅ tamamlandı |
-| 13  | DevOps: Terraform, Cloud Run, staging/production                                                                                                                | ⚠️ kod tamam, gerçek-bulut doğrulaması bekliyor |
-| 14  | Performance & reliability                                                                                                                                       |               |
-| 15  | **Web frontend** (bundan önce frontend geliştirilmez)                                                                                                           |               |
-| 16  | Flutter mobile                                                                                                                                                  |               |
-| 17  | Final E2E + production readiness + TÜBİTAK demo                                                                                                                 |               |
+| Faz | Kapsam                                                                                                                                                          | Durum                                            |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| 0   | Repository & architecture audit, ADR, konvansiyonlar, test stratejisi, faz planı                                                                                | ✅ tamamlandı                                    |
+| 1   | Foundation: monorepo, NestJS, FastAPI, Postgres+PostGIS, Redis, Docker, CI, migration, health                                                                   | ✅ tamamlandı                                    |
+| 2   | Core backend: auth, users, roles, RBAC, profiller, service catalog, skills, error handling + **audit (rol ayrımı/hash zinciri), outbox, idempotency altyapısı** | ✅ tamamlandı                                    |
+| 3   | Identity: adapter, identity_records, unique identity, recovery, verification levels                                                                             | ✅ tamamlandı                                    |
+| 4   | Provider & Booking: availability, PostGIS service areas, booking state machine                                                                                  | ✅ tamamlandı                                    |
+| 5   | Payment & Digital Proof: adapter, webhook idempotency, documents, disputes                                                                                      | ✅ tamamlandı                                    |
+| 6   | Python AI/NLP: structured extraction, versiyonlama, evaluation dataset                                                                                          |                                                  |
+| 7   | Matching & Optimization: retrieval, constraints, scoring, OR-Tools, explainability, benchmark                                                                   |                                                  |
+| 8   | Safety: sessions, geofence, telemetry, rules + anomaly, panic flow                                                                                              | ✅ tamamlandı                                    |
+| 9   | Event-driven: Pub/Sub, contracts, retries, DLQ, idempotency                                                                                                     | ✅ tamamlandı                                    |
+| 10  | Admin/Operations API                                                                                                                                            | ✅ tamamlandı                                    |
+| 11  | Analytics: BigQuery pipeline, metrikler                                                                                                                         | ✅ tamamlandı                                    |
+| 12  | Security hardening: proxy güveni (R-53), App Check, audit zincir doğrulama, retention, SAST/dependency gate                                                     | ✅ tamamlandı                                    |
+| 13  | DevOps: Terraform, Cloud Run, staging/production                                                                                                                | ⚠️ kod tamam, gerçek-bulut doğrulaması bekliyor  |
+| 14  | Performance & reliability                                                                                                                                       | ⚠️ ölçüm + düzeltmeler tamam, sonuçlar **yerel** |
+| 15  | **Web frontend** (bundan önce frontend geliştirilmez)                                                                                                           |                                                  |
+| 16  | Flutter mobile                                                                                                                                                  |                                                  |
+| 17  | Final E2E + production readiness + TÜBİTAK demo                                                                                                                 |                                                  |
 
 Ayrıntı: `docs/architecture/phase-plan.md`.
 

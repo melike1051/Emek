@@ -1,0 +1,80 @@
+{
+  "experiment": "EXP-007-degradation",
+  "label": "local benchmark",
+  "generated_at": "2026-09-23T17:21:19.763Z",
+  "environment": {
+    "platform": "darwin 25.6.0",
+    "cpus": 10,
+    "node": "v22.23.2",
+    "note": "Uygulama, veritabanı ve istemci aynı makinede; Postgres x86_64 emülasyonlu. Rota sağlayıcısı ölçülmedi: kayıtlı tek sağlayıcı yerel `haversine`, dış rota servisi henüz entegre değil (services/ai/app/routing/registry.py)."
+  },
+  "results": {
+    "healthy": {
+      "ai_url": "http://127.0.0.1:8000",
+      "ai_timeout_ms": 1000,
+      "requests": 15,
+      "warmup_discarded": 1,
+      "http_2xx": 15,
+      "http_error": 0,
+      "degraded_results": 0,
+      "latency": {
+        "samples": 15,
+        "p50_ms": 9.5,
+        "p95_ms": 19.6,
+        "max_ms": 21
+      },
+      "algorithm_versions": {
+        "matching-v1": 16
+      }
+    },
+    "refused": {
+      "ai_url": "http://127.0.0.1:1",
+      "ai_timeout_ms": 1000,
+      "requests": 15,
+      "warmup_discarded": 1,
+      "http_2xx": 15,
+      "http_error": 0,
+      "degraded_results": 15,
+      "latency": {
+        "samples": 15,
+        "p50_ms": 7.2,
+        "p95_ms": 15.6,
+        "max_ms": 17
+      },
+      "algorithm_versions": {
+        "fallback-distance-v1": 16
+      }
+    },
+    "stalled": {
+      "ai_url": "http://127.0.0.1:8099",
+      "ai_timeout_ms": 1000,
+      "requests": 15,
+      "warmup_discarded": 1,
+      "http_2xx": 15,
+      "http_error": 0,
+      "degraded_results": 15,
+      "latency": {
+        "samples": 15,
+        "p50_ms": 13.1,
+        "p95_ms": 1053.3,
+        "max_ms": 1061.3
+      },
+      "algorithm_versions": {
+        "fallback-distance-v1": 16
+      }
+    },
+    "identity_provider_down": {
+      "requests": 16,
+      "statuses": {
+        "503": 16
+      },
+      "latency": {
+        "samples": 16,
+        "p50_ms": 2.5,
+        "p95_ms": 4.9,
+        "max_ms": 7.2
+      },
+      "note": "Kimlik doğrulamasının fallback’i yoktur: doğru davranış hızlı ve açık bir hatadır."
+    }
+  }
+}

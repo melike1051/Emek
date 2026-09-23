@@ -1,0 +1,303 @@
+{
+  "experiment": "EXP-007",
+  "label": "local benchmark",
+  "generated_at": "2026-09-23T17:09:26.486Z",
+  "environment": {
+    "platform": "darwin 25.6.0",
+    "cpus": 10,
+    "total_memory_gib": 16,
+    "node": "v22.23.2",
+    "note": "Postgres container x86_64, Apple silicon host üzerinde emülasyonlu. Uygulama, istemci ve veritabanı aynı makineyi paylaşır."
+  },
+  "metric_definitions": "docs/research/experiments/exp-007-performance-baseline.md §4",
+  "client_timeout_ms": 10000,
+  "results": {
+    "s02_scaling": [
+      {
+        "concurrency": 100,
+        "rate_limit": "active",
+        "requests": 100,
+        "window_ms": 281,
+        "rps": 356.4,
+        "created_p50_ms": 252.2,
+        "created_p95_ms": 277.8,
+        "created_p99_ms": 279.2,
+        "created_per_second": 106.9,
+        "p50_ms": 46.9,
+        "p95_ms": 270.9,
+        "p99_ms": 277.9,
+        "max_ms": 279.8,
+        "created": 30,
+        "conflict_409": 0,
+        "rate_limited_429": 70,
+        "error_rate": 0,
+        "server_error_5xx": 0,
+        "transport_error": 0,
+        "timeout_rate": 0,
+        "status_breakdown": {
+          "201": 30,
+          "429": 70
+        },
+        "committed_bookings": 30,
+        "overbooking": 0,
+        "pool": {
+          "max": 10,
+          "peak_waiting": 20
+        },
+        "redis": {
+          "hits": 0,
+          "misses": 0,
+          "hit_rate": null
+        },
+        "outbox_rows": 330
+      },
+      {
+        "concurrency": 100,
+        "rate_limit": "swept",
+        "requests": 100,
+        "window_ms": 94,
+        "rps": 1068.3,
+        "created_p50_ms": 75,
+        "created_p95_ms": 92.1,
+        "created_p99_ms": 93.1,
+        "created_per_second": 320.5,
+        "p50_ms": 38.4,
+        "p95_ms": 88,
+        "p99_ms": 92.7,
+        "max_ms": 93.4,
+        "created": 30,
+        "conflict_409": 0,
+        "rate_limited_429": 70,
+        "error_rate": 0,
+        "server_error_5xx": 0,
+        "transport_error": 0,
+        "timeout_rate": 0,
+        "status_breakdown": {
+          "201": 30,
+          "429": 70
+        },
+        "committed_bookings": 30,
+        "overbooking": 0,
+        "pool": {
+          "max": 10,
+          "peak_waiting": 20
+        },
+        "redis": {
+          "hits": 0,
+          "misses": 0,
+          "hit_rate": null
+        },
+        "outbox_rows": 330
+      },
+      {
+        "concurrency": 250,
+        "rate_limit": "active",
+        "requests": 250,
+        "window_ms": 120,
+        "rps": 2082.8,
+        "created_p50_ms": 85.1,
+        "created_p95_ms": 117.8,
+        "created_p99_ms": 119.1,
+        "created_per_second": 249.9,
+        "p50_ms": 86.6,
+        "p95_ms": 114.2,
+        "p99_ms": 116.5,
+        "max_ms": 119.3,
+        "created": 30,
+        "conflict_409": 0,
+        "rate_limited_429": 220,
+        "error_rate": 0,
+        "server_error_5xx": 0,
+        "transport_error": 0,
+        "timeout_rate": 0,
+        "status_breakdown": {
+          "201": 30,
+          "429": 220
+        },
+        "committed_bookings": 30,
+        "overbooking": 0,
+        "pool": {
+          "max": 10,
+          "peak_waiting": 20
+        },
+        "redis": {
+          "hits": 0,
+          "misses": 0,
+          "hit_rate": null
+        },
+        "outbox_rows": 780
+      },
+      {
+        "concurrency": 250,
+        "rate_limit": "swept",
+        "requests": 250,
+        "window_ms": 106,
+        "rps": 2353,
+        "created_p50_ms": 88.3,
+        "created_p95_ms": 104.5,
+        "created_p99_ms": 105.5,
+        "created_per_second": 282.4,
+        "p50_ms": 52.9,
+        "p95_ms": 91.6,
+        "p99_ms": 103.5,
+        "max_ms": 105.8,
+        "created": 30,
+        "conflict_409": 0,
+        "rate_limited_429": 220,
+        "error_rate": 0,
+        "server_error_5xx": 0,
+        "transport_error": 0,
+        "timeout_rate": 0,
+        "status_breakdown": {
+          "201": 30,
+          "429": 220
+        },
+        "committed_bookings": 30,
+        "overbooking": 0,
+        "pool": {
+          "max": 10,
+          "peak_waiting": 20
+        },
+        "redis": {
+          "hits": 0,
+          "misses": 0,
+          "hit_rate": null
+        },
+        "outbox_rows": 780
+      },
+      {
+        "concurrency": 500,
+        "rate_limit": "active",
+        "requests": 500,
+        "window_ms": 153,
+        "rps": 3260.2,
+        "created_p50_ms": 111.5,
+        "created_p95_ms": 142.4,
+        "created_p99_ms": 144.3,
+        "created_per_second": 195.6,
+        "p50_ms": 99.1,
+        "p95_ms": 147.1,
+        "p99_ms": 150.1,
+        "max_ms": 150.7,
+        "created": 30,
+        "conflict_409": 0,
+        "rate_limited_429": 470,
+        "error_rate": 0,
+        "server_error_5xx": 0,
+        "transport_error": 0,
+        "timeout_rate": 0,
+        "status_breakdown": {
+          "201": 30,
+          "429": 470
+        },
+        "committed_bookings": 30,
+        "overbooking": 0,
+        "pool": {
+          "max": 10,
+          "peak_waiting": 20
+        },
+        "redis": {
+          "hits": 0,
+          "misses": 0,
+          "hit_rate": null
+        },
+        "outbox_rows": 1530
+      },
+      {
+        "concurrency": 500,
+        "rate_limit": "swept",
+        "requests": 500,
+        "window_ms": 208,
+        "rps": 2403.7,
+        "created_p50_ms": 149.6,
+        "created_p95_ms": 190.2,
+        "created_p99_ms": 192.3,
+        "created_per_second": 288.4,
+        "p50_ms": 124.9,
+        "p95_ms": 180.1,
+        "p99_ms": 188,
+        "max_ms": 192.8,
+        "created": 60,
+        "conflict_409": 0,
+        "rate_limited_429": 440,
+        "error_rate": 0,
+        "server_error_5xx": 0,
+        "transport_error": 0,
+        "timeout_rate": 0,
+        "status_breakdown": {
+          "201": 60,
+          "429": 440
+        },
+        "committed_bookings": 60,
+        "overbooking": 0,
+        "pool": {
+          "max": 10,
+          "peak_waiting": 36
+        },
+        "redis": {
+          "hits": 0,
+          "misses": 0,
+          "hit_rate": null
+        },
+        "outbox_rows": 1560
+      }
+    ],
+    "s03_same_slot_contention": {
+      "concurrency": 100,
+      "requests": 100,
+      "window_ms": 58,
+      "rps": 1737.4,
+      "created_p50_ms": 37.2,
+      "created_p95_ms": 37.2,
+      "created_p99_ms": 37.2,
+      "created_per_second": 17.4,
+      "p50_ms": 18.3,
+      "p95_ms": 56.3,
+      "p99_ms": 56.8,
+      "max_ms": 57.4,
+      "created": 1,
+      "conflict_409": 29,
+      "rate_limited_429": 70,
+      "error_rate": 0,
+      "server_error_5xx": 0,
+      "transport_error": 0,
+      "timeout_rate": 0,
+      "status_breakdown": {
+        "201": 1,
+        "409": 29,
+        "429": 70
+      },
+      "committed_bookings": 1,
+      "overbooking": 0
+    },
+    "s04_idempotency": {
+      "concurrent_repeats": 20,
+      "requests": 20,
+      "window_ms": 27,
+      "rps": 747.9,
+      "created_p50_ms": 26.2,
+      "created_p95_ms": 26.2,
+      "created_p99_ms": 26.2,
+      "created_per_second": 37.4,
+      "p50_ms": 21.5,
+      "p95_ms": 23.3,
+      "p99_ms": 25.6,
+      "max_ms": 26.2,
+      "created": 1,
+      "conflict_409": 19,
+      "rate_limited_429": 0,
+      "error_rate": 0,
+      "server_error_5xx": 0,
+      "transport_error": 0,
+      "timeout_rate": 0,
+      "status_breakdown": {
+        "201": 1,
+        "409": 19
+      },
+      "bookings_created": 1,
+      "replayed_201": 0,
+      "original_201": 1,
+      "distinct_booking_ids": 1
+    }
+  }
+}

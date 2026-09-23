@@ -111,17 +111,45 @@ sürümüyle yazılır (alarm üretmeyenler dâhil): FPR'nin paydası gerçek ve
 
 ### 2.5 Platform
 
-| Metrik                     | Hedef (başlangıç)                     |
-| -------------------------- | ------------------------------------- |
-| API p50 latency            | ölçülecek, Faz 14'te hedef sabitlenir |
-| API p95 latency            | ölçülecek                             |
-| RPS                        | yük testi ile                         |
-| Error rate                 | < %1 (5xx)                            |
-| Event processing lag       | p95 ölçümü + alarm                    |
-| Cache hit rate             | ölçüm                                 |
-| Mobile crash-free sessions | Faz 16                                |
+| Metrik                     | Hedef (başlangıç)                                                                                                                                                   |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| API p50 latency            | ölçülecek, Faz 14'te hedef sabitlenir                                                                                                                               |
+| API p95 latency            | ölçülecek                                                                                                                                                           |
+| RPS                        | yük testi ile                                                                                                                                                       |
+| Error rate                 | < %1 (5xx)                                                                                                                                                          |
+| Event processing lag       | p95 ölçümü + alarm                                                                                                                                                  |
+| Cache hit rate             | **tanımsız** — booking yolu Redis'i cache olarak kullanmaz, yalnızca oran sınırı sayacı için (`hits=0, misses=0`); oran raporlamak yanıltıcı olurdu (EXP-007 §10.4) |
+| Mobile crash-free sessions | Faz 16                                                                                                                                                              |
 
-Not: Hedef değerler Faz 14'te gerçek ölçüme dayanarak sabitlenir; şimdiden uydurulmuş sayı yazılmaz.
+**Faz 14 sonucu — hedefler sabitlenmedi, baseline kaydedildi.** Ölçümlerin tamamı
+`local benchmark`'tır (tek makine, emülasyonlu x86_64 Postgres, event ölçümünde Pub/Sub
+**emulator**). Bunlardan üretim SLO'su türetmek yanlış olurdu; onaylı bir SLO da yoktur
+(R-87 / A-09 açık). Bu yüzden tablo "hedef" değil **kaydedilmiş baseline** taşır:
+
+| Metrik                           | Yerel baseline (EXP-007)                                                                                                                                                                                                        |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| API p50 / p95                    | senaryo bazlı, [`exp-007-performance-baseline.md`](experiments/exp-007-performance-baseline.md) §10                                                                                                                             |
+| Event yayın throughput           | ~51–73 event/sn (üç koşu; instance başına, sıralı gönderim tavanı — R-95); tüketim tarafı yayınla örtüşür, `published→processed` p95 49–62 ms                                                                                   |
+| Event `published→processed` p95  | 49–62 ms (Pub/Sub **emulator**; gerçek Pub/Sub lag'ini temsil etmez)                                                                                                                                                            |
+| Bozulma maliyeti (AI asılı)      | Devre kesici, tam bütçeyi ödeyen istek sayısını **30 sn pencere başına en çok 5**'e indirir (öncesi: her istek). Ölçülen p50 1038 → 11,9–14,5 ms; bu p50 ölçümdeki istek sayısına bağlıdır, etki büyüklüğü olarak okunmamalıdır |
+| Bozulma maliyeti (AI reddedilen) | p50 7,2 ms (sağlıklı 9,5 ms) — hızlı hata ucuzdur                                                                                                                                                                               |
+| Optimizasyon p95 (aday sınırı)   | 50 aday **61 ms**, 100 aday 289 ms, 200 aday **1483 ms** (800 sağlayıcı sabit, **nokta başına 20 tohum**; 5000 ms çözücü limitinin %30'u, fallback 0.0). 5 tohumluk önceki koşu **geçersizdir** — EXP-007 §11.7                 |
+| Error rate                       | ölçülen senaryolarda 5xx = 0 (havuz kilitlenmesi **ve** slot deadlock'u düzeltildikten sonra — R-94, R-97)                                                                                                                      |
+| Cache hit rate                   | **tanımsız** — booking yolu Redis'i cache olarak kullanmaz, yalnızca oran sınırı sayacı için (`hits=0, misses=0`); oran raporlamak yanıltıcı olurdu (EXP-007 §10.4)                                                             |
+| Mobile crash-free sessions       | Faz 16                                                                                                                                                                                                                          |
+
+Gerçek hedefler, gerçek ortam ve gerçek trafik profili olmadan belirlenemez; nedeni
+budur ve burada kayıtlıdır. Şimdiden uydurulmuş sayı yazılmaz.
+
+**Geçersiz ölçümlerin statüsü (Faz 14 kapanışı).** Ar-Ge kaydında geçersiz bir ölçüm
+"eski sonuç" diye tutulmaz: S-09'un **5 tohumluk** koşusu geçersizdir, çünkü n=5'te
+en-yakın-sıra yüzdelik p95'i fiilen 5 koşunun **maksimumuna** indiriyordu. O koşudan
+türeyen hiçbir sayı (özellikle "200 adayda p95 4225 ms" ve "limitin %85'i") tarihsel
+performans iddiası olarak kullanılamaz. **Yetkili sonuç 20 tohumluk koşudur.**
+Geçersiz sayılar yalnızca **metodoloji dersi** olarak, EXP-007 §11.7'de neden
+geçersiz oldukları yazılı hâlde saklanır. H-4 (optimizasyon maliyeti aday sayısıyla
+süper-doğrusal büyür) 20 tohumla **doğrulanmıştır**: tohum sayısı hipotezin yönünü
+değil, yalnızca "pay tükendi" alarmını değiştirmiştir.
 
 ## 3. Üretimde ölçüm altyapısı (ADR-0012)
 

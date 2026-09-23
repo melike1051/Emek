@@ -36,8 +36,14 @@ export class HttpAnomalyClient implements AnomalyClient {
    * Basit devre kesici. Servis düştüğünde her değerlendirme 1,5 sn zaman aşımı
    * bekleseydi, izleyici turu oturum sayısıyla doğrusal uzar ve telemetri kesintisi
    * gibi kurallar gecikirdi (Faz 8 review). Art arda altyapı hatasından sonra bir
-   * süre çağrı yapılmaz; süre dolunca tek bir deneme yapılır (yarı açık).
+   * süre çağrı yapılmaz; süre dolunca **tek** bir deneme yapılır (yarı açık).
    * Sözleşme hataları (4xx) devreyi açmaz: onlar kesinti değil, hatadır.
+   *
+   * Yarı-açıklık gerçek olmak zorundadır (Faz 14 code review): pencere dolduğunda
+   * kapı serbest bırakılsaydı, izleyici turundaki tüm oturumlar aynı anda geçer ve
+   * her biri tam zaman aşımını öderdi — kesici, maliyeti kaldırmak yerine 30
+   * saniyede bir tekrarlayan bir sele çevirirdi. Bu yüzden deneme yapılmadan
+   * **önce** pencere ileri atılır.
    */
   private consecutiveFailures = 0;
   private openUntil = 0;
@@ -46,22 +52,37 @@ export class HttpAnomalyClient implements AnomalyClient {
     if (now < this.openUntil) {
       return { status: 'UNAVAILABLE', reason: 'CIRCUIT_OPEN' };
     }
+
+    const isProbe = this.openUntil > 0;
+    if (isProbe) {
+      this.openUntil = now + CIRCUIT_OPEN_MS;
+    }
+
     const outcome = await this.call(features);
-    if (
+
+    const infrastructureFailure =
       outcome.status === 'UNAVAILABLE' &&
       (outcome.reason === 'TIMEOUT' ||
         outcome.reason === 'TRANSPORT' ||
-        outcome.reason === 'SERVER_ERROR')
-    ) {
-      this.consecutiveFailures += 1;
-      if (this.consecutiveFailures >= CIRCUIT_FAILURE_THRESHOLD) {
-        this.openUntil = now + CIRCUIT_OPEN_MS;
-        this.consecutiveFailures = 0;
-        this.logger.warn({ openMs: CIRCUIT_OPEN_MS }, 'anomali servisi devre kesicisi açıldı');
-      }
-    } else {
+        outcome.reason === 'SERVER_ERROR');
+
+    if (!infrastructureFailure) {
       this.consecutiveFailures = 0;
+      this.openUntil = 0;
+      return outcome;
     }
+
+    if (isProbe) {
+      return outcome;
+    }
+
+    this.consecutiveFailures += 1;
+    if (this.consecutiveFailures >= CIRCUIT_FAILURE_THRESHOLD) {
+      this.openUntil = now + CIRCUIT_OPEN_MS;
+      this.consecutiveFailures = 0;
+      this.logger.warn({ openMs: CIRCUIT_OPEN_MS }, 'anomali servisi devre kesicisi açıldı');
+    }
+
     return outcome;
   }
 

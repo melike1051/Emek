@@ -155,7 +155,7 @@ export class AuditVerificationService {
 
     if (broken) {
       this.logger.error(
-        { brokenAtId: result.broken_at_id, verifiedThroughId },
+        { metric: 'audit.chain_broken', brokenAtId: result.broken_at_id, verifiedThroughId },
         'Audit hash zinciri kopuk: denetim izi değiştirilmiş olabilir',
       );
     }

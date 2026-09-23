@@ -78,6 +78,43 @@ Tüm event yaşam döngüsü boyunca yapılandırılmış loglar (structured log
 - DLQ (dead letter) sayacı.
 - Consumer hata metrikleri.
 
+**Metrik adı bir sözleşmedir (Faz 14 kapanışı, R-92).** `EventMetrics` her ölçümü
+sabit adlı bir log satırı olarak, **`metric` alanında** yazar (`event.publish.success`,
+`event.publish.failure`, `event.consumer.success`, `event.consumer.failure`,
+`event.consumer.duplicate`, `event.dlq.added`, `event.outbox.stats`). Cloud Logging
+log tabanlı metrikleri doğrudan bu alana ve bu adlara bağlanır.
+
+Faz 14 kapanışında `monitoring.tf`'teki worker/consumer filtresinin var olmayan bir
+alana (`jsonPayload.event`) bağlı olduğu görüldü: uygulama o alanı hiçbir yerde
+yazmıyor, dolayısıyla metrik **kalıcı olarak sıfır** üretecekti. Filtre gerçek alana
+bağlandı. Ders: alan veya ad değiştirmek **alarmı sessizce kapatır** — bu yüzden
+adlar kapalı küme olarak tutulur ve değişiklikleri `monitoring.tf` ile birlikte
+yapılır.
+
+## Ölçülen davranış (Faz 14, EXP-007 S-10/S-12)
+
+Ölçüm ortamı **yerel** ve taşıma **Pub/Sub emulator**'üdür; aşağıdaki sayılar gerçek
+Pub/Sub lag'i hakkında iddia üretmez (bkz. `docs/research/experiments/exp-007-performance-baseline.md` §10.9).
+
+- 50/200/500'lük partilerde teslim **tam**: yayınlanan = üretilen, işlenen = üretilen,
+  duplicate **etki** 0, DLQ 0, `FAILED` outbox satırı 0.
+- `published → processed` p95: 49–62 ms.
+- **Tavanı koyan şey, outbox yayıncısının olayları sırayla göndermesidir.**
+  `OutboxPublisher.dispatch` her event için bir `publish` **ve** bir `UPDATE` yapar,
+  ikisini de bekleyerek; dolayısıyla instance başına throughput ≈ `1 / (event başına
+tur süresi)` — burada ~14 ms tur, ~70 event/sn (üç koşu: 51–73). Turun içinde hangi
+  bacağın (Pub/Sub mu, Postgres mi) baskın olduğu **ölçülmedi**; kanıtlanan şey
+  serileştirmenin kendisidir. Gerçek Pub/Sub'da tur uzayacağı için tavanın **düşmesi**
+  beklenir. Bu **R-95** olarak açık kaydedilmiştir;
+  paralelleştirme `orderingKey` sırasını bozmadan yapılmak zorundadır (anahtarlar arası
+  paralellik güvenli, anahtar içi değil) ve ayrı bir tasarım kararıdır.
+
+Kurtarma davranışı `test/failure-recovery.integration.spec.ts` ile sözleşmeye bağlanmıştır:
+kirada olan event ikinci instance tarafından alınamaz, kira dolunca yeniden sahiplenilir,
+`FAILED` kayıt kendiliğinden yeniden denenmez; consumer geçici hatada dedup işareti geri
+alınır (yeniden teslim işe yarar), kalıcı hatada işaret kalır (yeniden teslim ikinci bir
+yan etki üretmez).
+
 ## Güvenlik
 
 - **PII Yok:** Event payload'larında isim, telefon, koordinat, kimlik bilgisi veya kredi kartı gibi PII verileri yer almaz. Sadece ID referansları taşınır ve asıl veri yetki sınırları içindeki API çağrısıyla alınır.

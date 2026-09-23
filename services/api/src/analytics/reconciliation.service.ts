@@ -1,5 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Pool, PoolClient } from 'pg';
+import type { Logger } from 'pino';
+import { ROOT_LOGGER } from '../common/logging/logging.tokens';
 import { AuditAction, AuditService } from '../common/audit/audit.service';
 import { POSTGRES_POOL } from '../common/database/database.tokens';
 import { UnitOfWork } from '../common/database/unit-of-work';
@@ -54,6 +56,7 @@ export class ReconciliationService {
 
   constructor(
     @Inject(POSTGRES_POOL) private readonly pool: Pool,
+    @Inject(ROOT_LOGGER) private readonly logger: Logger,
     private readonly uow: UnitOfWork,
     private readonly audit: AuditService,
     config: AppConfigService,
@@ -244,7 +247,22 @@ export class ReconciliationService {
        DO NOTHING`,
       [runId, candidate.paymentId, candidate.discrepancyType, JSON.stringify(candidate.details)],
     );
-    return (result.rowCount ?? 0) > 0;
+    const recorded = (result.rowCount ?? 0) > 0;
+    if (recorded) {
+      // Sabit adlı metrik satırı: Cloud Logging log tabanlı metriği buna bağlanır
+      // (ADR-0021 — otomatik düzeltme yoktur, insan görmek zorundadır). PII yok:
+      // yalnızca kimlik referansları taşınır.
+      this.logger.error(
+        {
+          metric: 'reconciliation.discrepancy',
+          runId,
+          paymentId: candidate.paymentId,
+          discrepancyType: candidate.discrepancyType,
+        },
+        'Ödeme mutabakat farkı kaydedildi',
+      );
+    }
+    return recorded;
   }
 
   async list(filter: {

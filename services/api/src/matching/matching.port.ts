@@ -127,6 +127,12 @@ export const MATCHING_DEGRADED_REASONS = [
   'ROUTING_UNAVAILABLE',
   'ENGINE_UNAVAILABLE',
   'ENGINE_CONTRACT_MISMATCH',
+  /**
+   * Motora **hiç gidilmedi**: devre kesici açıktı (bkz. `HttpMatchingClient`).
+   * `ENGINE_UNAVAILABLE`'dan ayrı tutulur — biri motorun, diğeri core'un
+   * korumasının durumudur ve bir olay sırasında en çok bu ayrım işe yarar.
+   */
+  'ENGINE_CIRCUIT_OPEN',
 ] as const;
 export type MatchingDegradedReason = (typeof MATCHING_DEGRADED_REASONS)[number];
 
@@ -157,7 +163,12 @@ export type MatchingOutcome =
    */
   | {
       status: 'UNAVAILABLE';
-      reason: 'TIMEOUT' | 'TRANSPORT' | 'INVALID_RESPONSE' | 'CONTRACT_MISMATCH';
+      /**
+       * `CIRCUIT_OPEN`: motor art arda düştüğü için çağrı **hiç yapılmadı**.
+       * Ayrı tutulur çünkü operasyonel anlamı farklıdır — motorun kendisi değil,
+       * core'un koruması konuşuyordur (bkz. `HttpMatchingClient` devre kesici).
+       */
+      reason: 'TIMEOUT' | 'TRANSPORT' | 'INVALID_RESPONSE' | 'CONTRACT_MISMATCH' | 'CIRCUIT_OPEN';
     };
 
 export interface MatchingClient {

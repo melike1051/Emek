@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { PoolClient } from 'pg';
 import { UnitOfWork } from '../common/database/unit-of-work';
 import { BusinessException } from '../common/errors/business.exception';
 import { ErrorCode } from '../common/errors/error-codes';
@@ -174,13 +175,15 @@ export class CatalogService {
   async priceFor(
     serviceId: string,
     durationMinutes: number,
+    client?: PoolClient,
   ): Promise<{ priceMinor: string; currency: string }> {
-    const rows = await this.uow.query<{
+    const rows = await this.uow.queryOn<{
       pricing_model: 'FIXED' | 'HOURLY';
       base_price_minor: string | null;
       hourly_rate_minor: string | null;
       currency: string;
     }>(
+      client,
       `SELECT pricing_model, base_price_minor, hourly_rate_minor, currency
          FROM services WHERE id = $1 AND active`,
       [serviceId],

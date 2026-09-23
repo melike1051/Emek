@@ -561,7 +561,12 @@ describe('matching (integration)', () => {
 
       expect(run.rows[0]?.algorithm_version).toBe('fallback-distance-v1');
       expect(run.rows[0]?.strategy).toBe('RANKED_FALLBACK');
-      expect(run.rows[0]?.degraded_reason).toBe('ENGINE_UNAVAILABLE');
+      // Motor bu pakette hep erişilemezdir. İlk birkaç çalıştırma motora gerçekten
+      // gider (`ENGINE_UNAVAILABLE`); art arda hata birikince devre kesici açılır ve
+      // sonrakiler motora **hiç gitmez** (`ENGINE_CIRCUIT_OPEN`, Faz 14). İkisi de
+      // aynı yedek yolu üretir; buradaki iddia karar kaydının **sürüm ve skor
+      // bileşenlerini** sakladığıdır, hangi kesinti etiketinin düştüğü değil.
+      expect(['ENGINE_UNAVAILABLE', 'ENGINE_CIRCUIT_OPEN']).toContain(run.rows[0]?.degraded_reason);
 
       const result = await pool.query<Record<string, string>>(
         `SELECT skill_score, availability_score, quality_score, distance_score,
@@ -679,6 +684,40 @@ describe('matching (integration)', () => {
       expect(response.body.status).toBe('MATCHED');
       expect(response.body.degraded).toBe(true);
     });
+
+    it('devre kesici açıldığında karar kaydı bunu ayrı etiketler (Faz 14)', async () => {
+      // Devre kesicinin **görünür** olması, eklenmesinin asıl gerekçesiydi: açılırken
+      // bir kez log yazılır, sonraki 30 saniye boyunca hiç yazılmaz. Ayrım yalnızca
+      // `matching_runs`'ta kalıcıdır — bir olay sırasında "motor mu düştü, yoksa core
+      // mu aramayı kesti" sorusunun tek cevabı budur.
+      //
+      // Bu pakette motor baştan erişilemezdir; art arda 5 hatadan sonra kesici açılır.
+      for (let index = 0; index < 6; index += 1) {
+        await setupProvider(`cb-${index}`);
+        const fixture = await setupRequest(`cb-${index}`);
+        await match(fixture).expect(201);
+      }
+
+      const reasons = await pool.query<{ degraded_reason: string }>(
+        `SELECT degraded_reason::text AS degraded_reason FROM matching_runs
+          WHERE degraded_reason IS NOT NULL`,
+      );
+      const values = reasons.rows.map((row) => row.degraded_reason);
+
+      // Enum değeri gerçekten yazılabiliyor ve gerçekten yazılıyor.
+      //
+      // Bu iddia koşum sırasından **bağımsızdır**: kesici zaten açıksa altı kaydın
+      // hepsi `ENGINE_CIRCUIT_OPEN` olur; sayaç sıfırdan başlıyorsa ilk beşi motora
+      // gider ve altıncısı kesiciyi açar. Her iki durumda da en az bir kayıt bu
+      // etiketi taşır. Tersi (aynı koşuda `ENGINE_UNAVAILABLE` de görmek) sıraya
+      // bağlıdır — istemci paket boyunca tek bir instance'tır — ve bu yüzden iddia
+      // edilmez; o ayrımı birim testler sabitler (`http-matching.client.spec.ts`).
+      expect(values).toContain('ENGINE_CIRCUIT_OPEN');
+      // Hiçbir kayıt başka bir nedene kaymaz: yedek yol yalnızca motor kesintisidir.
+      expect(new Set(values)).toEqual(
+        new Set(values.filter((v) => v === 'ENGINE_CIRCUIT_OPEN' || v === 'ENGINE_UNAVAILABLE')),
+      );
+    }, 60000);
 
     it('eşleşmiş talep ikinci kez eşleştirilemez', async () => {
       await setupProvider('dup');

@@ -39,24 +39,38 @@ const SUBSCRIPTIONS: SubscriptionDef[] = ALL_TOPICS.map((topic) => ({
   dlqTopic: dlqTopicFor(topic),
 }));
 
-async function main(): Promise<void> {
+/**
+ * Topolojiyi kurar (idempotent).
+ *
+ * Ayrı bir fonksiyon olarak dışa açılır: Faz 14 ölçüm betiği (`perf-event-pipeline.ts`)
+ * aynı topolojiyi kurmak zorundadır ve kopyalanan bir kurulum, betik ile uygulamanın
+ * açtığı subscription'lar arasında isim sürüklenmesi üretirdi.
+ */
+export async function setupPubSubTopology(
+  pubsub: PubSub,
+  log: (message: string) => void = () => {},
+): Promise<void> {
+  // Koruma **fonksiyonun içindedir**, çağıranın içinde değil (Faz 14 review).
+  // Bu fonksiyon topic, subscription ve DLQ yaratan yan etkili bir yazıcıdır:
+  // ambient kimlik bilgisiyle gerçek bir GCP projesinde çalıştırılırsa topolojiyi
+  // oradaki Terraform'un dışından kurar. Boş string de "emulator yok" demektir —
+  // Google istemcisi onu böyle yorumlar — bu yüzden varlık değil **doluluk**
+  // kontrol edilir.
   if (!process.env.PUBSUB_EMULATOR_HOST) {
-    process.stderr.write(
-      'PUBSUB_EMULATOR_HOST ayarlı değil. Bu betik yalnızca emulator ile çalışır.\n',
+    throw new Error(
+      'PUBSUB_EMULATOR_HOST tanımlı ve dolu olmalı: bu yordam yalnızca emulator ' +
+        'topolojisini kurar. Gerçek ortamda topolojiyi Terraform kurar (ADR-0010 §8).',
     );
-    process.exit(1);
   }
-
-  const pubsub = new PubSub({ projectId: PROJECT_ID });
 
   // Topics
   for (const topicName of TOPICS) {
     try {
       await pubsub.createTopic(topicName);
-      process.stdout.write(`✓ Topic oluşturuldu: ${topicName}\n`);
+      log(`✓ Topic oluşturuldu: ${topicName}`);
     } catch (err: unknown) {
       if (isAlreadyExistsError(err)) {
-        process.stdout.write(`· Topic mevcut: ${topicName}\n`);
+        log(`· Topic mevcut: ${topicName}`);
       } else {
         throw err;
       }
@@ -78,20 +92,35 @@ async function main(): Promise<void> {
           maximumBackoff: { seconds: 600 },
         },
       });
-      process.stdout.write(`✓ Subscription oluşturuldu: ${sub.name} → ${sub.topic}\n`);
+      log(`✓ Subscription oluşturuldu: ${sub.name} → ${sub.topic}`);
     } catch (err: unknown) {
       if (isAlreadyExistsError(err)) {
-        process.stdout.write(`· Subscription mevcut: ${sub.name}\n`);
+        log(`· Subscription mevcut: ${sub.name}`);
       } else {
         throw err;
       }
     }
   }
+}
+
+async function main(): Promise<void> {
+  if (!process.env.PUBSUB_EMULATOR_HOST) {
+    process.stderr.write(
+      'PUBSUB_EMULATOR_HOST ayarlı değil. Bu betik yalnızca emulator ile çalışır.\n',
+    );
+    process.exit(1);
+  }
+
+  await setupPubSubTopology(new PubSub({ projectId: PROJECT_ID }), (message) =>
+    process.stdout.write(`${message}\n`),
+  );
 
   process.stdout.write('\nPub/Sub topolojisi hazır.\n');
 }
 
-main().catch((err: unknown) => {
-  process.stderr.write(`Pub/Sub kurulumu başarısız: ${String(err)}\n`);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err: unknown) => {
+    process.stderr.write(`Pub/Sub kurulumu başarısız: ${String(err)}\n`);
+    process.exit(1);
+  });
+}

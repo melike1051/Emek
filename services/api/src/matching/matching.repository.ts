@@ -449,8 +449,9 @@ export class MatchingRepository {
   }
 
   /** Sağlayıcı adını yalnızca **seçilen** aday için okur (veri sızıntısını sınırlar). */
-  async findProviderDisplayName(providerId: string): Promise<string | null> {
-    const rows = await this.uow.query<{ display_name: string }>(
+  async findProviderDisplayName(providerId: string, client?: PoolClient): Promise<string | null> {
+    const rows = await this.uow.queryOn<{ display_name: string }>(
+      client,
       `SELECT display_name FROM provider_profiles WHERE user_id = $1`,
       [providerId],
     );
@@ -542,7 +543,14 @@ export class MatchingRepository {
  * $1 adres, $2 hizmet, $3 pencere başı, $4 pencere sonu, $5 süre (dk),
  * $6 gün başı, $7 gün sonu, $8 azami mesafe (m), $9 aday üst sınırı.
  */
-const CANDIDATE_SQL = `
+/**
+ * Aday havuzu sorgusu.
+ *
+ * Dışa aktarılır ki performans profili (`scripts/perf-db-profile.ts`) **gerçek**
+ * sorguyu ölçsün: kopyalanmış bir metin zamanla sürüklenir ve profil sessizce
+ * yanlış sorguyu ölçmeye başlar.
+ */
+export const CANDIDATE_SQL = `
 WITH target AS (
   SELECT location FROM addresses WHERE id = $1 AND archived_at IS NULL
 ),

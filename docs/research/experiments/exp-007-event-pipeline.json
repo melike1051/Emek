@@ -1,0 +1,113 @@
+{
+  "experiment": "EXP-007-event-pipeline",
+  "label": "local benchmark — Pub/Sub emulator",
+  "generated_at": "2026-09-23T16:57:44.437Z",
+  "environment": {
+    "platform": "darwin 25.6.0",
+    "cpus": 10,
+    "node": "v22.23.2",
+    "transport": "PubSubEventTransport → gcloud pubsub emulator (docker)",
+    "note": "Emulator gerçek Pub/Sub lag dağılımını temsil etmez (EXP-007 §8/4). Uygulama, veritabanı, emulator ve istemci aynı makinede."
+  },
+  "parameters": {
+    "outbox_batch_size": 50,
+    "poll_interval_ms": 50,
+    "consume_timeout_ms": 120000,
+    "probe_consumer": "analytics-export"
+  },
+  "results": {
+    "batch_50": {
+      "enqueued": 50,
+      "published": 50,
+      "processed": 50,
+      "completed": true,
+      "publish_wall_ms": 868,
+      "publish_throughput_eps": 58,
+      "consume_wall_ms": 17,
+      "lag_enqueue_to_published": {
+        "samples": 50,
+        "p50_ms": 498.3,
+        "p95_ms": 820.3,
+        "max_ms": 851.2
+      },
+      "lag_published_to_processed": {
+        "samples": 50,
+        "p50_ms": 29.5,
+        "p95_ms": 52.5,
+        "max_ms": 98.9
+      },
+      "lag_enqueue_to_processed": {
+        "samples": 50,
+        "p50_ms": 523.4,
+        "p95_ms": 851.6,
+        "max_ms": 882.5
+      },
+      "analytics_rows": 50,
+      "duplicate_effect": 0,
+      "dead_letter_rows": 0,
+      "outbox_failed_rows": 0
+    },
+    "batch_200": {
+      "enqueued": 200,
+      "published": 200,
+      "processed": 200,
+      "completed": true,
+      "publish_wall_ms": 2977,
+      "publish_throughput_eps": 67,
+      "consume_wall_ms": 54,
+      "lag_enqueue_to_published": {
+        "samples": 200,
+        "p50_ms": 1588.9,
+        "p95_ms": 2829.8,
+        "max_ms": 2984.9
+      },
+      "lag_published_to_processed": {
+        "samples": 200,
+        "p50_ms": 29.4,
+        "p95_ms": 51.7,
+        "max_ms": 74.6
+      },
+      "lag_enqueue_to_processed": {
+        "samples": 200,
+        "p50_ms": 1617.7,
+        "p95_ms": 2870.8,
+        "max_ms": 3031.7
+      },
+      "analytics_rows": 200,
+      "duplicate_effect": 0,
+      "dead_letter_rows": 0,
+      "outbox_failed_rows": 0
+    },
+    "batch_500": {
+      "enqueued": 500,
+      "published": 500,
+      "processed": 500,
+      "completed": true,
+      "publish_wall_ms": 7131,
+      "publish_throughput_eps": 70,
+      "consume_wall_ms": 4,
+      "lag_enqueue_to_published": {
+        "samples": 500,
+        "p50_ms": 3629.8,
+        "p95_ms": 6743.3,
+        "max_ms": 7131.8
+      },
+      "lag_published_to_processed": {
+        "samples": 500,
+        "p50_ms": 27.4,
+        "p95_ms": 49.5,
+        "max_ms": 52.5
+      },
+      "lag_enqueue_to_processed": {
+        "samples": 500,
+        "p50_ms": 3663.8,
+        "p95_ms": 6776.3,
+        "max_ms": 7135.6
+      },
+      "analytics_rows": 500,
+      "duplicate_effect": 0,
+      "dead_letter_rows": 0,
+      "outbox_failed_rows": 0
+    }
+  }
+}

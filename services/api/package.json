@@ -17,6 +17,11 @@
     "migrate:redo": "npm run migrate:down && npm run migrate:up",
     "seed:catalog": "dotenv -e ../../.env -- node --require ts-node/register scripts/seed-catalog.ts",
     "contracts:generate": "dotenv -e ../../.env -- node --require ts-node/register scripts/generate-openapi.ts",
+    "perf:safety-load": "dotenv -e ../../.env -- node --require ts-node/register scripts/perf-safety-load.ts",
+    "perf:db": "dotenv -e ../../.env -- node --require ts-node/register scripts/perf-db-profile.ts",
+    "perf:booking": "dotenv -e ../../.env -- node --require ts-node/register scripts/perf-booking-load.ts",
+    "perf:event-pipeline": "dotenv -e ../../.env -- node --require ts-node/register scripts/perf-event-pipeline.ts",
+    "perf:degradation": "dotenv -e ../../.env -- node --require ts-node/register scripts/perf-degradation.ts",
     "exp:safety": "node --require ts-node/register scripts/exp-004-safety.ts",
     "exp:safety:latency": "dotenv -e ../../.env -- node --require ts-node/register scripts/exp-004-latency.ts",
     "migrate:deploy": "node-pg-migrate up"

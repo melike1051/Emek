@@ -11,8 +11,10 @@ import type { MockBigQueryAdapter } from '../src/analytics/mock-bigquery-adapter
 import { ReconciliationService } from '../src/analytics/reconciliation.service';
 import {
   PREFIX,
+  auditActionsSince,
   bearer,
   clearRateLimits,
+  currentAuditMaxId,
   createPool,
   createRedis,
   createTestApp,
@@ -247,6 +249,36 @@ describe('analytics: BigQuery export + payment reconciliation (Faz 11)', () => {
       expect(bigQuery.tables.get('raw_events')?.size).toBe(2);
     });
 
+    it('çöken worker kira dolunca kaldığı yerden devam eder ve satır tam bir kez export edilir (Faz 14, S-12)', async () => {
+      const eventId = await insertAnalyticsEvent();
+
+      // Worker satırı sahiplenir, BigQuery çağrısı sırasında **çöker** (insert gitmez).
+      bigQuery.failNextInsert = true;
+      expect(await exportService.exportBatch()).toBe(0);
+
+      // Yeniden başlatılan worker: kira sürerken satırı **alamaz**. Bu bir kayıp
+      // değil, çift göndermeye karşı korumadır — satır `exported_at IS NULL` durur.
+      expect(await exportService.exportBatch()).toBe(0);
+      expect(bigQuery.tables.get('raw_events')?.size ?? 0).toBe(0);
+
+      // Kira dolar (ölen worker gerçekten geri gelmemiştir): satır yeniden sahiplenilir.
+      await pool.query(
+        `UPDATE analytics_events SET export_claimed_until = now() - interval '1 second'`,
+      );
+      expect(await exportService.exportBatch()).toBe(1);
+
+      // **Tam olarak bir kez**: sonraki tur boş, BigQuery'de tek satır, kira serbest.
+      expect(await exportService.exportBatch()).toBe(0);
+      expect(bigQuery.tables.get('raw_events')?.size).toBe(1);
+
+      const row = await pool.query(
+        `SELECT exported_at, export_claimed_until FROM analytics_events WHERE event_id = $1`,
+        [eventId],
+      );
+      expect(row.rows[0].exported_at).not.toBeNull();
+      expect(row.rows[0].export_claimed_until).toBeNull();
+    });
+
     it('export durum uç noktası bekleyen satır sayısını raporlar', async () => {
       await insertAnalyticsEvent();
       await insertAnalyticsEvent();
@@ -287,6 +319,40 @@ describe('analytics: BigQuery export + payment reconciliation (Faz 11)', () => {
 
       // Para hareketi tetiklemedi: ödeme durumu değişmedi.
       expect(['AUTHORIZED', 'HELD']).toContain(await paymentStatus(paymentId));
+    });
+
+    it('worker yeniden başlatıldığında aynı uyuşmazlık ikinci kez kaydedilmez (Faz 14, S-12)', async () => {
+      const fixture = await setupConfirmedBooking('restart');
+      const paymentId = await authorize(fixture);
+
+      await pool.query(
+        `INSERT INTO payment_commands (payment_id, operation, idempotency_key, status, created_at)
+         VALUES ($1, 'CAPTURE', $2, 'PENDING', now() - interval '30 minutes')`,
+        [paymentId, randomUUID()],
+      );
+
+      const first = await reconciliation.run('SCHEDULED');
+      // Worker yeniden başlar ve turu tekrarlar: aynı gerçeklik hâlâ oradadır.
+      const second = await reconciliation.run('SCHEDULED');
+
+      expect(first.newDiscrepancyCount).toBe(1);
+      // Aynı uyuşmazlık **yeniden görülür** ama **yeniden kaydedilmez**: operasyon
+      // ekibi her turda çoğalan bir kuyrukla değil, tek bir açık kayıtla karşılaşır.
+      expect(second.discrepancyCount).toBe(1);
+      expect(second.newDiscrepancyCount).toBe(0);
+
+      const rows = await pool.query(
+        `SELECT count(*)::int AS count FROM payment_reconciliation_discrepancies
+          WHERE payment_id = $1`,
+        [paymentId],
+      );
+      expect(rows.rows[0].count).toBe(1);
+
+      // İki tur da kayıtlıdır: mutabakat çalıştığı görünür kalır.
+      const runs = await pool.query(
+        `SELECT count(*)::int AS count FROM payment_reconciliation_runs WHERE status = 'COMPLETED'`,
+      );
+      expect(runs.rows[0].count).toBe(2);
     });
 
     it('AUTHORIZATION_EXPIRED_UNHANDLED: süresi dolmuş ama işlenmemiş yetki tespit edilir', async () => {
@@ -430,6 +496,10 @@ describe('analytics: BigQuery export + payment reconciliation (Faz 11)', () => {
       const adminToken = bearer('an-admin-1');
 
       await setupDiscrepancy('admin');
+      // `audit_logs` append-only'dir ve `resetDomainTables` onu **silmez** (KVKK/denetim
+      // gereği). Bu yüzden iddia, tüm tabloya değil **bu testte** eklenen satırlara
+      // bağlanır; aksi halde aynı veritabanında ikinci koşuda birikmiş satırlarla düşer.
+      const auditCursor = await currentAuditMaxId(pool);
 
       const runResponse = await http()
         .post(`${PREFIX}/analytics/reconciliation/run`)
@@ -457,10 +527,10 @@ describe('analytics: BigQuery export + payment reconciliation (Faz 11)', () => {
       expect(resolved.rows[0].resolved_at).not.toBeNull();
       expect(resolved.rows[0].resolved_by).toBe(adminId);
 
-      const audit = await pool.query(
-        `SELECT action FROM audit_logs WHERE action IN ('RECONCILIATION_RUN_COMPLETED', 'RECONCILIATION_DISCREPANCY_RESOLVED') ORDER BY id`,
+      const actions = (await auditActionsSince(pool, auditCursor)).filter((action) =>
+        ['RECONCILIATION_RUN_COMPLETED', 'RECONCILIATION_DISCREPANCY_RESOLVED'].includes(action),
       );
-      expect(audit.rows.map((r) => r.action)).toEqual([
+      expect(actions).toEqual([
         'RECONCILIATION_RUN_COMPLETED',
         'RECONCILIATION_DISCREPANCY_RESOLVED',
       ]);

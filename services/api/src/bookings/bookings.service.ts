@@ -1,5 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import type { PoolClient } from 'pg';
+import type { Logger } from 'pino';
+import { ROOT_LOGGER } from '../common/logging/logging.tokens';
 import { AddressesService } from '../addresses/addresses.service';
 import { AuditAction, AuditService } from '../common/audit/audit.service';
 import { UnitOfWork } from '../common/database/unit-of-work';
@@ -71,6 +73,21 @@ export interface BookingHistoryEntry {
 const EXCLUSION_VIOLATION = '23P01';
 /** PostgreSQL check_violation. */
 const CHECK_VIOLATION = '23514';
+/**
+ * PostgreSQL deadlock ve serileştirme hataları — yeniden denenir.
+ *
+ * Aynı slota eşzamanlı rezervasyon isteklerinde `isAvailableLocked` aynı
+ * `availability` satırını `FOR SHARE` ile kilitler, ardından her transaction
+ * `bookings` üzerindeki EXCLUDE constraint'inde birbirini bekler. Bu kombinasyon
+ * bir kilit döngüsü kurabilir ve Postgres kurbanı `40P01` ile düşürür
+ * (Faz 14 close-out bulgusu: 15 eşzamanlı istekte 13 × 500).
+ *
+ * Deadlock kurbanı **çakışma kanıtı değildir** — bu yüzden 409'a çevrilmez:
+ * transaction yeniden denenir. Gerçek çakışma varsa yeniden denemede
+ * EXCLUDE ihlali (`23P01`) oluşur ve doğru yanıt olan 409 üretilir.
+ */
+const RETRYABLE_SQLSTATES = new Set(['40P01', '40001']);
+const MAX_CREATE_ATTEMPTS = 3;
 
 function pgErrorCode(error: unknown): string | undefined {
   if (typeof error !== 'object' || error === null) {
@@ -114,6 +131,7 @@ const SELECT_BOOKING = `
 @Injectable()
 export class BookingsService {
   constructor(
+    @Inject(ROOT_LOGGER) private readonly logger: Logger,
     private readonly uow: UnitOfWork,
     private readonly state: BookingStateService,
     private readonly audit: AuditService,
@@ -132,7 +150,24 @@ export class BookingsService {
    * nullable ve durum bazlı zorunlu (R-14 kararı).
    */
   async create(input: CreateBookingInput): Promise<Booking> {
-    return this.uow.withTransaction((client) => this.createWithin(client, input));
+    // Yeniden deneme **yalnızca** transaction'ın sahibi burada yapılabilir.
+    // `createWithin` çağıranın transaction'ını alır; orada deadlock olduğunda
+    // transaction zaten iptal edilmiştir ve yeniden denemek çağıranın işini bozar.
+    for (let attempt = 1; attempt <= MAX_CREATE_ATTEMPTS; attempt += 1) {
+      try {
+        return await this.uow.withTransaction((client) => this.createWithin(client, input));
+      } catch (error) {
+        if (attempt < MAX_CREATE_ATTEMPTS && isRetryableWriteError(error)) {
+          this.logger.warn(
+            { metric: 'booking.create.retry', attempt, code: pgErrorCode(error) },
+            "rezervasyon transaction'ı deadlock sonrası yeniden deneniyor",
+          );
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw new Error('rezervasyon oluşturulamadı');
   }
 
   /**
@@ -155,14 +190,14 @@ export class BookingsService {
       throw new BusinessException(ErrorCode.SELF_BOOKING_NOT_ALLOWED);
     }
 
-    const address = await this.addresses.findOwned(input.customerId, input.addressId);
+    const address = await this.addresses.findOwned(input.customerId, input.addressId, client);
     if (address === null) {
       throw new BusinessException(ErrorCode.ADDRESS_NOT_FOUND);
     }
 
     // Fiyat sunucuda hesaplanır; istemci tutar gönderemez.
     const durationMinutes = (input.scheduledEnd.getTime() - input.scheduledStart.getTime()) / 60000;
-    const { priceMinor } = await this.catalog.priceFor(input.serviceId, durationMinutes);
+    const { priceMinor } = await this.catalog.priceFor(input.serviceId, durationMinutes, client);
 
     {
       // Müsaitlik kontrolü **transaction içinde** ve pencereyi kilitleyerek yapılır:
@@ -569,4 +604,9 @@ export class BookingsService {
 
     return error;
   }
+}
+
+function isRetryableWriteError(error: unknown): boolean {
+  const code = pgErrorCode(error);
+  return code !== undefined && RETRYABLE_SQLSTATES.has(code);
 }

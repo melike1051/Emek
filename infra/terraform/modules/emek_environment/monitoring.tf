@@ -37,7 +37,7 @@ resource "google_logging_metric" "safety_panic" {
   filter  = <<-EOT
     resource.type="cloud_run_revision"
     resource.labels.service_name="${local.name_prefix}-api"
-    jsonPayload.event="safety.panic"
+    jsonPayload.metric="safety.panic.raised"
   EOT
 
   metric_descriptor {
@@ -54,7 +54,7 @@ resource "google_logging_metric" "reconciliation_discrepancy" {
   filter  = <<-EOT
     resource.type="cloud_run_revision"
     resource.labels.service_name="${local.name_prefix}-api"
-    jsonPayload.event="reconciliation.discrepancy"
+    jsonPayload.metric="reconciliation.discrepancy"
   EOT
 
   metric_descriptor {
@@ -71,7 +71,7 @@ resource "google_logging_metric" "audit_chain_broken" {
   filter  = <<-EOT
     resource.type="cloud_run_revision"
     resource.labels.service_name="${local.name_prefix}-api"
-    jsonPayload.event="audit.chain_broken"
+    jsonPayload.metric="audit.chain_broken"
   EOT
 
   metric_descriptor {
@@ -81,14 +81,37 @@ resource "google_logging_metric" "audit_chain_broken" {
 }
 
 # Consumer/worker hataları: DLQ'ya düşmeden önceki kalıcı hata sinyali.
+#
+# `severity` filtresi **bilinçli olarak yoktur**: `event.publish.failure` ve
+# `event.consumer.failure` WARN seviyesinde yazılır, yalnızca `event.dlq.added`
+# ERROR'dur. `severity>=ERROR` eklemek üç sinyalden ikisini sessizce düşürürdü
+# (Faz 14 close-out). Seçiciliği metrik adı regex'i sağlar.
 resource "google_logging_metric" "worker_failure" {
   project = var.project_id
   name    = "${local.name_prefix}-worker-failure"
   filter  = <<-EOT
     resource.type="cloud_run_revision"
     resource.labels.service_name="${local.name_prefix}-api"
-    severity>=ERROR
-    jsonPayload.event=~"^(outbox|consumer|dead_letter)\\."
+    jsonPayload.metric=~"^event\\.(publish\\.failure|consumer\\.failure|dlq\\.added)$"
+  EOT
+
+  metric_descriptor {
+    metric_kind = "DELTA"
+    value_type  = "INT64"
+  }
+}
+
+# Transaction içinden havuzdan ikinci bağlantı istendi (R-94 sınıfı).
+# Üretimde `UnitOfWork.query` fail-open davranır: isteği düşürmez, hata olarak loglar.
+# Bu bilinçlidir — ama log görülmezse kapasite sessizce kaybolur. Metrik, fail-open
+# kararını gözlemlenebilir kılar.
+resource "google_logging_metric" "pool_nested_connection" {
+  project = var.project_id
+  name    = "${local.name_prefix}-pool-nested-connection"
+  filter  = <<-EOT
+    resource.type="cloud_run_revision"
+    resource.labels.service_name="${local.name_prefix}-api"
+    jsonPayload.metric="db.pool.nested_connection"
   EOT
 
   metric_descriptor {
@@ -371,6 +394,10 @@ locals {
     worker_failure = {
       metric       = google_logging_metric.worker_failure.name
       display_name = "worker/consumer hatası"
+    }
+    pool_nested_connection = {
+      metric       = google_logging_metric.pool_nested_connection.name
+      display_name = "transaction içinde havuzdan ikinci bağlantı"
     }
   }
 }

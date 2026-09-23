@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { PoolClient } from 'pg';
 import { AuditAction, AuditService } from '../common/audit/audit.service';
 import { UnitOfWork } from '../common/database/unit-of-work';
 import { BusinessException } from '../common/errors/business.exception';
@@ -65,8 +66,13 @@ export class AddressesService {
   }
 
   /** Sahiplikle kapsanmış okuma: başka kullanıcının adresi asla dönmez. */
-  async findOwned(userId: string, addressId: string): Promise<Address | null> {
-    const rows = await this.uow.query<AddressRow>(
+  /**
+   * `client` verilirse okuma o transaction'da yapılır. Transaction içinden havuzdan
+   * ikinci bağlantı istemek havuzu kilitler (bkz. `UnitOfWork.queryOn`).
+   */
+  async findOwned(userId: string, addressId: string, client?: PoolClient): Promise<Address | null> {
+    const rows = await this.uow.queryOn<AddressRow>(
+      client,
       `${SELECT_ADDRESS} WHERE id = $1 AND user_id = $2 AND archived_at IS NULL`,
       [addressId, userId],
     );

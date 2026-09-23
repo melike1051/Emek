@@ -259,6 +259,130 @@ describe('HttpMatchingClient', () => {
     });
   });
 
+  // --- Devre kesici (Faz 14, EXP-007 S-11) ---
+
+  it('art arda altyapı hatasından sonra devre açılır ve çağrı hiç yapılmaz', async () => {
+    let calls = 0;
+    const client = clientWith(async () => {
+      calls += 1;
+      throw new Error('connect ETIMEDOUT');
+    });
+
+    for (let i = 0; i < 5; i += 1) {
+      expect(await client.solve({ demands: [demand], optimize: true }, 1000)).toEqual({
+        status: 'UNAVAILABLE',
+        reason: 'TRANSPORT',
+      });
+    }
+    expect(calls).toBe(5);
+
+    // Altıncı istek motora hiç gitmez: bekleme bedeli ödenmez.
+    expect(await client.solve({ demands: [demand], optimize: true }, 1000)).toEqual({
+      status: 'UNAVAILABLE',
+      reason: 'CIRCUIT_OPEN',
+    });
+    expect(calls).toBe(5);
+  });
+
+  it('devre süresi dolunca **tek** bir deneme geçer, kapı açılmaz (gerçek yarı-açık)', async () => {
+    let calls = 0;
+    const client = clientWith(async () => {
+      calls += 1;
+      throw new Error('connect ETIMEDOUT');
+    });
+
+    for (let i = 0; i < 5; i += 1) {
+      await client.solve({ demands: [demand], optimize: true }, 1000);
+    }
+    expect((await client.solve({ demands: [demand], optimize: true }, 1000)).status).toBe(
+      'UNAVAILABLE',
+    );
+    expect(calls).toBe(5);
+
+    // 30 sn sonra tek bir deneme yapılır: kesici kalıcı bir kapatma değildir.
+    const probeAt = 1000 + 30_001;
+    await client.solve({ demands: [demand], optimize: true }, probeAt);
+    expect(calls).toBe(6);
+
+    // Kritik ayrım: deneme düştüğüne göre kapı **yeniden kapanmış** olmalıdır.
+    // Kapı serbest bırakılsaydı aşağıdaki istekler motora giderdi ve her biri tam
+    // zaman aşımını öderdi — kesici, maliyeti 30 sn'de bir tekrarlanan bir sele
+    // çevirmiş olurdu. Ayrıca yeniden kapanmak için 5 hata daha **gerekmez**.
+    for (let i = 0; i < 3; i += 1) {
+      expect(await client.solve({ demands: [demand], optimize: true }, probeAt + 1)).toEqual({
+        status: 'UNAVAILABLE',
+        reason: 'CIRCUIT_OPEN',
+      });
+    }
+    expect(calls).toBe(6);
+  });
+
+  it('başarılı deneme devreyi kapatır: sonraki istekler normal akar', async () => {
+    let calls = 0;
+    let healthy = false;
+    const client = clientWith(async () => {
+      calls += 1;
+      if (healthy) {
+        return jsonResponse(validBody);
+      }
+      throw new Error('connect ETIMEDOUT');
+    });
+
+    for (let i = 0; i < 5; i += 1) {
+      await client.solve({ demands: [demand], optimize: true }, 1000);
+    }
+    expect((await client.solve({ demands: [demand], optimize: true }, 1000)).status).toBe(
+      'UNAVAILABLE',
+    );
+
+    healthy = true;
+    const probeAt = 1000 + 30_001;
+    expect((await client.solve({ demands: [demand], optimize: true }, probeAt)).status).toBe(
+      'SOLVED',
+    );
+
+    // Deneme tuttu → devre kapandı; artık `CIRCUIT_OPEN` dönmemeli ve çağrı yapılmalı.
+    const before = calls;
+    expect((await client.solve({ demands: [demand], optimize: true }, probeAt + 1)).status).toBe(
+      'SOLVED',
+    );
+    expect(calls).toBe(before + 1);
+  });
+
+  it('sözleşme hatası devreyi açmaz — şema ayrışması susturulmamalı', async () => {
+    let calls = 0;
+    const client = clientWith(async () => {
+      calls += 1;
+      return jsonResponse({ detail: 'unknown service slug' }, 422);
+    });
+
+    for (let i = 0; i < 8; i += 1) {
+      expect(await client.solve({ demands: [demand], optimize: true }, 1000)).toEqual({
+        status: 'UNAVAILABLE',
+        reason: 'CONTRACT_MISMATCH',
+      });
+    }
+    expect(calls).toBe(8);
+  });
+
+  it('araya giren başarı sayacı sıfırlar — seyrek hatalar devreyi açmaz', async () => {
+    let attempt = 0;
+    const client = clientWith(async () => {
+      attempt += 1;
+      // 4 hata, 1 başarı, 4 hata: hiçbir noktada art arda 5 hata yok.
+      if (attempt === 5) {
+        return jsonResponse(validBody);
+      }
+      throw new Error('connect ETIMEDOUT');
+    });
+
+    for (let i = 0; i < 9; i += 1) {
+      const outcome = await client.solve({ demands: [demand], optimize: true }, 1000);
+      expect(outcome.status === 'UNAVAILABLE' ? outcome.reason : 'SOLVED').not.toBe('CIRCUIT_OPEN');
+    }
+    expect(attempt).toBe(9);
+  });
+
   it('ham talep metnini veya konumu loglamaz', async () => {
     const warn = jest.fn();
     global.fetch = async () => {
