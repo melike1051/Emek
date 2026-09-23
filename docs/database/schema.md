@@ -15,30 +15,30 @@ bağlı olabilir.
 
 ## Migration dosyaları
 
-| Migration                             | İçerik                                                                                       | Faz |
-| ------------------------------------- | -------------------------------------------------------------------------------------------- | --- |
-| `…120000_shared-updated-at-trigger`   | Paylaşılan `set_updated_at()` fonksiyonu                                                     | 1   |
-| `…120100_init-extensions-and-users`   | Extension'lar, `user_status`/`app_role`, `users`, `user_roles`                               | 1   |
-| `…130000_audit-logs`                  | `audit_logs` + hash zinciri + değişmezlik trigger'ları + `audit_chain_broken_at()`           | 2   |
-| `…130100_outbox-and-idempotency`      | `outbox`, `processed_events`, `idempotency_keys`                                             | 2   |
-| `…130200_profiles-and-catalog`        | `customer_profiles`, `provider_profiles`, katalog ve yetkinlik tabloları                     | 2   |
-| `…130300_auth-subjects`               | `auth_subjects` (sağlayıcı subject → user eşlemesi)                                          | 2   |
-| `…140000_identity`                    | `identity_records`, `verification_attempts`, sağlayıcıdan bağımsız tekil kimlik              | 3   |
-| `…140100_deleted-user-contact`        | `users_contact_present` gevşetmesi (silinen kullanıcı)                                       | 3   |
-| `…140200_auth-subject-lifecycle`      | `auth_subjects` ACTIVE/REVOKED yaşam döngüsü + kısmi unique                                  | 3   |
-| `…140300_account-recovery-requests`   | `account_recovery_requests` (operatör onaylı kurtarma)                                       | 3   |
-| `…150000_addresses-and-service-areas` | `addresses`, `provider_service_areas` (PostGIS + GIST)                                       | 4   |
-| `…150100_availability`                | `availability`, `availability_exceptions` (EXCLUDE ile örtüşme yasağı)                       | 4   |
-| `…150200_bookings`                    | `booking_status`, `booking_requests`, `bookings` (+EXCLUDE), `booking_status_history`        | 4   |
-| `…150300_service-pricing`             | `services` fiyatlandırma kolonları + tutarlılık CHECK'leri                                   | 4   |
-| `…160000_payments`                    | `payments`, `payment_events`, `payment_commands`                                             | 5   |
-| `…160100_disputes`                    | `disputes` (+ açık uyuşmazlık kısmi unique)                                                  | 5   |
-| `…160200_documents`                   | `documents` (+ bütünlük trigger'ı)                                                           | 5   |
-| `…160300_reviews`                     | `reviews` (+ çift oy ve kendine puan engeli)                                                 | 5   |
-| `…160400_payment-freeze-origin`       | `payments.frozen_from_status` (review bulgusu C2)                                            | 5   |
-| `…210000_matching` (2026-09-21)       | `provider_services`, `matching_runs`, `booking_match_results`, kapasite, bölge sınırı        | 7   |
-| `…220000_safety` (2026-09-22)         | `safety_sessions`, `location_events` (partition), `safety_events`, `safety_risk_assessments` | 8   |
-| `…110000_event-driven` (2026-09-22)   | `dead_letter_events`, `notification_jobs`, `analytics_events`                                | 9   |
+| Migration                                       | İçerik                                                                                                         | Faz |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | --- |
+| `…120000_shared-updated-at-trigger`             | Paylaşılan `set_updated_at()` fonksiyonu                                                                       | 1   |
+| `…120100_init-extensions-and-users`             | Extension'lar, `user_status`/`app_role`, `users`, `user_roles`                                                 | 1   |
+| `…130000_audit-logs`                            | `audit_logs` + hash zinciri + değişmezlik trigger'ları + `audit_chain_broken_at()`                             | 2   |
+| `…130100_outbox-and-idempotency`                | `outbox`, `processed_events`, `idempotency_keys`                                                               | 2   |
+| `…130200_profiles-and-catalog`                  | `customer_profiles`, `provider_profiles`, katalog ve yetkinlik tabloları                                       | 2   |
+| `…130300_auth-subjects`                         | `auth_subjects` (sağlayıcı subject → user eşlemesi)                                                            | 2   |
+| `…140000_identity`                              | `identity_records`, `verification_attempts`, sağlayıcıdan bağımsız tekil kimlik                                | 3   |
+| `…140100_deleted-user-contact`                  | `users_contact_present` gevşetmesi (silinen kullanıcı)                                                         | 3   |
+| `…140200_auth-subject-lifecycle`                | `auth_subjects` ACTIVE/REVOKED yaşam döngüsü + kısmi unique                                                    | 3   |
+| `…140300_account-recovery-requests`             | `account_recovery_requests` (operatör onaylı kurtarma)                                                         | 3   |
+| `…150000_addresses-and-service-areas`           | `addresses`, `provider_service_areas` (PostGIS + GIST)                                                         | 4   |
+| `…150100_availability`                          | `availability`, `availability_exceptions` (EXCLUDE ile örtüşme yasağı)                                         | 4   |
+| `…150200_bookings`                              | `booking_status`, `booking_requests`, `bookings` (+EXCLUDE), `booking_status_history`                          | 4   |
+| `…150300_service-pricing`                       | `services` fiyatlandırma kolonları + tutarlılık CHECK'leri                                                     | 4   |
+| `…160000_payments`                              | `payments`, `payment_events`, `payment_commands`                                                               | 5   |
+| `…160100_disputes`                              | `disputes` (+ açık uyuşmazlık kısmi unique)                                                                    | 5   |
+| `…160200_documents`                             | `documents` (+ bütünlük trigger'ı)                                                                             | 5   |
+| `…160300_reviews`                               | `reviews` (+ çift oy ve kendine puan engeli)                                                                   | 5   |
+| `…160400_payment-freeze-origin`                 | `payments.frozen_from_status` (review bulgusu C2)                                                              | 5   |
+| `…210000_matching` (2026-09-21)                 | `provider_services`, `matching_runs`, `booking_match_results`, kapasite, bölge sınırı                          | 7   |
+| `…220000_safety` (2026-09-22)                   | `safety_sessions`, `location_events` (partition), `safety_events`, `safety_risk_assessments`                   | 8   |
+| `…090000_analytics-reconciliation` (2026-09-23) | `analytics_events.export_claimed_until`, `payment_reconciliation_runs`, `payment_reconciliation_discrepancies` | 11  |
 
 `set_updated_at()` kendi migration'ındadır: birden çok tablo ona bağlanacak ve fonksiyon ilk
 kullanan tablonun migration'ına gömülürse o migration'ın `down` yönü sonraki tabloların
@@ -433,6 +433,7 @@ Bunlar Faz 1'de **bilinçli olarak yok**; ilgili domain ile birlikte gelir:
 | 5   | `payments`, `payment_events`, `documents`, `disputes`, `reviews`                                                                                              |
 | 8   | ✅ `safety_sessions`, `location_events` (partition + retention), `safety_events`, `safety_risk_assessments`                                                   |
 | 9   | ✅ `dead_letter_events`, `notification_jobs`, `analytics_events`                                                                                              |
+| 11  | ✅ `payment_reconciliation_runs`, `payment_reconciliation_discrepancies`, `analytics_events.export_claimed_until`                                             |
 
 ## Faz 9 tabloları — event-driven ve asenkron işlemler
 
@@ -483,25 +484,63 @@ Bunlar Faz 1'de **bilinçli olarak yok**; ilgili domain ile birlikte gelir:
 
 ### `analytics_events` — Veri Ambarı Aktarımı İçin Olay Günlüğü
 
-| Kolon            | Tip          | Not                                                       |
-| ---------------- | ------------ | --------------------------------------------------------- |
-| `id`             | BIGSERIAL PK | Sıra garantisi (lokal loglama)                            |
-| `event_id`       | UUID         | Orijinal olay ID'si (`UNIQUE`)                            |
-| `event_type`     | VARCHAR(80)  | `BookingCreated`, `PaymentAuthorized` vb.                 |
-| `event_version`  | INT          | Olayın şema sürümü (varsayılan 1)                         |
-| `aggregate_type` | VARCHAR(80)  | `booking`, `payment` vb.                                  |
-| `aggregate_id`   | UUID         | İlgili aggregate'in ID'si (nullable)                      |
-| `occurred_at`    | TIMESTAMPTZ  | Olayın meydana geliş zamanı                               |
-| `correlation_id` | UUID         | İzlenebilirlik için (nullable)                            |
-| `payload`        | JSONB        | Olay verisi — yalnızca id referansları, PII yok           |
-| `exported_at`    | TIMESTAMPTZ  | BigQuery'ye (Faz 11) aktarılma zamanı (null ise bekliyor) |
-| `created_at`     | TIMESTAMPTZ  | Kayıt zamanı                                              |
+| Kolon                  | Tip          | Not                                                                                                                                                   |
+| ---------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                   | BIGSERIAL PK | Sıra garantisi (lokal loglama)                                                                                                                        |
+| `event_id`             | UUID         | Orijinal olay ID'si (`UNIQUE`)                                                                                                                        |
+| `event_type`           | VARCHAR(80)  | `BookingCreated`, `PaymentAuthorized` vb.                                                                                                             |
+| `event_version`        | INT          | Olayın şema sürümü (varsayılan 1)                                                                                                                     |
+| `aggregate_type`       | VARCHAR(80)  | `booking`, `payment` vb.                                                                                                                              |
+| `aggregate_id`         | UUID         | İlgili aggregate'in ID'si (nullable)                                                                                                                  |
+| `occurred_at`          | TIMESTAMPTZ  | Olayın meydana geliş zamanı                                                                                                                           |
+| `correlation_id`       | UUID         | İzlenebilirlik için (nullable)                                                                                                                        |
+| `payload`              | JSONB        | Olay verisi — yalnızca id referansları, PII yok                                                                                                       |
+| `exported_at`          | TIMESTAMPTZ  | BigQuery'ye (Faz 11) aktarılma zamanı (null ise bekliyor)                                                                                             |
+| `export_claimed_until` | TIMESTAMPTZ  | Faz 11: export worker'ının kira süresi (ADR-0021 §2) — `exported_at IS NULL AND (export_claimed_until IS NULL OR <= now())` satırlar claim edilebilir |
+| `created_at`           | TIMESTAMPTZ  | Kayıt zamanı                                                                                                                                          |
 
 **Kısıtlar/İndeksler:**
 
 - `UNIQUE (event_id)`: `AnalyticsExportConsumer`'ın idempotency kaynağı.
 - Kısmi indeks `(created_at) WHERE exported_at IS NULL` — Faz 11 export aracının aktarılmamış kayıtları çekmesi için.
 - İndeks `(event_type, occurred_at)` — tip/zaman bazlı analitik sorgular için.
+
+## Faz 11 tabloları — ödeme mutabakatı (ADR-0021)
+
+`analytics_events`'e yeni kolon eklendi (yukarıya bakın); BigQuery şeması ve
+view'ları için bkz. `services/api/bigquery/`. Aşağıdaki iki tablo PostgreSQL'de
+kalır (mutabakat dahili bir tutarlılık taramasıdır, BigQuery'ye gitmez).
+
+### `payment_reconciliation_runs`
+
+| Kolon               | Tip          | Not                                                    |
+| ------------------- | ------------ | ------------------------------------------------------ |
+| `id`                | BIGSERIAL PK |                                                        |
+| `triggered_by`      | VARCHAR(20)  | `SCHEDULED` veya `MANUAL` (CHECK)                      |
+| `status`            | VARCHAR(20)  | `RUNNING`/`COMPLETED`/`FAILED` (CHECK)                 |
+| `checked_count`     | INT          | Taranan aday (payment_commands/payments) sayısı        |
+| `discrepancy_count` | INT          | Bu turda bulunan aday sayısı (yeni + zaten açık)       |
+| `started_at`        | TIMESTAMPTZ  |                                                        |
+| `finished_at`       | TIMESTAMPTZ  | `(status = 'RUNNING') = (finished_at IS NULL)` (CHECK) |
+
+### `payment_reconciliation_discrepancies`
+
+| Kolon              | Tip          | Not                                                                                         |
+| ------------------ | ------------ | ------------------------------------------------------------------------------------------- |
+| `id`               | BIGSERIAL PK |                                                                                             |
+| `run_id`           | BIGINT FK    | `payment_reconciliation_runs(id)` RESTRICT                                                  |
+| `payment_id`       | UUID FK      | `payments(id)` RESTRICT                                                                     |
+| `discrepancy_type` | VARCHAR(40)  | `STUCK_PENDING_COMMAND`/`AUTHORIZATION_EXPIRED_UNHANDLED`/`RELEASE_PENDING_STALLED` (CHECK) |
+| `details`          | JSONB        | Yalnızca operasyonel alanlar (tutar/kart/kimlik yok — veri minimizasyonu)                   |
+| `detected_at`      | TIMESTAMPTZ  |                                                                                             |
+| `resolved_at`      | TIMESTAMPTZ  | `(resolved_at IS NULL) = (resolved_by IS NULL)` (CHECK)                                     |
+| `resolved_by`      | UUID FK      | `users(id)` RESTRICT (nullable)                                                             |
+
+**Kısıtlar/İndeksler:**
+
+- Kısmi `UNIQUE (payment_id, discrepancy_type) WHERE resolved_at IS NULL`:
+  `dead_letter_events` ile aynı desen — aynı ödeme+tip için tek açık kayıt.
+- Kısmi indeks `(detected_at) WHERE resolved_at IS NULL` — çözülmemiş bulgu taraması.
 
 ## Migration kuralları
 

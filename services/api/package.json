@@ -21,6 +21,7 @@
     "exp:safety:latency": "dotenv -e ../../.env -- node --require ts-node/register scripts/exp-004-latency.ts"
   },
   "dependencies": {
+    "@google-cloud/bigquery": "^9.1.0",
     "@google-cloud/pubsub": "^6.1.0",
     "@nestjs/common": "^11.1.6",
     "@nestjs/core": "^11.1.6",

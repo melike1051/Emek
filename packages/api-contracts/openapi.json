@@ -1795,6 +1795,63 @@
         },
         "tags": ["Ops"]
       }
+    },
+    "/api/v1/analytics/export/status": {
+      "get": {
+        "operationId": "AnalyticsController_exportStatus",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Analytics"]
+      }
+    },
+    "/api/v1/analytics/reconciliation": {
+      "get": {
+        "operationId": "AnalyticsController_listDiscrepancies",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Analytics"]
+      }
+    },
+    "/api/v1/analytics/reconciliation/run": {
+      "post": {
+        "operationId": "AnalyticsController_runReconciliation",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Analytics"]
+      }
+    },
+    "/api/v1/analytics/reconciliation/{id}/resolve": {
+      "post": {
+        "operationId": "AnalyticsController_resolveDiscrepancy",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Analytics"]
+      }
     }
   },
   "info": {

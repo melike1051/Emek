@@ -100,6 +100,30 @@ describe('validateEnv', () => {
     ).toThrow(/STORAGE_SIGNING_SECRET/);
   });
 
+  // ADR-0021: export açıkken bellek-içi sahte BigQuery sağlayıcısıyla üretime
+  // çıkmak, hiçbir yere yazmayan bir export'u "yapılıyor" gibi gösterir.
+  it('production ortamında ANALYTICS_EXPORT_ENABLED=true iken mock BigQuery reddedilir', () => {
+    expect(() =>
+      validateEnv({
+        ...baseEnv,
+        ...productionEnv,
+        ANALYTICS_EXPORT_ENABLED: 'true',
+        BIGQUERY_PROVIDER: 'mock',
+      }),
+    ).toThrow(/BIGQUERY_PROVIDER/);
+  });
+
+  it('production ortamında ANALYTICS_EXPORT_ENABLED=true + BIGQUERY_PROVIDER=bigquery geçerlidir', () => {
+    expect(() =>
+      validateEnv({
+        ...baseEnv,
+        ...productionEnv,
+        ANALYTICS_EXPORT_ENABLED: 'true',
+        BIGQUERY_PROVIDER: 'bigquery',
+      }),
+    ).not.toThrow();
+  });
+
   // Faz 6 review bulgusu L1: AI servisi yalnızca ağ politikasına güvenemez.
   it('production ortamında AI servis anahtarı zorunludur', () => {
     const withoutKey = { ...productionEnv };

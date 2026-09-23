@@ -184,7 +184,7 @@ Bu yapıyı değiştirmek gerekirse önce `docs/architecture/adr/` altında ADR 
 | 8   | Safety: sessions, geofence, telemetry, rules + anomaly, panic flow                                                                                              | ✅ tamamlandı |
 | 9   | Event-driven: Pub/Sub, contracts, retries, DLQ, idempotency                                                                                                     | ✅ tamamlandı |
 | 10  | Admin/Operations API                                                                                                                                            | ✅ tamamlandı |
-| 11  | Analytics: BigQuery pipeline, metrikler                                                                                                                         |               |
+| 11  | Analytics: BigQuery pipeline, metrikler                                                                                                                         | ✅ tamamlandı |
 | 12  | Security hardening                                                                                                                                              |               |
 | 13  | DevOps: Terraform, Cloud Run, staging/production                                                                                                                |               |
 | 14  | Performance & reliability                                                                                                                                       |               |
@@ -228,6 +228,7 @@ ADR-0015), Python 3.12 + uv. Build `tsc` iledir; `@nestjs/cli` kullanılmaz.
 | `docs/architecture/phase-plan.md`           | Faz planı, çıktılar, exit kriterleri                           |
 | `docs/architecture/coding-conventions.md`   | Kod/commit/naming konvansiyonları                              |
 | `docs/architecture/event-catalog.md`        | Event sözlüğü ve şema kuralları                                |
+| `docs/architecture/analytics.md`            | BigQuery export pipeline, metrik view'ları, ödeme mutabakatı   |
 | `docs/testing/test-strategy.md`             | Test seviyeleri, zorunlu senaryolar, coverage eşiği            |
 | `docs/security/data-protection-baseline.md` | Veri sınıflandırma, KVKK, retention                            |
 | `docs/research/technical-risks.md`          | Teknik riskler, varsayımlar, hukuki doğrulama gereken noktalar |

@@ -216,6 +216,31 @@ export const envSchema = z
       .transform((val) => val === 'true'),
     SCHEDULED_RELEASE_INTERVAL_MS: z.coerce.number().int().min(1000).default(60000),
     SCHEDULED_RELEASE_DISPUTE_WINDOW_HOURS: z.coerce.number().int().min(1).default(48),
+
+    /**
+     * BigQuery export worker'ı (Faz 11, ADR-0021). Kapalıyken `analytics_events`
+     * yalnızca PostgreSQL'de birikir — hiçbir transactional akış buna bağlı değildir.
+     */
+    ANALYTICS_EXPORT_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((val) => val === 'true'),
+    ANALYTICS_EXPORT_INTERVAL_MS: z.coerce.number().int().min(1000).default(30000),
+    ANALYTICS_EXPORT_BATCH_SIZE: z.coerce.number().int().min(1).max(1000).default(500),
+    BIGQUERY_PROVIDER: z.enum(['mock', 'bigquery']).default('mock'),
+    BIGQUERY_DATASET: z.string().min(1).default('emek_analytics'),
+    BIGQUERY_PROJECT_ID: z.string().optional(),
+    BIGQUERY_RAW_TABLE: z.string().min(1).default('raw_events'),
+
+    /** Ödeme mutabakat taraması (Faz 11, ADR-0021). Para hareketi tetiklemez. */
+    RECONCILIATION_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((val) => val === 'true'),
+    RECONCILIATION_INTERVAL_MS: z.coerce.number().int().min(1000).default(900000),
+    RECONCILIATION_STUCK_COMMAND_MINUTES: z.coerce.number().int().min(1).default(15),
+    RECONCILIATION_AUTH_EXPIRY_GRACE_MINUTES: z.coerce.number().int().min(1).default(60),
+    RECONCILIATION_RELEASE_PENDING_GRACE_MINUTES: z.coerce.number().int().min(1).default(120),
   })
   .superRefine((env, ctx) => {
     // ADR-0005 / ADR-0009: mock sağlayıcılar production'da seçilemez.
@@ -303,6 +328,17 @@ export const envSchema = z
         code: z.ZodIssueCode.custom,
         path: ['PUBSUB_EMULATOR_HOST'],
         message: 'PUBSUB_EMULATOR_HOST production ortamında tanımlı olamaz',
+      });
+    }
+
+    // ADR-0021: export açıkken bellek-içi sahte sağlayıcıyla üretime çıkmak,
+    // "BigQuery'ye export ediliyor" iddiasını hiçbir yere yazmadan doğru gösterir.
+    if (env.ANALYTICS_EXPORT_ENABLED && env.BIGQUERY_PROVIDER !== 'bigquery') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['BIGQUERY_PROVIDER'],
+        message:
+          'ANALYTICS_EXPORT_ENABLED=true iken BIGQUERY_PROVIDER production ortamında bigquery olmalı',
       });
     }
   });

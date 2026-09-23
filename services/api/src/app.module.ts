@@ -1,6 +1,7 @@
 import { MiddlewareConsumer, Module, type NestModule } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { AddressesModule } from './addresses/addresses.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 import { AuthGuard } from './auth/auth.guard';
 import { AuthModule } from './auth/auth.module';
 import { RolesGuard } from './auth/roles.guard';
@@ -60,6 +61,7 @@ import { UsersModule } from './users/users.module';
     MatchingModule,
     SafetyModule,
     OpsModule,
+    AnalyticsModule,
   ],
   providers: [
     // Guard sırası önemlidir: oran sınırı → kimlik → rol.

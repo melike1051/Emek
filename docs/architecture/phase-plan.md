@@ -671,13 +671,51 @@ mevcut listeler (ör. `GET /bookings`) geriye dönük değiştirilmedi (kapsam d
 
 ---
 
-## Faz 11 — Analytics
+## Faz 11 — Analytics ✅
 
-**Kapsam:** event → BigQuery pipeline; operasyonel, matching, safety, AI ve ESG metrik modelleri;
-payment reconciliation işi; dashboard-ready view'lar; retention/agregasyon.
+**Kapsam:** Faz 9'un `analytics_events` tablosunu BigQuery'ye export eden worker
+(`BigQueryExportService`/`Worker`, claim/lease deseni, `BigQueryPort` adapter'ı);
+operasyonel/matching/safety/ESG metrik view'ları (`services/api/bigquery/views/`);
+dahili ödeme mutabakat taraması (`ReconciliationService`/`Worker`,
+`payment_reconciliation_runs`/`_discrepancies`); admin uçları
+(`GET /analytics/export/status`, `GET/POST /analytics/reconciliation*`).
 
-**Exit:** metrikler tanımlarıyla eşleşiyor; kişisel veri analitiğe minimize edilerek gidiyor;
-reconciliation farkı alarm üretiyor.
+Ayrıntı: [analytics.md](analytics.md), [ADR-0021](adr/0021-analytics-bigquery-pipeline.md),
+deney: [EXP-006](../research/experiments/exp-006-analytics-export-reconciliation.md).
+
+**Exit kriterleri (durum):**
+
+- ✅ **İkinci bir ingestion mimarisi kurulmadı** — Faz 9'un `analytics_events`'i tek
+  girdi kaynağı; Faz 11 yalnızca export ekledi.
+- ✅ **İdempotent export:** `exported_at` + BigQuery `insertId=eventId` çift savunma;
+  ikinci tur zaten export edilmiş satırı tekrar göndermez (EXP-006 #2).
+- ✅ **Event versiyonlama:** `event_version` elenmeden export edilir (EXP-006 #3).
+- ✅ **Analitik hata transactional durumu bozmaz:** BigQuery hatasında `exported_at`
+  işaretlenmez, hiçbir booking/payment tablosu etkilenmez (EXP-006 #4).
+- ✅ **Concurrency:** atomik claim (`FOR UPDATE SKIP LOCKED` + kira kolonu) — Faz 7'nin
+  "transaction içinde ağ çağrısı" bulgusu tekrarlanmadı, ağ çağrısı sırasında hiçbir
+  satır kilitli değil (EXP-006 #5, ADR-0021 §2).
+- ✅ **Metrik tanımları + kaynak lineage:** her view başlığında hangi event
+  tipi/payload alanından türetildiği yazılı (`bigquery/views/*.sql`).
+- ✅ **Kişisel veri minimize edildi:** `raw_events.payload` Faz 9 kuralını miras alır
+  (PII yok); mutabakat bulgu detayları yalnızca operasyonel alanlar taşır (EXP-006 #10,
+  allowlist testi). İki ESG metriği (aktif kadın sağlayıcı sayısı, bölgesel erişim)
+  gerekli veri şemada olmadığı için **üretilmedi**, uydurulmadı (R-80, R-81).
+- ✅ **Reconciliation farkı görünür/alarm-hazır:** `payment_reconciliation_discrepancies`
+  - `GET /analytics/reconciliation` (ops görünürlüğü — Faz 12/13'te gerçek alarma
+    bağlanabilir); **para hareketi tetiklemez** (EXP-006 #6-9).
+- ⚠️ **Kapsam sınırı (bilinçli):** mutabakat dış PSP ekstresiyle karşılaştırma
+  yapmıyor — `PaymentProvider` portunda bu yetenek yok (R-79). AI/NLP metrikleri
+  event pipeline'ından türetilemiyor, ayrı bir view yazılmadı (ADR-0021 §"Sonuçlar").
+- ✅ 15 yeni integration test (`analytics.integration.spec.ts`) + 4 unit test
+  (`bigquery-client.adapter.spec.ts`) + 2 env config testi; core unit 347, core
+  integration 376 (20 suite); migration up/down temiz (dev + test); lint/format/
+  typecheck/build temiz; `npm audit` 0 açık; OpenAPI sözleşmesi yeniden üretildi (84 yol).
+
+**Bu fazda alınan tasarım kararı:** export/mutabakat worker'ları production
+varsayılanı **kapalıdır** (`ANALYTICS_EXPORT_ENABLED`/`RECONCILIATION_ENABLED=false`).
+Gerçek GCP bağlantısını (Terraform, dataset, alarm) canlıya almak Faz 13 DevOps
+kapsamındadır; Faz 11 altyapıyı doğru ve test edilmiş kurmaktan sorumludur.
 
 ---
 
