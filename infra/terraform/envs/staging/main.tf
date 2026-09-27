@@ -21,10 +21,24 @@ module "emek" {
   redis_tier                 = "BASIC"
   redis_memory_gb            = 1
 
-  api_min_instances = 0
+  # `api_min_instances = 0` **olamaz** (modüldeki validation da reddeder): saatlik
+  # işler — retention süpürmesi ve audit zincir doğrulaması — uygulama içi
+  # `setTimeout` döngüleridir ve sıfıra ölçeklenen bir serviste container boşta
+  # kalınca kapanır. Kısa aralıklı işçiler (outbox 1 sn, safety 30 sn) trafik varken
+  # zaten çalışır; saatlik olanlar için hiçbir ortam o kadar sıcak kalmaz.
+  #
+  # Bunun bedeli sürekli açık bir instance (~$50/ay, bu ortamın bütçesinin üçte
+  # biri) ve bilinçli kabul edilmiştir: staging'in amacı production ile **aynı** kod
+  # yollarını çalıştırmaksa (bu dosyanın başı), retention'ın ilk kez production'da
+  # canlı veri üzerinde çalışması kabul edilemez. Daha ucuz yollar (staging'e özel
+  # kısa aralık, veya /ops uçlarına Cloud Scheduler) yapılandırma farkı yaratacağı
+  # için reddedildi.
+  api_min_instances = 1
   api_max_instances = 3
-  ai_min_instances  = 0
-  ai_max_instances  = 2
+
+  # AI servisi istek-yanıt; zamanlanmış işi yoktur, sıfıra ölçeklenebilir.
+  ai_min_instances = 0
+  ai_max_instances = 2
 
   # Staging verisi yeniden üretilebilir; ortamı silebilmek istenir.
   deletion_protection = false

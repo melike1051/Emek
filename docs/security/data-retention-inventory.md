@@ -39,6 +39,38 @@ Sınıflar (`data-protection-baseline.md`): **K1** kamuya açık · **K2** iç �
 | `idempotency_keys`                               | K2    | İstek tekilleştirme                               | Kayıt TTL'i                                                                                                                            | `IdempotencyService.purgeExpired`                          |
 | BigQuery `raw_events`                            | K2    | Analitik kopya                                    | **TODO(legal)** — süre. Uygulama: `raw_events` partition expiration (`analytics_table_expiration_days`, Terraform)                     | ✅ Faz 13 (R-83); süre A-04                                |
 
+## 1.1 Silen işleri kim tetikler
+
+Tablodaki her "silen iş" üretimde **otomatik** çalışır; Cloud Scheduler işi yoktur
+ve gerekmez:
+
+| İş                                                                            | Tetikleyici                                                                        | Aralık / koşul                                                    |
+| ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `RetentionService.sweep` (tablodaki `RetentionService.*` satırlarının tamamı) | `SecurityMaintenanceService.scheduleRetention` — uygulama içi `setTimeout` döngüsü | `RETENTION_INTERVAL_MS` (1 sa), koşul `RETENTION_ENABLED`         |
+| `SafetyMaintenanceService` (`location_events`, kanıt dosyaları)               | kendi `setTimeout` döngüsü                                                         | `SAFETY_MONITOR_INTERVAL_SECONDS`, koşul `SAFETY_MONITOR_ENABLED` |
+| `IdempotencyService.purgeExpired`                                             | kayıt TTL'i (Redis) + sweep                                                        | —                                                                 |
+| BigQuery `raw_events`                                                         | partition expiration (Terraform)                                                   | `analytics_table_expiration_days`                                 |
+
+`RETENTION_ENABLED` dağıtılan ortamlarda kapatılamaz: `env.schema.ts` `superRefine`
+bunu reddeder ve Terraform Cloud Run tanımında `"true"` sabitlenmiştir.
+`POST /ops/retention/sweep` otomatik yol **değildir** — elle çalıştırma ve test yoludur.
+Döngünün kurulduğu `security-maintenance.service.spec.ts` ile test edilir.
+
+Döngü uygulama instance'ı içinde yaşadığı için `api_min_instances >= 1` bu
+politikanın parçasıdır: sıfıra ölçeklenen bir serviste container boşta kalınca kapanır
+ve döngü onunla ölür. Kısıt Terraform'da `validation` bloğuyla zorlanır
+(`modules/emek_environment/variables.tf`), yorumla değil — staging ve production'ın
+ikisi de `1`.
+
+Bu **yalnızca saatlik işleri** kurtarmak için gerekir: `SafetyMaintenanceService`
+(30 sn) trafik varken zaten çalışır, ama `RetentionService.sweep` bir saatlik
+aralıkla döner ve hiçbir ortam kendiliğinden bu kadar sıcak kalmaz. Staging'de
+sürekli açık instance'ın maliyeti (~$50/ay, bütçenin üçte biri) bilinçli kabul
+edilmiştir: alternatifi, retention'ın ilk kez production'da canlı veri üzerinde
+kendi kendine çalışması olurdu. Daha ucuz iki yol (staging'de aralığı kısaltmak,
+veya `/ops/retention/sweep`'e Cloud Scheduler bağlamak) değerlendirilip
+**reddedildi** — gerekçe: staging'in production ile yapılandırma farkı taşımaması.
+
 ## 2. "Silen iş yok" gerekçeleri
 
 Bir satırın süresiz saklanması bir ihmal değil, bir karardır. Üç gerekçe grubu:

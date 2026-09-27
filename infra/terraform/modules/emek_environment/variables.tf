@@ -75,9 +75,28 @@ variable "redis_memory_gb" {
 }
 
 variable "api_min_instances" {
-  description = "Soğuk başlangıç, kimlik doğrulama ve ödeme akışlarında gecikmeye dönüşür."
+  description = <<-EOT
+    Soğuk başlangıç, kimlik doğrulama ve ödeme akışlarında gecikmeye dönüşür.
+
+    En az 1 olmak **zorundadır**: API container'ı zamanlanmış işlerini uygulama içi
+    `setTimeout` döngüsüyle yürütür ve sıfıra ölçeklenen bir serviste container
+    boşta kalınca kapanır — döngü de onunla ölür. `cpu_idle = false` tek başına
+    yetmez; CPU'nun tahsis edileceği bir instance olmalıdır.
+
+    Kritik olan **uzun aralıklı** işlerdir. Kısa aralıklılar (outbox 1 sn, safety
+    bakımı ve analytics export 30 sn, zamanlanmış serbest bırakma 60 sn) trafik bir
+    instance'ı ayakta tuttuğu sürece zaten çalışır. Ama retention süpürmesi ve audit
+    zincir doğrulaması **saatlik**, ödeme mutabakatı 15 dakikalık: hiçbir ortam bu
+    kadar süre kendiliğinden sıcak kalmaz. Onlar için `RETENTION_ENABLED=true`
+    sıfıra ölçeklenen bir serviste yalnızca bir yanılsamadır (T-24, R-38).
+  EOT
   type        = number
-  default     = 0
+  default     = 1
+
+  validation {
+    condition     = var.api_min_instances >= 1
+    error_message = "api_min_instances >= 1 olmalı: zamanlanmış işler uygulama içi döngülerdir ve sıfıra ölçeklenen serviste çalışmaz."
+  }
 }
 
 variable "api_max_instances" {
