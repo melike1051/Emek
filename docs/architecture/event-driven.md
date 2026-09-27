@@ -42,13 +42,17 @@ Gelen mesajlar `EventConsumerRunner` tarafından aşağıdaki aşamalardan geçi
 
 1. **Zarf Doğrulama (Validate Envelope):** Mesaj standart zarf formatında mı?
 2. **Sürüm Kontrolü (Version Check):** Sürüm destekleniyor mu?
-3. **Tekilleştirme (Deduplicate):** `processed_events` tablosunda `(consumer, event_id)` var mı?
-4. **Dispatch:** İlgili consumer'ın `handle()` metodu çağrılır.
-5. **Sonuç (Ack/Nack):** İşlem başarılıysa ACK, geçici hata varsa NACK (Pub/Sub tarafından tekrar denenir), kalıcı hata varsa DLQ'ya yönlendirilir ve ACK edilir.
+3. **Transaction:** Runner (consumer, event) çifti için bir transaction açar.
+4. **Tekilleştirme (Deduplicate):** `processed_events`'e `(consumer, event_id)` **aynı transaction'da** yazılır; satır zaten varsa duplicate'tir ve consumer çağrılmaz.
+5. **Dispatch:** Consumer'ın `handle(event, client)` metodu **aynı bağlantıyla** çağrılır.
+6. **Commit:** İşaret ve iş etkisi birlikte kalıcı olur; hata varsa ikisi birlikte geri alınır.
+7. **Sonuç (Ack/Nack):** İşlem başarılıysa ACK, geçici hata varsa NACK (Pub/Sub tarafından tekrar denenir), kalıcı hata varsa DLQ'ya yönlendirilir ve ACK edilir.
 
 ## İdempotency ve At-Least-Once Semantics
 
 Event teslimi "at-least-once" (en az bir kez) olarak garanti edilir. Bu yüzden her consumer'ın **idempotent** (tekrar edilebilir) olması zorunludur. Kalıcı tekilleştirme `processed_events` tablosuna kaydedilir (`consumer`, `event_id` çifti ile). Redis sadece optimizasyon amacıyla (ikincil olarak) kullanılabilir.
+
+İşaret, iş etkisiyle **aynı transaction'da** yazılır (R-75, ADR-0020 §4-5). Ayrı bağlantılarda yazılsaydı süreç ikisinin arasında çökebilirdi (SIGKILL, OOM, instance eviction): satır kalır, iş etkisi kaybolur, yeniden teslim "duplicate" deyip ACK eder — olay **sessizce** düşerdi, DLQ'ya bile girmeden. Tek transaction bu pencereyi kapatır: çökme ROLLBACK'e denktir. Bunun sözleşmedeki karşılığı `handle(event, client)`'tır ve consumer tüm PostgreSQL yazmalarını o bağlantıda yapmak zorundadır. Her uçuştaki mesaj bir havuz bağlantısı tuttuğu için Pub/Sub akış denetimi `DATABASE_POOL_MAX`'ın yarısıyla sınırlıdır.
 
 ## Retry ve Backoff
 

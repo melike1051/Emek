@@ -7,6 +7,7 @@ import {
 import type { PubSub, Message, Subscription } from '@google-cloud/pubsub';
 import type { Logger } from 'pino';
 import { ROOT_LOGGER } from '../logging/logging.tokens';
+import { AppConfigService } from '../config/app-config.service';
 import { PUBSUB_CLIENT } from './pubsub-client.provider';
 import { EventConsumerRunner } from './event-consumer-runner';
 import { ALL_TOPICS, coreSubscriptionNameFor } from './event-topology';
@@ -21,6 +22,13 @@ import { ALL_TOPICS, coreSubscriptionNameFor } from './event-topology';
  * fazla kez teslim edilir ve her consumer kendi subscription'ından bir kez, runner'ın
  * fan-out'undan bir kez daha işlenirdi.
  *
+ * **Eşzamanlılık havuza bağlıdır (R-75 sonrası):** runner her mesaj için bir
+ * transaction açar ve `handle()` boyunca bir PostgreSQL bağlantısı tutar. Pub/Sub
+ * istemcisinin varsayılanı 1000 eşzamanlı mesaj çekmektir; bu, havuz boyutundan
+ * (`DATABASE_POOL_MAX`) çok fazla mesajın bağlantı beklemesine, ack süresinin
+ * dolmasına ve yeniden teslim yığılmasına yol açardı. Bu yüzden `maxMessages`
+ * havuzun yarısıyla sınırlanır: diğer yarısı HTTP isteklerine kalır.
+ *
  * `PUBSUB_CLIENT` `null` ise (yerel geliştirmede `LoggingEventTransport` kullanılıyor)
  * bu servis devre dışı kalır: event'ler yalnızca loglanır, hiç tüketilmez. Bu, Faz 2'den
  * beri var olan ve bilinçli olarak korunan bir sınırlamadır (bkz. `logging-event-transport.ts`).
@@ -31,6 +39,7 @@ export class PubSubSubscriberService implements OnApplicationBootstrap, OnApplic
 
   constructor(
     @Inject(PUBSUB_CLIENT) private readonly pubsub: PubSub | null,
+    private readonly config: AppConfigService,
     private readonly runner: EventConsumerRunner,
     @Inject(ROOT_LOGGER) private readonly logger: Logger,
   ) {}
@@ -44,7 +53,9 @@ export class PubSubSubscriberService implements OnApplicationBootstrap, OnApplic
 
     for (const topic of ALL_TOPICS) {
       const subscriptionName = coreSubscriptionNameFor(topic);
-      const subscription = this.pubsub.subscription(subscriptionName);
+      const subscription = this.pubsub.subscription(subscriptionName, {
+        flowControl: { maxMessages: this.maxConcurrentMessages(), allowExcessMessages: false },
+      });
 
       subscription.on('message', (message: Message) => {
         void this.handleMessage(topic, message);
@@ -60,6 +71,16 @@ export class PubSubSubscriberService implements OnApplicationBootstrap, OnApplic
       { topics: ALL_TOPICS, subscriptionCount: this.subscriptions.length },
       'Pub/Sub subscriber başlatıldı',
     );
+  }
+
+  /**
+   * Aynı anda işlenecek en fazla mesaj sayısı.
+   *
+   * Her mesaj işlenirken bir havuz bağlantısı tutulur (transaction). Havuzun
+   * yarısı HTTP isteklerine bırakılır; en az 1 mesaj her zaman çekilir.
+   */
+  private maxConcurrentMessages(): number {
+    return Math.max(1, Math.floor(this.config.env.DATABASE_POOL_MAX / 2));
   }
 
   /**

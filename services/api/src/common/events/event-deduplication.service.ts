@@ -3,32 +3,35 @@ import type { Pool, PoolClient } from 'pg';
 import { POSTGRES_POOL } from '../database/database.tokens';
 
 /**
- * Consumer tarafı durable deduplication (ADR-0010 §3).
+ * Consumer tarafı durable deduplication (ADR-0010 §3, ADR-0020 §4).
  *
  * Her consumer aynı event_id'yi yalnızca bir kez işler. Tekillik `processed_events`
  * tablosunda `PRIMARY KEY (consumer, event_id)` ile garanti edilir.
  *
- * `EventConsumerRunner`, `handle()`'ı çağırmadan **önce** ayrı bir bağlantıda
- * `markProcessed` çağırır (bkz. `event-consumer-runner.ts`). `handle()` TRANSIENT hata
- * dönerse kayıt telafi edici bir `DELETE` ile geri alınır (`rollbackDeduplication`); PERMANENT
- * hatada kayıt kasıtlı olarak kalır (DLQ'ya alınan event otomatik yeniden denenmez).
+ * **İşaretleme, iş etkisiyle aynı transaction'da yapılır** (R-75). `markProcessed`
+ * bu yüzden bir `PoolClient` ister: çağıran, işaretlemeyi consumer'ın kendi
+ * transaction'ının içine almak zorundadır. Havuzdan ayrı bir bağlantı kullanmak
+ * mümkün olsaydı ikisi ayrı commit olurdu ve süreç aralarında çökebilirdi
+ * (SIGKILL, OOM, Cloud Run instance eviction): satır kalır, iş etkisi kaybolur,
+ * yeniden teslim "duplicate" deyip ACK eder. Event sessizce düşer — DLQ'ya bile
+ * girmeden. Tip imzası bu kullanımı mümkün kılmaz.
  *
- * Bu, işaretleme ile `handle()` çağrısı **aynı transaction'da değildir** — süreç tam bu
- * ikisi arasında çökerse event kalıcı olarak "işlenmiş" görünür ama hiç işlenmemiş olur
- * (kabul edilen dar bir yarış penceresi; bkz. `docs/research/technical-risks.md`).
+ * Bunun sonucu olarak telafi edici bir `DELETE` de yoktur: hata durumunda
+ * transaction geri alınır, işaret ile iş etkisi **birlikte** yok olur.
  */
 @Injectable()
 export class EventDeduplicationService {
   constructor(@Inject(POSTGRES_POOL) private readonly pool: Pool) {}
 
   /**
-   * Event'i işlenmiş olarak kaydetmeye çalışır.
+   * Event'i bu consumer için işlenmiş olarak kaydeder.
    *
-   * @returns `true` ise event ilk kez işleniyor, `false` ise daha önce işlenmiş (duplicate).
+   * @param client İş etkisinin yazıldığı transaction'ın bağlantısı — **zorunlu**.
+   * @returns `true` ise event ilk kez işleniyor, `false` ise daha önce işlenmiş
+   *          (duplicate) ve consumer çağrılmamalıdır.
    */
-  async markProcessed(consumer: string, eventId: string, client?: PoolClient): Promise<boolean> {
-    const executor = client ?? this.pool;
-    const result = await executor.query(
+  async markProcessed(consumer: string, eventId: string, client: PoolClient): Promise<boolean> {
+    const result = await client.query(
       `INSERT INTO processed_events (consumer, event_id)
        VALUES ($1, $2)
        ON CONFLICT (consumer, event_id) DO NOTHING`,
@@ -39,7 +42,9 @@ export class EventDeduplicationService {
 
   /**
    * Bir event'in daha önce işlenip işlenmediğini kontrol eder.
-   * Consumer runner, handle çağrısından önce bunu kontrol eder.
+   *
+   * Bu yalnızca **gözlem** içindir (test, operasyon). Karar yolu `markProcessed`'in
+   * dönüş değeridir: ayrı bir okuma, okuma ile yazma arasında yarış bırakır.
    */
   async isProcessed(consumer: string, eventId: string): Promise<boolean> {
     const result = await this.pool.query<{ event_id: string }>(

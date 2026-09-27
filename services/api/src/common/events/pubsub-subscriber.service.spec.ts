@@ -4,6 +4,7 @@ import type { EventConsumerRunner } from './event-consumer-runner';
 import type { PubSub, Subscription, Message } from '@google-cloud/pubsub';
 import type { Logger } from 'pino';
 import { ALL_TOPICS, coreSubscriptionNameFor } from './event-topology';
+import type { AppConfigService } from '../config/app-config.service';
 
 class FakeSubscription extends EventEmitter {
   closed = false;
@@ -25,12 +26,15 @@ function fakeMessage(data: Record<string, unknown> | string): Message {
 
 describe('PubSubSubscriberService', () => {
   let runner: jest.Mocked<EventConsumerRunner>;
+  let config: AppConfigService;
   let logger: jest.Mocked<Logger>;
   let fakeSubs: Map<string, FakeSubscription>;
   let pubsub: jest.Mocked<PubSub>;
 
   beforeEach(() => {
     fakeSubs = new Map();
+
+    config = { env: { DATABASE_POOL_MAX: 10 } } as unknown as AppConfigService;
 
     runner = {
       processEvent: jest.fn(),
@@ -44,7 +48,7 @@ describe('PubSubSubscriberService', () => {
     } as unknown as jest.Mocked<Logger>;
 
     pubsub = {
-      subscription: jest.fn().mockImplementation((name: string) => {
+      subscription: jest.fn().mockImplementation((name: string, _options?: unknown) => {
         const sub = new FakeSubscription();
         fakeSubs.set(name, sub);
         return sub as unknown as Subscription;
@@ -52,15 +56,29 @@ describe('PubSubSubscriberService', () => {
     } as unknown as jest.Mocked<PubSub>;
   });
 
+  it('eşzamanlı mesaj sayısı havuz boyutunun yarısıyla sınırlanır (bağlantı açlığı)', async () => {
+    const service = new PubSubSubscriberService(pubsub, config, runner, logger);
+    await service.onApplicationBootstrap();
+
+    // Her mesaj işlenirken bir havuz bağlantısı tutulur (transaction); havuzdan
+    // fazla mesaj çekmek ack süresinin dolmasına ve yeniden teslime yol açardı.
+    expect(pubsub.subscription).toHaveBeenCalledWith(
+      coreSubscriptionNameFor(ALL_TOPICS[0]!),
+      expect.objectContaining({
+        flowControl: { maxMessages: 5, allowExcessMessages: false },
+      }),
+    );
+  });
+
   it('PUBSUB_CLIENT null ise hiçbir subscription açılmaz', async () => {
-    const service = new PubSubSubscriberService(null, runner, logger);
+    const service = new PubSubSubscriberService(null, config, runner, logger);
     await service.onApplicationBootstrap();
 
     expect(pubsub.subscription).not.toHaveBeenCalled();
   });
 
   it('her domain topic için bir subscription açılır', async () => {
-    const service = new PubSubSubscriberService(pubsub, runner, logger);
+    const service = new PubSubSubscriberService(pubsub, config, runner, logger);
     await service.onApplicationBootstrap();
 
     // Varlık kontrolü de aynı fabrikadan geçer: topic başına iki çağrı beklenir.
@@ -72,7 +90,7 @@ describe('PubSubSubscriberService', () => {
 
   it("geçerli mesaj runner.processEvent'e iletilir ve ACK sonucunda ack() çağrılır", async () => {
     runner.processEvent.mockResolvedValue({ action: 'ACK', reason: 'ok' });
-    const service = new PubSubSubscriberService(pubsub, runner, logger);
+    const service = new PubSubSubscriberService(pubsub, config, runner, logger);
     await service.onApplicationBootstrap();
 
     const topic = ALL_TOPICS[0];
@@ -92,7 +110,7 @@ describe('PubSubSubscriberService', () => {
 
   it('NACK sonucunda message.nack() çağrılır', async () => {
     runner.processEvent.mockResolvedValue({ action: 'NACK', reason: 'geçici hata' });
-    const service = new PubSubSubscriberService(pubsub, runner, logger);
+    const service = new PubSubSubscriberService(pubsub, config, runner, logger);
     await service.onApplicationBootstrap();
 
     const topic = ALL_TOPICS[0];
@@ -107,7 +125,7 @@ describe('PubSubSubscriberService', () => {
   });
 
   it("bozuk JSON runner'a hiç gitmeden ack() ile atlanır", async () => {
-    const service = new PubSubSubscriberService(pubsub, runner, logger);
+    const service = new PubSubSubscriberService(pubsub, config, runner, logger);
     await service.onApplicationBootstrap();
 
     const topic = ALL_TOPICS[0];
@@ -122,7 +140,7 @@ describe('PubSubSubscriberService', () => {
   });
 
   it('subscription error olayı loglanır', async () => {
-    const service = new PubSubSubscriberService(pubsub, runner, logger);
+    const service = new PubSubSubscriberService(pubsub, config, runner, logger);
     await service.onApplicationBootstrap();
 
     const topic = ALL_TOPICS[0];
@@ -136,7 +154,7 @@ describe('PubSubSubscriberService', () => {
   });
 
   it("onApplicationShutdown tüm subscription'ları kapatır", async () => {
-    const service = new PubSubSubscriberService(pubsub, runner, logger);
+    const service = new PubSubSubscriberService(pubsub, config, runner, logger);
     await service.onApplicationBootstrap();
 
     await service.onApplicationShutdown();
@@ -159,7 +177,7 @@ describe('PubSubSubscriberService', () => {
       return sub as unknown as Subscription;
     }) as unknown as jest.Mocked<PubSub>['subscription'];
 
-    const service = new PubSubSubscriberService(pubsub, runner, logger);
+    const service = new PubSubSubscriberService(pubsub, config, runner, logger);
 
     await expect(service.onApplicationBootstrap()).rejects.toThrow(missing);
   });
@@ -172,7 +190,7 @@ describe('PubSubSubscriberService', () => {
       return sub as unknown as Subscription;
     }) as unknown as jest.Mocked<PubSub>['subscription'];
 
-    const service = new PubSubSubscriberService(pubsub, runner, logger);
+    const service = new PubSubSubscriberService(pubsub, config, runner, logger);
 
     await expect(service.onApplicationBootstrap()).resolves.toBeUndefined();
     expect(logger.warn).toHaveBeenCalled();

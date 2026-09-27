@@ -5,6 +5,7 @@ import { createTestApp, createPool, resetDomainTables } from './helpers/test-app
 import { EventConsumerRunner } from '../src/common/events/event-consumer-runner';
 import { EventDeduplicationService } from '../src/common/events/event-deduplication.service';
 import { DeadLetterService } from '../src/common/events/dead-letter.service';
+import { UnitOfWork } from '../src/common/database/unit-of-work';
 import { FailureClassification } from '../src/common/events/event-consumer';
 
 describe('events infrastructure (integration)', () => {
@@ -13,6 +14,7 @@ describe('events infrastructure (integration)', () => {
   let runner: EventConsumerRunner;
   let dedup: EventDeduplicationService;
   let dlq: DeadLetterService;
+  let uow: UnitOfWork;
 
   beforeAll(async () => {
     app = await createTestApp();
@@ -20,6 +22,7 @@ describe('events infrastructure (integration)', () => {
     runner = app.get(EventConsumerRunner);
     dedup = app.get(EventDeduplicationService);
     dlq = app.get(DeadLetterService);
+    uow = app.get(UnitOfWork);
   });
 
   beforeEach(async () => {
@@ -143,20 +146,68 @@ describe('events infrastructure (integration)', () => {
 
   // --- Event Deduplication Service ---
 
-  it('markProcessed ilk çağrıda true, ikinci çağrıda false döner', async () => {
+  it("markProcessed aynı transaction'da ilk çağrıda true, ikinci çağrıda false döner", async () => {
     const eventId = randomUUID();
-    const first = await dedup.markProcessed('test-consumer', eventId);
-    const second = await dedup.markProcessed('test-consumer', eventId);
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const first = await dedup.markProcessed('test-consumer', eventId, client);
+      const second = await dedup.markProcessed('test-consumer', eventId, client);
+      await client.query('COMMIT');
 
-    expect(first).toBe(true);
-    expect(second).toBe(false);
+      expect(first).toBe(true);
+      expect(second).toBe(false);
+    } finally {
+      client.release();
+    }
   });
 
-  it('isProcessed doğru durumu yansıtır', async () => {
+  /**
+   * R-75: işaret iş etkisiyle **aynı** transaction'da olduğu için geri alma
+   * telafi edici bir DELETE değil, ROLLBACK'in kendisidir. Süreç işaretleme ile
+   * iş etkisi arasında çökemez: ikisi tek commit'tir.
+   */
+  it('rollback edilen transaction işaret bırakmaz', async () => {
+    const eventId = randomUUID();
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      expect(await dedup.markProcessed('test-consumer', eventId, client)).toBe(true);
+      await client.query('ROLLBACK');
+    } finally {
+      client.release();
+    }
+
+    expect(await dedup.isProcessed('test-consumer', eventId)).toBe(false);
+  });
+
+  it('isProcessed commit edilmiş işareti görür', async () => {
     const eventId = randomUUID();
     expect(await dedup.isProcessed('test-consumer', eventId)).toBe(false);
-    await dedup.markProcessed('test-consumer', eventId);
+
+    await uow.withTransaction((client) => dedup.markProcessed('test-consumer', eventId, client));
+
     expect(await dedup.isProcessed('test-consumer', eventId)).toBe(true);
+  });
+
+  it("runner işareti ve iş etkisini aynı transaction'da commit eder", async () => {
+    const event = createEvent('BookingCreated', {
+      bookingId: randomUUID(),
+      serviceId: randomUUID(),
+      customerId: randomUUID(),
+    });
+
+    expect((await runner.processEvent(event)).action).toBe('ACK');
+
+    // İşaret ve iş etkisi birlikte var: biri olup diğeri olmayan bir ara durum yok.
+    const rows = await pool.query<{ processed: number; analytics: number }>(
+      `SELECT
+         (SELECT count(*)::int FROM processed_events
+           WHERE event_id = $1 AND consumer = 'analytics-export') AS processed,
+         (SELECT count(*)::int FROM analytics_events WHERE event_id = $1) AS analytics`,
+      [event.eventId],
+    );
+    expect(rows.rows[0]).toEqual({ processed: 1, analytics: 1 });
   });
 
   // --- Dead Letter Service ---

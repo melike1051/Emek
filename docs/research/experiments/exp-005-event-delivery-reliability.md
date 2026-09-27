@@ -28,10 +28,17 @@ otomatik test paketleri referans alınır:
    ikinci teslim `processed_events`'in `PRIMARY KEY (consumer, event_id)`'i üzerinden `DUPLICATE`
    olarak işaretlenir, iş etkisi ikinci kez üretilmez.
    Doğrulama: `events.integration.spec.ts` — "aynı event ikinci kez", "concurrent duplicate delivery".
+   2b. **Atomiklik (R-75):** Consumer iş etkisini yazdıktan **sonra** düşer. Beklenen: ne iş etkisi ne
+   işaret kalır; yeniden teslim olayı gerçekten işler. Bu, işaretin iş etkisiyle aynı transaction'da
+   olduğunun doğrudan kanıtıdır — ayrı bağlantı kullanılsaydı işaret kalır ve olay sessizce düşerdi.
+   Doğrulama: `failure-recovery.integration.spec.ts` — "consumer yazdıktan sonra düşerse iş etkisi ve
+   işaret birlikte geri alınır", "başarılı işlemede iş etkisi ve işaret birlikte kalıcıdır";
+   `events.integration.spec.ts` — "rollback edilen transaction işaret bırakmaz", "runner işareti ve iş
+   etkisini aynı transaction'da commit eder".
 3. **Transient failure:** Consumer `handle()` bilinmeyen/geçici sınıflı bir hata fırlatır (ör.
-   `ECONNREFUSED`, sınıflandırılamayan `Error`). Beklenen: `rollbackDeduplication` ile
-   `processed_events` kaydı geri alınır, runner `NACK` döner (Pub/Sub yeniden dener); event
-   **DLQ'ya yazılmaz**.
+   `ECONNREFUSED`, sınıflandırılamayan `Error`). Beklenen: transaction geri alınır — `processed_events`
+   işareti ile kısmi iş etkisi **birlikte** yok olur — runner `NACK` döner (Pub/Sub yeniden dener);
+   event **DLQ'ya yazılmaz**.
    Doğrulama: `event-consumer-runner.spec.ts` — "TRANSIENT hata dönerse NACK döner",
    "consumer hata fırlatırsa yakalanır ve TRANSIENT olarak sınıflandırılır".
 4. **Permanent failure (DLQ):** Consumer `handle()` `FailureClassification.PERMANENT` bildirir

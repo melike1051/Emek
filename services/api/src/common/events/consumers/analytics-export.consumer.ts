@@ -1,7 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { Pool } from 'pg';
+import type { PoolClient } from 'pg';
 import type { Logger } from 'pino';
-import { POSTGRES_POOL } from '../../database/database.tokens';
 import { ROOT_LOGGER } from '../../logging/logging.tokens';
 import {
   FailureClassification,
@@ -21,6 +20,9 @@ import {
  *
  * İdempotency: `analytics_events.UNIQUE(event_id)` ile aynı event iki kez
  * yazılamaz. `ON CONFLICT DO NOTHING` ile duplicate sessizce atlanır.
+ *
+ * Yazma, runner'ın verdiği transaction bağlantısında yapılır: tekilleştirme
+ * işareti ile bu satır aynı commit'te olmak zorundadır (R-75).
  */
 
 /** Bilinen tüm event tipleri. Yenisi eklendiğinde buraya eklenir. */
@@ -48,15 +50,12 @@ export class AnalyticsExportConsumer implements EventConsumer {
   readonly consumerName = 'analytics-export';
   readonly eventTypes = ALL_EVENT_TYPES;
 
-  constructor(
-    @Inject(POSTGRES_POOL) private readonly pool: Pool,
-    @Inject(ROOT_LOGGER) private readonly logger: Logger,
-  ) {}
+  constructor(@Inject(ROOT_LOGGER) private readonly logger: Logger) {}
 
-  async handle(event: ConsumedEvent): Promise<ConsumerResult> {
+  async handle(event: ConsumedEvent, client: PoolClient): Promise<ConsumerResult> {
     try {
       // event_id UNIQUE: aynı event ikinci kez yazılamaz.
-      await this.pool.query(
+      await client.query(
         `INSERT INTO analytics_events
            (event_id, event_type, event_version, aggregate_type, aggregate_id,
             occurred_at, correlation_id, payload)

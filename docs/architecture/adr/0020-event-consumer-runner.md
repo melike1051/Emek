@@ -14,13 +14,21 @@ Emek platformunda Phase 9 kapsamında Pub/Sub tabanlı "event-driven" yan akış
 2. **Pipeline Sırası:**
    - Zarf (Envelope) doğrulama
    - Sürüm kontrolü
-   - Tekilleştirme (Deduplication - `processed_events` tablosu kontrolü)
-   - Dağıtım (Dispatch to consumers)
+   - Transaction açma (`UnitOfWork.withTransaction`)
+   - Tekilleştirme (Deduplication - `processed_events`'e işaret, **aynı** transaction'da)
+   - Dağıtım (Dispatch to consumers - aynı transaction bağlantısıyla)
+   - Commit (işaret + iş etkisi birlikte)
    - Sonuç bildirme (Ack/Nack/DLQ)
 3. **Hata Sınıflandırması (Failure Classification):** `failure-classifier.ts` hataları iki türe ayırır:
    - **Geçici Hatalar (Transient):** Bağlantı kopmaları, kilit bekleme (lock wait) hataları vb. Mesaj NACK edilerek Pub/Sub'ın backoff politikasıyla tekrar denemesi sağlanır.
    - **Kalıcı Hatalar (Permanent):** Geçersiz zarf, format bozukluğu, desteklenmeyen şema versiyonları gibi hatalar. Mesaj ACK edilir ve `dead_letter_events` tablosuna (DLQ) yazılır. Kalıcı hatalar için tekrar deneme yapılmaz.
-4. **Tekilleştirme Yönetimi:** Consumer işlemlerinin başında olay `(consumer, event_id)` çifti ile `processed_events` tablosuna yazılır. Consumer geçici bir hata verirse, Pub/Sub'ın yeniden denediğinde tekrar işlenebilmesi için bu tekilleştirme kaydı `ROLLBACK` edilir.
+4. **Tekilleştirme Yönetimi (tek transaction):** Runner her (consumer, event) çifti için bir transaction açar; `processed_events` işareti **o transaction'ın içine** yazılır ve aynı `PoolClient` consumer'ın `handle()` metoduna geçirilir. İşaret ile iş etkisi tek commit'te olur. Consumer başarısızlık bildirirse bu bir istisnaya çevrilir ve transaction geri alınır: işaret ile kısmi iş etkisi **birlikte** yok olur. Telafi edici bir `DELETE` yoktur; geri alma ROLLBACK'in kendisidir. Kalıcı hatada DLQ kaydı ile işaret ikinci bir transaction'da **birlikte** yazılır (olay yeniden denenmez, kurtarma manuel replay'dir).
+
+   Bunun sözleşmeye yansıması: `EventConsumer.handle(event, client)`. Consumer, PostgreSQL yazmalarının tamamını verilen bağlantıda yapmak zorundadır. Havuzdan kendi bağlantısını alan bir consumer garantiyi sessizce kaybeder; tip imzası buna izin vermez.
+
+5. **Çökme penceresi kapalıdır (R-75):** İşaretin iş etkisinden **ayrı** bir bağlantıda commit edildiği tasarımda süreç tam ikisinin arasında çökebilirdi (SIGKILL, OOM, Cloud Run instance eviction) — o yolda hiçbir `catch` bloğu çalışmaz. Satır kalır, Pub/Sub yeniden teslim ettiğinde runner "duplicate" der ve ACK eder: olay **sessizce** düşerdi, DLQ'ya bile girmeden. At-least-once teslim garantisi tam bu noktada at-most-once'a dönüyordu. Tek transaction bu pencereyi **yok eder**: çökme her zaman ROLLBACK'e denktir, yani olay hiç işlenmemiş sayılır ve yeniden teslim onu baştan işler.
+
+   Bedeli, bağlantı tutma süresidir: her uçuştaki mesaj `handle()` boyunca bir havuz bağlantısı tutar. Bu yüzden Pub/Sub akış denetimi (`flowControl.maxMessages`) `DATABASE_POOL_MAX`'ın yarısıyla sınırlanır (diğer yarısı HTTP isteklerine kalır); sınırsız bırakılsaydı istemcinin varsayılanı (1000 eşzamanlı mesaj) havuzu tüketir, ack süresi dolar ve yeniden teslim yığılırdı. Uzun süren veya PostgreSQL dışına yan etki yazan bir consumer bu modele uymaz: böyle bir iş, etkisini kendi içinde idempotent yapmak ya da bir outbox/iş kuyruğu ile PostgreSQL sınırının içinde tutmak zorundadır.
 
 ## Alternatifler
 
@@ -31,4 +39,6 @@ Emek platformunda Phase 9 kapsamında Pub/Sub tabanlı "event-driven" yan akış
 
 - **İzlenebilirlik (Observability):** Başarılı ve başarısız tüketim metrikleri, duplicate algılamaları ve DLQ yazımları tek merkezden izlenir.
 - **Deduplication Güvenilirliği:** Tekilleştirme mantığı kalıcı veritabanına bağlı olduğu için geçici kesintilerden veya yeniden başlatmalardan etkilenmez.
-- **Kompleksite Artışı:** İşletim pipeline'ı ve geçici hata durumunda `rollbackDeduplication` gibi mekanizmalar kod tabanına ek bir karmaşıklık getirir. Ancak "sessiz DLQ dolması" gibi sorunlar proaktif hata sınıflandırmasıyla engellenmiş olur.
+- **Tekilleştirme ile iş etkisi atomiktir:** "İşlenmiş göründü ama hiç işlenmedi" durumu artık mümkün değildir; telafi edici silme mantığı ve onun kendi hata yolu kod tabanından çıktı.
+- **Consumer'lar transaction sınırını paylaşır:** `handle()` kısa ve PostgreSQL'e kapalı kalmak zorundadır. Bu bir kısıttır; karşılığında her consumer kendi transaction'ını yönetmek zorunda kalmaz (sınırı runner çizer) ve eşzamanlılık havuz boyutuna bağlanır.
+- **Kompleksite Artışı:** İşletim pipeline'ı hata sınıflandırması ve DLQ yönetimiyle birlikte kod tabanına ek karmaşıklık getirir. Ancak "sessiz DLQ dolması" gibi sorunlar proaktif hata sınıflandırmasıyla engellenmiş olur.

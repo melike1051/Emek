@@ -35,18 +35,28 @@ export class DeadLetterService {
     @Inject(ROOT_LOGGER) private readonly logger: Logger,
   ) {}
 
-  async record(input: {
-    eventId: string;
-    eventType: string;
-    eventVersion: number;
-    consumer: string;
-    payload: Record<string, unknown>;
-    attemptCount: number;
-    classification: FailureClassification;
-    reason: string;
-  }): Promise<void> {
+  /**
+   * @param client Verilirse kayıt o transaction'da yazılır. Runner, DLQ kaydını
+   *   tekilleştirme işaretiyle **aynı** transaction'da yazar: ikisi ayrı commit
+   *   olsaydı aralarındaki bir çökme ya izsiz bir düşüş ya da izi olmayan bir
+   *   yeniden deneme bırakırdı (R-75, ADR-0020 §5).
+   */
+  async record(
+    input: {
+      eventId: string;
+      eventType: string;
+      eventVersion: number;
+      consumer: string;
+      payload: Record<string, unknown>;
+      attemptCount: number;
+      classification: FailureClassification;
+      reason: string;
+    },
+    client?: PoolClient,
+  ): Promise<void> {
+    const executor = client ?? this.pool;
     // Mevcut kaydı güncelle veya yeni kayıt oluştur (aynı event + consumer çifti).
-    const result = await this.pool.query(
+    const result = await executor.query(
       `INSERT INTO dead_letter_events
          (event_id, event_type, event_version, consumer, payload,
           attempt_count, failure_classification, failure_reason,

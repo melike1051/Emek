@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import type { Logger } from 'pino';
 import { EVENT_TRANSPORT, type OutboundEvent } from '../src/common/outbox/event-transport';
 import { OutboxPublisher, OUTBOX_MAX_ATTEMPTS } from '../src/common/outbox/outbox.publisher';
@@ -194,9 +194,9 @@ describe('arıza ve kurtarma — consumer yeniden teslimi (integration)', () => 
   const probe = {
     consumerName: CONSUMER_NAME,
     eventTypes: ['BookingCreated'],
-    behaviour: 'ok' as 'ok' | 'transient' | 'permanent',
+    behaviour: 'ok' as 'ok' | 'transient' | 'permanent' | 'transient-after-write',
     effects: [] as string[],
-    async handle(event: ConsumedEvent) {
+    async handle(event: ConsumedEvent, client: PoolClient) {
       if (probe.behaviour === 'transient') {
         return {
           success: false as const,
@@ -211,7 +211,38 @@ describe('arıza ve kurtarma — consumer yeniden teslimi (integration)', () => 
           reason: 'kalıcı arıza (test)',
         };
       }
+
+      // Kalıcı yan etki: runner'ın verdiği transaction bağlantısında yazılır.
+      // Bellekteki `effects` dizisi transaction'la geri alınmaz, bu yüzden
+      // atomiklik iddiası tabloya bakılarak sınanır.
+      await client.query(
+        `INSERT INTO analytics_events
+           (event_id, event_type, event_version, aggregate_type, aggregate_id,
+            occurred_at, correlation_id, payload)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (event_id) DO NOTHING`,
+        [
+          event.eventId,
+          event.eventType,
+          event.eventVersion,
+          event.aggregateType,
+          event.aggregateId,
+          event.occurredAt,
+          event.correlationId,
+          JSON.stringify(event.payload),
+        ],
+      );
       probe.effects.push(event.eventId);
+
+      if (probe.behaviour === 'transient-after-write') {
+        // Yazdıktan **sonra** düşen consumer: transaction geri alınmalı.
+        return {
+          success: false as const,
+          classification: FailureClassification.TRANSIENT,
+          reason: 'yazdıktan sonra geçici arıza (test)',
+        };
+      }
+
       return { success: true as const };
     },
   } satisfies EventConsumer & { behaviour: string; effects: string[] };
@@ -247,6 +278,14 @@ describe('arıza ve kurtarma — consumer yeniden teslimi (integration)', () => 
     correlationId: null,
     payload: { bookingId: randomUUID() },
   });
+
+  async function effectCount(eventId: string): Promise<number> {
+    const result = await pool.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM analytics_events WHERE event_id = $1`,
+      [eventId],
+    );
+    return Number(result.rows[0]?.count ?? 0);
+  }
 
   async function processedCount(eventId: string): Promise<number> {
     const result = await pool.query<{ count: string }>(
@@ -285,6 +324,40 @@ describe('arıza ve kurtarma — consumer yeniden teslimi (integration)', () => 
 
     expect(probe.effects).toHaveLength(0);
     expect(await processedCount(message['eventId'] as string)).toBe(0);
+  }, 30000);
+
+  /**
+   * R-75'in tam çözümü: tekilleştirme işareti ile iş etkisi **aynı** transaction'da.
+   * Consumer yazdıktan sonra düşerse ikisi birlikte geri alınmalıdır; aksi halde
+   * işaret kalır, yeniden teslim "duplicate" der ve event sessizce düşer.
+   */
+  it('consumer yazdıktan sonra düşerse iş etkisi ve işaret birlikte geri alınır', async () => {
+    const message = event();
+    const eventId = message['eventId'] as string;
+
+    probe.behaviour = 'transient-after-write';
+    expect((await runner.processEvent(message)).action).toBe('NACK');
+    expect(await effectCount(eventId)).toBe(0);
+    expect(await processedCount(eventId)).toBe(0);
+
+    // Yeniden teslim: event gerçekten işlenir (kayıp yok).
+    probe.behaviour = 'ok';
+    expect((await runner.processEvent(message)).action).toBe('ACK');
+    expect(await effectCount(eventId)).toBe(1);
+    expect(await processedCount(eventId)).toBe(1);
+  }, 30000);
+
+  it('başarılı işlemede iş etkisi ve işaret birlikte kalıcıdır', async () => {
+    const message = event();
+    const eventId = message['eventId'] as string;
+
+    expect((await runner.processEvent(message)).action).toBe('ACK');
+    expect(await effectCount(eventId)).toBe(1);
+    expect(await processedCount(eventId)).toBe(1);
+
+    // Yeniden teslim: işaret duplicate der, ikinci bir yan etki oluşmaz.
+    expect((await runner.processEvent(message)).action).toBe('ACK');
+    expect(await effectCount(eventId)).toBe(1);
   }, 30000);
 
   it('kalıcı hata DLQ üretir; yeniden teslim ikinci DLQ kaydı veya yan etki üretmez', async () => {

@@ -1,7 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { Pool } from 'pg';
+import type { PoolClient } from 'pg';
 import type { Logger } from 'pino';
-import { POSTGRES_POOL } from '../../database/database.tokens';
 import { ROOT_LOGGER } from '../../logging/logging.tokens';
 import {
   FailureClassification,
@@ -114,12 +113,9 @@ export class NotificationJobConsumer implements EventConsumer {
   readonly consumerName = 'notification-job';
   readonly eventTypes = Object.keys(TEMPLATES);
 
-  constructor(
-    @Inject(POSTGRES_POOL) private readonly pool: Pool,
-    @Inject(ROOT_LOGGER) private readonly logger: Logger,
-  ) {}
+  constructor(@Inject(ROOT_LOGGER) private readonly logger: Logger) {}
 
-  async handle(event: ConsumedEvent): Promise<ConsumerResult> {
+  async handle(event: ConsumedEvent, client: PoolClient): Promise<ConsumerResult> {
     const template = TEMPLATES[event.eventType];
     if (template === undefined) {
       return { success: true }; // Tanımsız event type — sorun değil, atla.
@@ -144,7 +140,7 @@ export class NotificationJobConsumer implements EventConsumer {
 
     try {
       // UNIQUE constraint (event_id, channel, recipient_user_id) idempotency sağlar.
-      await this.pool.query(
+      await client.query(
         `INSERT INTO notification_jobs
            (event_id, event_type, channel, recipient_user_id, template_key, template_data)
          VALUES ($1, $2, 'IN_APP', $3, $4, $5)

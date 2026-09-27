@@ -12,6 +12,7 @@ import {
   type EventConsumer,
   EVENT_CONSUMERS,
 } from './event-consumer';
+import { UnitOfWork } from '../database/unit-of-work';
 import { EventDeduplicationService } from './event-deduplication.service';
 import { DeadLetterService } from './dead-letter.service';
 import { EventMetrics } from './event-metrics';
@@ -28,8 +29,10 @@ const SUPPORTED_SCHEMA_VERSIONS = [1];
  *   → validate envelope
  *   → validate event version
  *   → classify failure
- *   → durable deduplication
- *   → execute consumer
+ *   → transaction aç
+ *   → durable deduplication (işaret, **aynı** transaction'da)
+ *   → execute consumer (aynı transaction'da)
+ *   → commit (işaret + iş etkisi birlikte)
  *   → acknowledge (veya nack/DLQ)
  *
  * Bu sınıf **local** çalışma modunu destekler: Pub/Sub subscription
@@ -46,6 +49,7 @@ export class EventConsumerRunner implements OnApplicationBootstrap, OnApplicatio
 
   constructor(
     @Inject(EVENT_CONSUMERS) private readonly consumers: EventConsumer[],
+    private readonly uow: UnitOfWork,
     private readonly deduplication: EventDeduplicationService,
     private readonly deadLetter: DeadLetterService,
     private readonly metrics: EventMetrics,
@@ -122,10 +126,53 @@ export class EventConsumerRunner implements OnApplicationBootstrap, OnApplicatio
   ): Promise<ConsumerProcessResult> {
     const start = Date.now();
 
-    // Deduplication kontrolü
-    const isNew = await this.deduplication.markProcessed(consumer.consumerName, envelope.eventId);
+    let attempt: TransactionOutcome;
+    try {
+      // Tekilleştirme işareti ve iş etkisi **tek** transaction'dadır (R-75):
+      // ikisi ayrı commit olsaydı süreç aralarında çökebilir ve event işlenmiş
+      // görünüp hiç işlenmemiş olabilirdi. Hata yolunda da telafi edici bir
+      // DELETE gerekmez — rollback ikisini birlikte geri alır.
+      attempt = await this.uow.withTransaction(async (client) => {
+        const isNew = await this.deduplication.markProcessed(
+          consumer.consumerName,
+          envelope.eventId,
+          client,
+        );
 
-    if (!isNew) {
+        if (!isNew) {
+          return { kind: 'DUPLICATE' };
+        }
+
+        const result = await consumer.handle(envelope, client);
+        if (result.success) {
+          return { kind: 'SUCCESS' };
+        }
+
+        // Başarısızlık bildirimi de transaction'ı geri almalıdır: consumer
+        // kısmen yazmış olabilir ve tekilleştirme işareti kalmamalıdır. Bu
+        // yüzden `return` değil `throw`.
+        throw new ConsumerReportedFailure(result.classification, result.reason);
+      });
+    } catch (error) {
+      if (error instanceof ConsumerReportedFailure) {
+        return await this.handleConsumerFailure(
+          consumer,
+          envelope,
+          error.classification,
+          error.reason,
+        );
+      }
+
+      // Fırlatılan hata (consumer'dan, markProcessed'dan veya COMMIT'ten).
+      // Hepsinde transaction geri alınmıştır: iş etkisi de işaret de yok.
+      const classification = classifyFailure(error, this.logger);
+      const reason = error instanceof Error ? error.message.slice(0, 500) : 'Bilinmeyen hata';
+      return await this.handleConsumerFailure(consumer, envelope, classification, reason);
+    }
+
+    // Metrikler commit'ten **sonra** yayılır: transaction callback'i içinde
+    // yayılsaydı, COMMIT'te düşen bir event başarılı raporlanırdı.
+    if (attempt.kind === 'DUPLICATE') {
       this.metrics.duplicateDetected({
         eventId: envelope.eventId,
         eventType: envelope.eventType,
@@ -134,32 +181,13 @@ export class EventConsumerRunner implements OnApplicationBootstrap, OnApplicatio
       return { outcome: 'DUPLICATE' };
     }
 
-    // Consumer'ı çalıştır
-    try {
-      const result = await consumer.handle(envelope);
-
-      if (result.success) {
-        this.metrics.consumerSuccess({
-          eventId: envelope.eventId,
-          eventType: envelope.eventType,
-          consumer: consumer.consumerName,
-          latencyMs: Date.now() - start,
-        });
-        return { outcome: 'SUCCESS' };
-      }
-
-      // Consumer başarısızlık bildirdi
-      return await this.handleConsumerFailure(
-        consumer,
-        envelope,
-        result.classification,
-        result.reason,
-      );
-    } catch (error) {
-      const classification = classifyFailure(error, this.logger);
-      const reason = error instanceof Error ? error.message.slice(0, 500) : 'Bilinmeyen hata';
-      return await this.handleConsumerFailure(consumer, envelope, classification, reason);
-    }
+    this.metrics.consumerSuccess({
+      eventId: envelope.eventId,
+      eventType: envelope.eventType,
+      consumer: consumer.consumerName,
+      latencyMs: Date.now() - start,
+    });
+    return { outcome: 'SUCCESS' };
   }
 
   private async handleConsumerFailure(
@@ -177,16 +205,26 @@ export class EventConsumerRunner implements OnApplicationBootstrap, OnApplicatio
     });
 
     if (classification === FailureClassification.PERMANENT) {
-      // Kalıcı hata: DLQ'ya yaz, acknowledge et (yeniden denemek anlamsız).
-      await this.deadLetter.record({
-        eventId: envelope.eventId,
-        eventType: envelope.eventType,
-        eventVersion: envelope.eventVersion,
-        consumer: consumer.consumerName,
-        payload: envelope.payload,
-        attemptCount: 1,
-        classification,
-        reason,
+      // Kalıcı hata: DLQ kaydı ile tekilleştirme işareti **aynı** transaction'da
+      // yazılır. İş etkisi geri alındı ama event artık yeniden denenmemelidir:
+      // işaret olmadan, ACK'ten önceki bir çökme aynı kalıcı hatayı tekrar
+      // işletirdi. İkisi ayrı yazılsaydı da aralarındaki çökme ya izsiz bir
+      // düşüş ya da izi olmayan bir yeniden deneme bırakırdı.
+      await this.uow.withTransaction(async (client) => {
+        await this.deadLetter.record(
+          {
+            eventId: envelope.eventId,
+            eventType: envelope.eventType,
+            eventVersion: envelope.eventVersion,
+            consumer: consumer.consumerName,
+            payload: envelope.payload,
+            attemptCount: 1,
+            classification,
+            reason,
+          },
+          client,
+        );
+        await this.deduplication.markProcessed(consumer.consumerName, envelope.eventId, client);
       });
 
       this.metrics.deadLettered({
@@ -197,29 +235,13 @@ export class EventConsumerRunner implements OnApplicationBootstrap, OnApplicatio
         classification,
       });
 
-      // Deduplication kaydını kaldır: DLQ'ya alınan event yeniden denenemez
-      // ama operasyonel düzeltme sonrası manuel replay yapılabilir.
-      // İşaretli tutmak daha güvenli: replay de markProcessed'dan geçer.
       return { outcome: 'PERMANENT_FAILURE' };
     }
 
-    // Geçici hata: deduplication kaydını sil ki Pub/Sub retry'da tekrar denenebilsin.
-    // Bu güvenli çünkü iş etkisi commit edilmedi (hata aldık).
-    await this.rollbackDeduplication(consumer.consumerName, envelope.eventId);
+    // Geçici hata: yapılacak bir şey yok. Transaction geri alındı, ne iş etkisi
+    // ne tekilleştirme işareti kaldı; Pub/Sub yeniden teslim ettiğinde event
+    // baştan işlenir.
     return { outcome: 'TRANSIENT_FAILURE' };
-  }
-
-  private async rollbackDeduplication(consumer: string, eventId: string): Promise<void> {
-    try {
-      await this.deduplication['pool'].query(
-        `DELETE FROM processed_events WHERE consumer = $1 AND event_id = $2`,
-        [consumer, eventId],
-      );
-    } catch (error) {
-      // Rollback başarısız olursa event bir sonraki denemede duplicate olarak görülür
-      // ama bu güvenli yöndür: iş etkisi zaten yürütülmedi.
-      this.logger.warn({ consumer, eventId, err: error }, 'Deduplication geri alınamadı');
-    }
   }
 
   private validateEnvelope(raw: unknown): ConsumedEvent | null {
@@ -282,6 +304,25 @@ export interface ProcessEventResult {
   action: 'ACK' | 'NACK';
   reason: string;
 }
+
+/**
+ * Consumer'ın bildirdiği başarısızlık.
+ *
+ * `ConsumerResult` ile taşınan hata bilgisi, transaction'ı geri almak için
+ * istisnaya çevrilir: `withTransaction` yalnızca fırlatılan hatada ROLLBACK eder.
+ */
+class ConsumerReportedFailure extends Error {
+  constructor(
+    readonly classification: FailureClassification,
+    readonly reason: string,
+  ) {
+    super(reason);
+    this.name = 'ConsumerReportedFailure';
+  }
+}
+
+/** Transaction'ın içinden dışarı taşınan sonuç (metrikler commit sonrası yayılır). */
+type TransactionOutcome = { kind: 'SUCCESS' } | { kind: 'DUPLICATE' };
 
 interface ConsumerProcessResult {
   outcome: 'SUCCESS' | 'DUPLICATE' | 'PERMANENT_FAILURE' | 'TRANSIENT_FAILURE';
