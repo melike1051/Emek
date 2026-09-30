@@ -168,7 +168,12 @@ flutter test integration_test -d <simülatör> --dart-define=API_BASE_URL=http:/
   veritabanına (`emek`) `e2e-` önekli kullanıcılar ve rastgele konumlu sağlayıcılar yazar, silmez.
   Yerel oran sınırı sayaçlarını (`ratelimit:*`) her testten önce sıfırlar. İlk kurulum:
   `npx --workspace=@emek/e2e playwright install chromium`. AI servisi kapalıysa eşleştirme yedek
-  yoldan geçer; test bunu kabul eder.
+  yoldan geçer; test bunu kabul eder. `E2E_REQUIRE_AI=true` iken tam zincir testi
+  (`web.full-lifecycle.spec.ts`) yedek yola düşen eşleşmeyi başarısız sayar — AI servisini
+  başlatıp öyle koşun. CI'da (`ci.yml` `e2e` işi) iki varyant da her PR'da koşar (Faz 17).
+- **Demo verisi** (`npx tsx e2e/scripts/seed-demo.ts`, Faz 17): TÜBİTAK demo senaryolarının
+  aktörlerini kurar ve giriş bilgilerini yazdırır; yalnız yerel hedeflere yazar.
+  Bkz. [demo-scenarios.md](../research/demo-scenarios.md).
 
 ## Yapılandırma
 

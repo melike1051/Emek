@@ -397,8 +397,8 @@ describe('Randevu detayı', () => {
           authorizationExpiresAt: null,
           releasedAt: null,
         }),
-      'POST /bookings/b-1/transitions': (_m, body) =>
-        json({ ...BOOKING, status: (body as { to: string }).to }),
+      // Sunucu onayı aynı transaction'da `COMPLETED`'a zincirler (Faz 17, R-115).
+      'POST /bookings/b-1/transitions': () => json({ ...BOOKING, status: 'COMPLETED' }),
     });
     renderScreen(<BookingDetail bookingId="b-1" />);
     await userEvent.click(await screen.findByRole('button', { name: 'Hizmeti onayla' }));
@@ -435,7 +435,7 @@ describe('Randevu detayı', () => {
   it('itiraz açılır; açık itiraz varken ikinci form gösterilmez', async () => {
     const disputes: unknown[] = [];
     customerBackend({
-      '/bookings/b-1': () => json({ ...BOOKING, status: 'CUSTOMER_CONFIRMED' }),
+      '/bookings/b-1': () => json({ ...BOOKING, status: 'COMPLETED' }),
       '/bookings/b-1/history': () => json([]),
       'GET /bookings/b-1/disputes': () => json(disputes),
       'GET /bookings/b-1/payment': () => apiError(404, 'NOT_FOUND', 'yok'),

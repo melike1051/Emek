@@ -44,6 +44,13 @@ interface BookingRow {
   status: BookingStatus;
 }
 
+/**
+ * Müşteri onayından sonra ulaşılan durumlar: onayın tekrarı burada yan etkisiz başarıdır.
+ * `CUSTOMER_CONFIRMED` bilinçli olarak yok — o durumda kalmış bir rezervasyon tekrar onayla
+ * `COMPLETED`'a ilerler (Faz 17 öncesinden takılı kalan kayıtlar).
+ */
+const AFTER_CUSTOMER_CONFIRMATION: ReadonlySet<BookingStatus> = new Set(['COMPLETED', 'SETTLED']);
+
 export interface CreateBookingInput {
   /**
    * Rezervasyonun kaynaklandığı talep (Faz 7).
@@ -383,6 +390,20 @@ export class BookingsService {
       );
       const actor = this.resolveActor(booking, input.userId, input.roles);
 
+      // Müşteri onayı `CUSTOMER_CONFIRMED`'da durmaz, `COMPLETED`'a zincirlenir (aşağıda).
+      // Bu yüzden onayın tekrarı (çift dokunma, yeni anahtarla ağ tekrarı) genel "zaten
+      // hedefte" kontrolüne düşmez; onay sonrası durumları kilit altında yan etkisiz başarı sayar.
+      if (input.to === 'CUSTOMER_CONFIRMED') {
+        const locked = await client.query<BookingRow>(
+          `${SELECT_BOOKING} WHERE id = $1 FOR NO KEY UPDATE`,
+          [input.bookingId],
+        );
+        const current = locked.rows[0];
+        if (current !== undefined && AFTER_CUSTOMER_CONFIRMATION.has(current.status)) {
+          return toBooking(current);
+        }
+      }
+
       await this.assertPaymentAllows(client, input.bookingId, input.to);
 
       await this.state.transition(client, {
@@ -395,6 +416,18 @@ export class BookingsService {
 
       await this.applyPaymentEffects(client, input.bookingId, input.to);
       await this.publishLifecycleEvent(client, input.bookingId, input.to);
+
+      // Müşteri onayı hizmeti tamamlar: `CUSTOMER_CONFIRMED → COMPLETED` SYSTEM geçişi aynı
+      // transaction'da. Bu adımı atan başka bir üretim yolu yoktu; randevu onayda takılır,
+      // ödeme `SERVICE_COMPLETED` olmaz ve hiç serbest bırakılamazdı (Faz 17 E2E bulgusu).
+      // Para yine çıkmaz: release uyuşmazlık penceresinden sonra ayrı karardır.
+      if (input.to === 'CUSTOMER_CONFIRMED') {
+        return this.advanceBySystemWithin(client, {
+          bookingId: input.bookingId,
+          to: 'COMPLETED',
+          reason: 'customer_confirmed',
+        });
+      }
 
       const updated = await client.query<BookingRow>(`${SELECT_BOOKING} WHERE id = $1`, [
         input.bookingId,

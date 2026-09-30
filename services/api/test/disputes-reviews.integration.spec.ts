@@ -167,8 +167,6 @@ describe('disputes & reviews (integration)', () => {
       .set('authorization', fixture.customerToken)
       .send({ to: 'CUSTOMER_CONFIRMED' })
       .expect(201);
-
-    await bookings.advanceBySystem({ bookingId: fixture.bookingId, to: 'COMPLETED' });
   }
 
   describe('uyuşmazlık açma', () => {

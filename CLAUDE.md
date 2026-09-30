@@ -209,7 +209,7 @@ Bu yapıyı değiştirmek gerekirse önce `docs/architecture/adr/` altında ADR 
 | 14  | Performance & reliability                                                                                                                                       | ⚠️ ölçüm + düzeltmeler tamam, sonuçlar **yerel** |
 | 15  | **Web frontend** (bundan önce frontend geliştirilmez)                                                                                                           | ⚠️ kod tamam, yalnız yerel doğrulandı            |
 | 16  | Flutter mobile                                                                                                                                                  | ⚠️ kod tamam, yalnız yerel doğrulandı            |
-| 17  | Final E2E + production readiness + TÜBİTAK demo                                                                                                                 |                                                  |
+| 17  | Final E2E + production readiness + TÜBİTAK demo                                                                                                                 | ⚠️ kod + demo tamam; pilot/üretim hazır değil    |
 
 Ayrıntı: `docs/architecture/phase-plan.md`.
 
@@ -232,6 +232,7 @@ npm run sast                                              # SAST: semgrep (kayı
 npm run smoke -- --api-url <url> --environment staging    # dağıtım sonrası smoke testleri (Faz 13)
 npm run test:integration                                  # gerçek Postgres+Redis gerektirir
 npm run test:e2e                                          # Playwright (Faz 15): API ayakta + yalnız yerel hedefler
+npx tsx e2e/scripts/seed-demo.ts                          # TÜBİTAK demo aktörleri (yalnız yerel, Faz 17)
 cd services/ai && uv run pytest                           # AI servisi testleri
 cd services/ai && uv run ruff check . && uv run mypy app  # AI lint + typecheck
 ```
@@ -264,3 +265,5 @@ ADR-0015), Python 3.12 + uv. Build `tsc` iledir; `@nestjs/cli` kullanılmaz.
 | `docs/security/identity-key-migration.md`     | Identity HMAC anahtarı göç prosedürü (rotasyon yok)            |
 | `docs/research/technical-risks.md`            | Teknik riskler, varsayımlar, hukuki doğrulama gereken noktalar |
 | `docs/research/research-metrics.md`           | TÜBİTAK Ar-Ge metrikleri ve deney çerçevesi                    |
+| `docs/research/demo-scenarios.md`             | TÜBİTAK demo senaryoları ve demo seed'i                        |
+| `docs/architecture/production-readiness.md`   | Hazırlık kararı, go/no-go listesi (Faz 17)                     |

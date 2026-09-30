@@ -288,6 +288,114 @@ export async function safetyState(
   return row ? { riskLevel: row.risk_level, panicCount: row.panic_count } : null;
 }
 
+/**
+ * Sağlayıcı cihazının konum telemetrisi. Web'de telemetri istemcisi yoktur (mobil uygulamanın
+ * işidir, `apps/mobile/integration_test/telemetry_flow_test.dart`); tam zincirde aynı uç
+ * doğrudan çağrılır. Sunucu kabul/red kararını örnek başına döner.
+ */
+export async function sendTelemetry(
+  provider: Pick<Actor, 'subject'>,
+  bookingId: string,
+  location: { latitude: number; longitude: number },
+): Promise<{ sessionStatus: string; results: { status: string; reason: string | null }[] }> {
+  const token = bearerFor(provider);
+  const session = await api<{ sessionId: string; status: string; lastSequence: number }>(
+    `/bookings/${bookingId}/safety-session`,
+    token,
+    { method: 'GET' },
+  );
+  const ingest = await api<{ results: { status: string; reason: string | null }[] }>(
+    `/safety/sessions/${session.sessionId}/telemetry`,
+    token,
+    {
+      body: {
+        samples: [
+          {
+            sequence: session.lastSequence + 1,
+            capturedAt: new Date().toISOString(),
+            ...location,
+            accuracyMeters: 12,
+          },
+        ],
+      },
+    },
+  );
+  return { sessionStatus: session.status, results: ingest.results };
+}
+
+/** Rezervasyonun durum geçmişi, sırayla (`booking_status_history`). */
+export async function statusHistory(bookingId: string): Promise<string[]> {
+  const result = await db().query<{ to_status: string }>(
+    `SELECT to_status FROM booking_status_history WHERE booking_id = $1 ORDER BY id`,
+    [bookingId],
+  );
+  return result.rows.map((row) => row.to_status);
+}
+
+/**
+ * Rezervasyonun ve ödemesinin outbox event tipleri (alfabetik: aynı transaction'daki eventlerin
+ * zamanı eşittir). Ödeme eventlerinin konusu ödemedir, rezervasyon değil.
+ */
+export async function outboxEventTypes(bookingId: string): Promise<string[]> {
+  const result = await db().query<{ event_type: string }>(
+    `SELECT event_type FROM outbox
+      WHERE subject_id = $1
+         OR subject_id IN (SELECT id FROM payments WHERE booking_id = $1)
+      ORDER BY event_type`,
+    [bookingId],
+  );
+  return result.rows.map((row) => row.event_type);
+}
+
+/** Rezervasyonu üreten eşleştirme kararının kaydı (ADR-0012 §1: sürümler zorunlu). */
+export async function matchingRunFor(bookingId: string): Promise<{
+  algorithmVersion: string;
+  strategy: string;
+  degradedReason: string | null;
+} | null> {
+  const result = await db().query<{
+    algorithm_version: string;
+    strategy: string;
+    degraded_reason: string | null;
+  }>(
+    `SELECT r.algorithm_version, r.strategy::text, r.degraded_reason::text
+       FROM matching_runs r JOIN bookings b ON b.request_id = r.request_id
+      WHERE b.id = $1 ORDER BY r.created_at DESC LIMIT 1`,
+    [bookingId],
+  );
+  const row = result.rows[0];
+  return row
+    ? {
+        algorithmVersion: row.algorithm_version,
+        strategy: row.strategy,
+        degradedReason: row.degraded_reason,
+      }
+    : null;
+}
+
+export async function paymentStatus(bookingId: string): Promise<string> {
+  const result = await db().query<{ status: string }>(
+    `SELECT status FROM payments WHERE booking_id = $1 ORDER BY created_at DESC LIMIT 1`,
+    [bookingId],
+  );
+  return result.rows[0]?.status ?? 'NONE';
+}
+
+export async function reviewsFor(
+  bookingId: string,
+): Promise<{ rating: number; authorId: string }[]> {
+  const result = await db().query<{ rating: number; author_user_id: string }>(
+    `SELECT rating, author_user_id FROM reviews WHERE booking_id = $1`,
+    [bookingId],
+  );
+  return result.rows.map((row) => ({ rating: row.rating, authorId: row.author_user_id }));
+}
+
+/** Audit hash zincirini doğrular (`POST /ops/audit-chain/verify`, yalnız ADMIN). */
+export async function verifyAuditChain(admin: Pick<Actor, 'subject'>): Promise<{ status: string }> {
+  return api<{ status: string }>('/ops/audit-chain/verify', bearerFor(admin), { body: {} });
+}
+
 /** Sağlayıcının randevu geçişi (ör. `PROVIDER_ARRIVING` — "Yola çıktım"). */
 export async function providerTransition(
   provider: Pick<Actor, 'subject'>,

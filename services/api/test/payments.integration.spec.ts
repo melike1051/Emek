@@ -183,11 +183,6 @@ describe('payments (integration)', () => {
       .set('authorization', fixture.customerToken)
       .send({ to: 'CUSTOMER_CONFIRMED' })
       .expect(201);
-
-    await app.get(BookingsService).advanceBySystem({
-      bookingId: fixture.bookingId,
-      to: 'COMPLETED',
-    });
   }
 
   function signedWebhook(payload: Record<string, unknown>): {
@@ -941,7 +936,6 @@ describe('payments (integration)', () => {
         .set('authorization', fixture.customerToken)
         .send({ to: 'CUSTOMER_CONFIRMED' })
         .expect(201);
-      await bookings.advanceBySystem({ bookingId: fixture.bookingId, to: 'COMPLETED' });
 
       expect(await paymentStatus(paymentId)).toBe('SERVICE_COMPLETED');
       await http()

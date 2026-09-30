@@ -1037,3 +1037,18 @@ mobilde kimlik doğrulama başlatma (R-111) açık.
 ## Faz 17 — Final E2E
 
 Web + mobile + backend uçtan uca; production readiness review; TÜBİTAK demo senaryoları.
+
+**Durum (2026-09-30): kod + doküman tamam; staging doğrulaması Faz 13'ün gerçek-bulut adımına bağlı.**
+
+- Tam zincir E2E: `e2e/tests/web.full-lifecycle.spec.ts` — talep → eşleşme → kabul → ödeme yetkisi →
+  hizmet günü (arayüz) + telemetri → müşteri onayı → değerlendirme → operatör serbest bırakma →
+  `SETTLED`; durum geçmişi, outbox eventleri, `matching_runs` sürümü ve audit zinciri doğrulanır.
+- CI `e2e` işi (R-106 web kısmı): Postgres/PostGIS + Redis servis konteynerleri, katalog seed'i,
+  AI kapalı/açık iki varyant (`E2E_REQUIRE_AI`).
+- Final E2E'nin yakaladığı kritik hata düzeltildi (R-115): müşteri onayı randevuyu `COMPLETED`'a
+  taşımıyordu — ödeme hiç serbest bırakılamıyordu. CI'daki kayıp `containers` iş başlığı geri geldi.
+- [production-readiness.md](production-readiness.md): demo **hazır**, pilot/üretim **hazır değil**;
+  go/no-go listesi.
+- [demo-scenarios.md](../research/demo-scenarios.md) + `e2e/scripts/seed-demo.ts`.
+- Kapsam dışı bırakılanlar (dış bağımlılık): gerçek GCP `apply`, fiziksel cihaz (R-110), APNs
+  (R-112), admin dağıtımı ve web IP modeli (R-105, R-107) — pilot öncesi go/no-go maddeleri.

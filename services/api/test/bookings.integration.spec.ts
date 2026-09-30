@@ -522,18 +522,51 @@ describe('bookings (integration)', () => {
         expect(response.body.status).toBe(to);
       }
 
-      // Son onay müşteriye aittir.
+      // Son onay müşteriye aittir; onay rezervasyonu aynı transaction'da `COMPLETED`'a
+      // taşır (SYSTEM). Taşımasaydı üretimde bu geçişi yapan başka bir yol yoktu:
+      // randevu `CUSTOMER_CONFIRMED`'da kalır, ödeme hiç serbest bırakılamazdı (Faz 17).
       const confirmed = await http()
         .post(`${PREFIX}/bookings/${bookingId}/transitions`)
         .set('authorization', fixture.customerToken)
         .send({ to: 'CUSTOMER_CONFIRMED' })
         .expect(201);
-      expect(confirmed.body.status).toBe('CUSTOMER_CONFIRMED');
+      expect(confirmed.body.status).toBe('COMPLETED');
+
+      const history = await pool.query<{ to_status: string; changed_by: string | null }>(
+        `SELECT to_status, changed_by FROM booking_status_history
+          WHERE booking_id = $1 ORDER BY id DESC LIMIT 2`,
+        [bookingId],
+      );
+      expect(history.rows).toEqual([
+        { to_status: 'COMPLETED', changed_by: null },
+        { to_status: 'CUSTOMER_CONFIRMED', changed_by: fixture.customerId },
+      ]);
 
       const events = await pool.query<{ event_type: string }>(
-        `SELECT event_type FROM outbox WHERE event_type = 'ServiceStarted'`,
+        `SELECT event_type FROM outbox
+          WHERE event_type IN ('ServiceStarted', 'ServiceCompleted')
+            AND subject_id = $1 ORDER BY event_type`,
+        [bookingId],
       );
-      expect(events.rows).toHaveLength(1);
+      expect(events.rows.map((row) => row.event_type)).toEqual([
+        'ServiceCompleted',
+        'ServiceStarted',
+      ]);
+
+      // Onayın tekrarı (çift dokunma, yeni anahtarla ağ tekrarı) yan etkisiz başarıdır:
+      // durum artık `COMPLETED` olduğu için genel "hedefteyse dön" kontrolü yakalamazdı.
+      const retried = await http()
+        .post(`${PREFIX}/bookings/${bookingId}/transitions`)
+        .set('authorization', fixture.customerToken)
+        .send({ to: 'CUSTOMER_CONFIRMED' })
+        .expect(201);
+      expect(retried.body.status).toBe('COMPLETED');
+      const confirmations = await pool.query<{ count: string }>(
+        `SELECT count(*)::text FROM booking_status_history
+          WHERE booking_id = $1 AND to_status IN ('CUSTOMER_CONFIRMED', 'COMPLETED')`,
+        [bookingId],
+      );
+      expect(confirmations.rows[0]?.count).toBe('2');
     });
 
     // T-07: aynı geçiş tekrar çağrıldığında yan etki üretmez.

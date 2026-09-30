@@ -167,6 +167,120 @@ jobs:
       - name: Tests
         run: flutter test
 
+  # Faz 17 final E2E (R-106): Playwright kritik akışları gerçek core API + Postgres/PostGIS +
+  # Redis + katalog seed'iyle. İki varyant: AI servisi kapalı (eşleştirme yedek yoldan,
+  # bozulmuş mod sınanır) ve açık (`E2E_REQUIRE_AI=true`: tam zincir yedek yola düşerse
+  # başarısız olur — açıklanabilirlik zinciri uçtan uca). Veritabanı iş başına sıfırdan
+  # kurulduğu için `e2e-` önekli veri birikmez. Mobil `integration_test` emülatör ister;
+  # burada koşmaz.
+  e2e:
+    name: E2E (Playwright, AI ${{ matrix.ai && 'açık' || 'kapalı' }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        ai: [false, true]
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: emek
+          POSTGRES_PASSWORD: emek_ci
+          POSTGRES_DB: emek
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U emek -d emek"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+
+    # `.env.example` kopyalanır; buradaki değerler dotenv'in üzerine yazmadığı süreç
+    # ortamıdır. Hepsi yerel/mock: seed yardımcısı yerel olmayan hedefi reddeder.
+    env:
+      NODE_ENV: development
+      LOG_LEVEL: warn
+      DATABASE_URL: postgres://emek:emek_ci@localhost:5432/emek
+      REDIS_URL: redis://localhost:6379
+      AUTH_PROVIDER: mock
+      IDENTITY_PROVIDER: mock
+      PAYMENT_PROVIDER: mock
+      APP_CHECK_ENABLED: 'false'
+      # AI kapalı varyantta kapalı bir porta işaret eder: eşleştirme yedek yola düşer.
+      AI_SERVICE_URL: ${{ matrix.ai && 'http://localhost:8000' || 'http://localhost:8999' }}
+      NEXT_PUBLIC_AUTH_MODE: mock
+      NEXT_TELEMETRY_DISABLED: '1'
+      E2E_DATABASE_URL: postgres://emek:emek_ci@localhost:5432/emek
+      E2E_REQUIRE_AI: ${{ matrix.ai }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      - run: cp .env.example .env
+
+      - name: Migrations + katalog seed
+        run: |
+          npm run migrate:up
+          npm run seed:catalog --workspace=@emek/api
+
+      - uses: astral-sh/setup-uv@v5
+        if: matrix.ai
+        with:
+          enable-cache: true
+
+      - name: AI servisini başlat
+        if: matrix.ai
+        working-directory: services/ai
+        run: |
+          uv sync --frozen
+          nohup uv run uvicorn app.main:app --port 8000 > "$RUNNER_TEMP/ai.log" 2>&1 &
+          timeout 90 bash -c 'until curl -fs http://localhost:8000/health/live; do sleep 2; done'
+
+      - name: Core API'yi başlat
+        working-directory: services/api
+        run: |
+          nohup npx dotenv -e ../../.env -- node --require ts-node/register src/main.ts \
+            > "$RUNNER_TEMP/api.log" 2>&1 &
+          timeout 120 bash -c 'until curl -fs http://localhost:3000/api/v1/health/live; do sleep 2; done'
+
+      - name: Playwright tarayıcısı
+        working-directory: e2e
+        run: npx playwright install --with-deps chromium
+
+      # Web ve admin `next dev` ile Playwright yapılandırmasından başlatılır.
+      - name: E2E
+        run: npm run test:e2e
+
+      - name: Rapor ve servis günlükleri
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-${{ matrix.ai && 'ai' || 'fallback' }}
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+            ${{ runner.temp }}/api.log
+            ${{ runner.temp }}/ai.log
+          retention-days: 7
+
+  containers:
+    name: Container images build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

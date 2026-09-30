@@ -165,11 +165,6 @@ describe('scheduled payment release (R-42)', () => {
       .set('authorization', fixture.customerToken)
       .send({ to: 'CUSTOMER_CONFIRMED' })
       .expect(201);
-
-    await app.get(BookingsService).advanceBySystem({
-      bookingId: fixture.bookingId,
-      to: 'COMPLETED',
-    });
   }
 
   /**

@@ -15,19 +15,19 @@
 
 ## 2. Test seviyeleri
 
-| Seviye        | Kapsam                                                                                | Araç                        | Ne zaman                             |
-| ------------- | ------------------------------------------------------------------------------------- | --------------------------- | ------------------------------------ |
-| Unit          | domain kuralları, state transition map, scoring fonksiyonları, DTO validation, parser | Jest/Vitest, pytest         | her PR                               |
-| Integration   | Postgres/PostGIS, Redis, migration, repository, outbox, adapter'lar                   | Testcontainers/compose      | her PR                               |
-| Contract      | OpenAPI + event şemaları; NestJS ↔ AI servisi; PSP/identity adapter şemaları          | schema validation testleri  | her PR                               |
-| API           | HTTP seviyesinde auth/RBAC/hata kodları/idempotency                                   | supertest                   | her PR                               |
-| Database      | constraint'ler, EXCLUDE, partial unique, partition, retention işi                     | SQL testleri                | ilgili faz + her PR                  |
-| Security      | authz bypass, IDOR, rate limit, injection, webhook imza/replay, secret scan, SAST     | otomatik + periyodik        | her PR (tarama), periyodik (pentest) |
-| Load          | 100/250/500 eşzamanlı booking; matching/optimization yükü                             | süreç içi harness (EXP-007) | release candidate                    |
-| AI evaluation | NLP precision/recall/F1, Recall@K, anomaly recall/FPR                                 | evaluation harness          | model/algoritma sürümünde            |
-| E2E           | customer → booking → matching → payment → service → safety → review                   | staging                     | Faz 17 + release                     |
-| Chaos/failure | bağımlılık arızaları, duplicate event, retry                                          | staging                     | Faz 14                               |
-| Concurrency   | havuz doygunluğu, aynı slot yarışı, eşzamanlı idempotency tekrarı                     | integration + harness       | her PR (regresyon), Faz 14 (ölçüm)   |
+| Seviye        | Kapsam                                                                                | Araç                                                     | Ne zaman                             |
+| ------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------ |
+| Unit          | domain kuralları, state transition map, scoring fonksiyonları, DTO validation, parser | Jest/Vitest, pytest                                      | her PR                               |
+| Integration   | Postgres/PostGIS, Redis, migration, repository, outbox, adapter'lar                   | Testcontainers/compose                                   | her PR                               |
+| Contract      | OpenAPI + event şemaları; NestJS ↔ AI servisi; PSP/identity adapter şemaları          | schema validation testleri                               | her PR                               |
+| API           | HTTP seviyesinde auth/RBAC/hata kodları/idempotency                                   | supertest                                                | her PR                               |
+| Database      | constraint'ler, EXCLUDE, partial unique, partition, retention işi                     | SQL testleri                                             | ilgili faz + her PR                  |
+| Security      | authz bypass, IDOR, rate limit, injection, webhook imza/replay, secret scan, SAST     | otomatik + periyodik                                     | her PR (tarama), periyodik (pentest) |
+| Load          | 100/250/500 eşzamanlı booking; matching/optimization yükü                             | süreç içi harness (EXP-007)                              | release candidate                    |
+| AI evaluation | NLP precision/recall/F1, Recall@K, anomaly recall/FPR                                 | evaluation harness                                       | model/algoritma sürümünde            |
+| E2E           | customer → booking → matching → payment → service → safety → review → settlement      | Playwright (CI: AI açık/kapalı); staging uyarlaması açık | her PR (Faz 17) + release            |
+| Chaos/failure | bağımlılık arızaları, duplicate event, retry                                          | staging                                                  | Faz 14                               |
+| Concurrency   | havuz doygunluğu, aynı slot yarışı, eşzamanlı idempotency tekrarı                     | integration + harness                                    | her PR (regresyon), Faz 14 (ölçüm)   |
 
 ## 3. Zorunlu senaryolar
 
