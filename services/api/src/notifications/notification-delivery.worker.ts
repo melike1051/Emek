@@ -82,6 +82,17 @@ export interface DeliveryTickResult {
  *
  * Başlatma: `NOTIFICATION_DELIVERY_ENABLED=true` (varsayılan kapalı).
  */
+/**
+ * İş sonucunu yazan `SET` parçaları — kapalı beyaz liste (SQL metni yalnız buradan gelir).
+ * $1 = iş kimliği, $2 = kira; $3 varsa parçaya özgü parametredir.
+ */
+const SETTLE_SET = {
+  SENT: `status = 'SENT', sent_at = now(), attempts = attempts + 1, last_error = NULL`,
+  RETRY: `attempts = attempts + 1, last_error = 'TRANSIENT',
+          next_attempt_at = now() + make_interval(secs => $3)`,
+  FAILED: `status = 'FAILED', attempts = attempts + 1, last_error = $3`,
+} as const;
+
 @Injectable()
 export class NotificationDeliveryWorker implements OnApplicationBootstrap, OnApplicationShutdown {
   private timer?: NodeJS.Timeout;
@@ -261,23 +272,12 @@ export class NotificationDeliveryWorker implements OnApplicationBootstrap, OnApp
     failReason: () => string | null,
   ): Promise<keyof DeliveryTickResult | null> {
     if (delivered) {
-      return this.settle(
-        job,
-        `status = 'SENT', sent_at = now(), attempts = attempts + 1, last_error = NULL`,
-        [],
-        'sent',
-      );
+      return this.settle(job, 'SENT', [], 'sent');
     }
     if (transient && job.attempts + 1 < this.config.env.NOTIFICATION_MAX_ATTEMPTS) {
       // Üstel geri çekilme: 30 sn, 1 dk, 2 dk, 4 dk …
       const backoffSeconds = 30 * 2 ** job.attempts;
-      return this.settle(
-        job,
-        `attempts = attempts + 1, last_error = 'TRANSIENT',
-         next_attempt_at = now() + make_interval(secs => $3)`,
-        [backoffSeconds],
-        'retried',
-      );
+      return this.settle(job, 'RETRY', [backoffSeconds], 'retried');
     }
     return this.fail(job, failReason() ?? 'MAX_ATTEMPTS');
   }
@@ -318,23 +318,21 @@ export class NotificationDeliveryWorker implements OnApplicationBootstrap, OnApp
   }
 
   private fail(job: ClaimedJob, reason: string): Promise<'failed' | null> {
-    return this.settle(
-      job,
-      `status = 'FAILED', attempts = attempts + 1, last_error = $3`,
-      [reason],
-      'failed',
-    );
+    return this.settle(job, 'FAILED', [reason], 'failed');
   }
 
   /** Sonucu yalnız iş hâlâ bu turun kirasındaysa yazar ($1 = id, $2 = kira, $3… = ek). */
   private async settle<T extends keyof DeliveryTickResult>(
     job: ClaimedJob,
-    set: string,
+    kind: keyof typeof SETTLE_SET,
     params: unknown[],
     outcome: T,
   ): Promise<T | null> {
+    // Parça yalnız `SETTLE_SET` kapalı beyaz listesinden gelir (anahtar tiplidir); tüm değerler
+    // parametrelidir ($3…). İstek verisi SQL metnine hiç girmez.
+    // nosemgrep: emek-no-string-interpolated-sql
     const updated = await this.pool.query(
-      `UPDATE notification_jobs SET ${set}
+      `UPDATE notification_jobs SET ${SETTLE_SET[kind]}
         WHERE id = $1 AND status = 'PENDING' AND next_attempt_at = $2::timestamptz`,
       [job.id, job.lease, ...params],
     );

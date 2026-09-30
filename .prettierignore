@@ -27,3 +27,7 @@ apps/mobile/ios
 apps/mobile/android
 apps/mobile/pubspec.yaml
 apps/mobile/pubspec.lock
+
+# Claude Code masaüstü uygulamasının önizleme yapılandırması: uygulama kendi biçiminde yeniden
+# yazar; Prettier'a uydurmak her yazımdan sonra CI'ı düşürürdü.
+.claude/

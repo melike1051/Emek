@@ -19,8 +19,11 @@ on:
 permissions:
   contents: read
 
+# `github.workflow` gruba dahildir: `deploy.yml` bu dosyayı `workflow_call` ile çağırdığında
+# workflow adı çağıranınkidir ("Deploy"). Dahil edilmezse main'e her push'ta bağımsız CI ile
+# Deploy içindeki CI aynı gruba düşer ve biri diğerini iptal eder.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -250,7 +253,7 @@ jobs:
         run: |
           uv sync --frozen
           nohup uv run uvicorn app.main:app --port 8000 > "$RUNNER_TEMP/ai.log" 2>&1 &
-          timeout 90 bash -c 'until curl -fs http://localhost:8000/health/live; do sleep 2; done'
+          timeout 90 bash -c 'until curl -fs http://localhost:8000/api/v1/health/live; do sleep 2; done'
 
       - name: Core API'yi başlat
         working-directory: services/api
