@@ -32,7 +32,30 @@ export const EVENT_TOPIC_MAP: Readonly<Record<string, string>> = {
   ServiceEvidenceAdded: 'emek.booking',
 };
 
-export const DEFAULT_TOPIC = 'emek.booking';
+/**
+ * Haritada olmayan event tipi için **fallback yoktur**.
+ *
+ * Varsayılan bir topic, yeni bir event tipini haritaya eklemeyi unutmayı sessiz bir
+ * kayba çevirirdi: event yanlış topic'e gider, doğru topic'i dinleyen consumer'a hiç
+ * ulaşmaz, outbox kaydı PUBLISHED işaretlenir ve metriklerde başarı görünür. Bunun
+ * yerine yayın kalıcı hatayla reddedilir; kayıt FAILED kalır ve operatör görür.
+ */
+export class UnmappedEventTypeError extends Error {
+  override readonly name = 'UnmappedEventTypeError';
+
+  constructor(readonly eventType: string) {
+    super(`Event tipi '${eventType}' EVENT_TOPIC_MAP'te tanımlı değil`);
+  }
+}
+
+/** Event tipinin topic'ini döner; haritada yoksa `UnmappedEventTypeError` fırlatır. */
+export function topicFor(eventType: string): string {
+  const topic = EVENT_TOPIC_MAP[eventType];
+  if (topic === undefined) {
+    throw new UnmappedEventTypeError(eventType);
+  }
+  return topic;
+}
 
 export const ALL_TOPICS = ['emek.booking', 'emek.payment', 'emek.safety', 'emek.identity'] as const;
 

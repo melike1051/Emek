@@ -25,6 +25,15 @@ Tüm event'ler standart bir zarf (envelope) kullanır. `packages/api-contracts/e
 
 Domain başına bir topic (`emek.booking`, `emek.payment`, vb.) tanımlanır. Event tipi mesaj attribute'unda taşınır ve subscription filtresiyle ayrıştırılır. Consumer'lar kendi subscription'larına sahiptir ve her subscription'ın kendi DLQ (Dead Letter Queue) yapılandırması vardır.
 
+Event tipi → topic eşlemesi `services/api/src/common/events/event-topology.ts` içindeki
+`EVENT_TOPIC_MAP`'tedir ve **varsayılan/fallback topic yoktur**. Haritada karşılığı olmayan
+bir event tipiyle yapılan yayın `UnmappedEventTypeError` ile reddedilir; `OutboxPublisher`
+bunu kalıcı hata sayar, kaydı ilk denemede `FAILED` durumuna alır ve `error` seviyesinde
+loglar. Fallback bulunsaydı, haritaya eklenmesi unutulan yeni bir event sessizce yanlış
+topic'e gider, doğru topic'i dinleyen consumer'a hiç ulaşmaz, outbox kaydı `PUBLISHED`
+işaretlenir ve metriklerde başarı görünürdü. **Yeni bir event tipi eklerken `EVENT_TOPIC_MAP`
+güncellenmek zorundadır.**
+
 ## Producer Ownership (Outbox Pattern)
 
 Veri bütünlüğünü sağlamak için **transactional outbox** deseni kullanılır. Event, domain nesnesinin (ör. Booking, Payment) kaydedildiği transaction ile `outbox` tablosuna eklenir. `OutboxPublisher` arka planda çalışarak `PENDING` durumundaki event'leri `FOR UPDATE SKIP LOCKED` ile sahiplenir ve yayınlar.

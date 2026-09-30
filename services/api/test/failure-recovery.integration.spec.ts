@@ -3,6 +3,7 @@ import type { INestApplication } from '@nestjs/common';
 import type { Pool, PoolClient } from 'pg';
 import type { Logger } from 'pino';
 import { EVENT_TRANSPORT, type OutboundEvent } from '../src/common/outbox/event-transport';
+import { UnmappedEventTypeError } from '../src/common/events/event-topology';
 import { OutboxPublisher, OUTBOX_MAX_ATTEMPTS } from '../src/common/outbox/outbox.publisher';
 import { EventMetrics } from '../src/common/events/event-metrics';
 import { EventConsumerRunner } from '../src/common/events/event-consumer-runner';
@@ -34,12 +35,15 @@ describe('arıza ve kurtarma — outbox kiralaması ve consumer yeniden teslimi 
 
   /** Yayını istenildiğinde reddeden/askıya alan taşıma (dış servis sınırı). */
   const transport = {
-    mode: 'ok' as 'ok' | 'fail' | 'hang',
+    mode: 'ok' as 'ok' | 'fail' | 'hang' | 'unmapped',
     published: [] as string[],
     release: undefined as undefined | (() => void),
     async publish(event: OutboundEvent): Promise<void> {
       if (transport.mode === 'fail') {
         throw new Error('transport unavailable');
+      }
+      if (transport.mode === 'unmapped') {
+        throw new UnmappedEventTypeError(event.eventType);
       }
       if (transport.mode === 'hang') {
         // Sonsuza dek beklemez; testin serbest bırakacağı bir kilit.
@@ -175,6 +179,17 @@ describe('arıza ve kurtarma — outbox kiralaması ve consumer yeniden teslimi 
     expect(await publisher.drain()).toBe(0);
     expect(transport.published).toHaveLength(0);
   }, 60000);
+
+  it('topic eşlemesi olmayan event ilk denemede FAILED olur (kalıcı hata, yeniden denenmez)', async () => {
+    const [eventId] = await enqueue(1);
+    transport.mode = 'unmapped';
+
+    await secondInstancePublisher().drain();
+
+    const row = await outboxRow(eventId!);
+    expect(row?.status).toBe('FAILED');
+    expect(row?.attempts).toBe(1);
+  });
 });
 
 /**

@@ -1,3 +1,5 @@
+import { EventType } from './outbox.service';
+import { topicFor } from '../events/event-topology';
 import { PubSubEventTransport } from './pubsub-event-transport';
 import type { PubSub, Topic } from '@google-cloud/pubsub';
 import type { Logger } from 'pino';
@@ -54,6 +56,21 @@ describe('PubSubEventTransport', () => {
 
     expect(pubsub.topic).toHaveBeenCalledWith('emek.booking');
     expect(mockTopic.publishMessage).toHaveBeenCalled();
+  });
+
+  it("outbox sözlüğündeki her event tipinin topic eşlemesi vardır (yeni tip CI'da yakalanır)", () => {
+    for (const eventType of Object.values(EventType)) {
+      expect(() => topicFor(eventType)).not.toThrow();
+    }
+  });
+
+  it("haritada olmayan event tipi yayınlanmaz — sessizce varsayılan topic'e düşmez", async () => {
+    await expect(
+      transport.publish({ ...testEvent, eventType: 'BrandNewEventNobodyMapped' }),
+    ).rejects.toThrow(/EVENT_TOPIC_MAP/);
+
+    expect(pubsub.topic).not.toHaveBeenCalled();
+    expect(mockTopic.publishMessage).not.toHaveBeenCalled();
   });
 
   it('doğru envelope (zarf) yapısı oluşturulur', async () => {

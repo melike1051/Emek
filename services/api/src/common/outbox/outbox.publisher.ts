@@ -10,6 +10,7 @@ import { POSTGRES_POOL } from '../database/database.tokens';
 import { ROOT_LOGGER } from '../logging/logging.tokens';
 import { EVENT_TRANSPORT, type EventTransport, type OutboundEvent } from './event-transport';
 import { EventMetrics } from '../events/event-metrics';
+import { UnmappedEventTypeError } from '../events/event-topology';
 
 interface OutboxRow {
   event_id: string;
@@ -214,7 +215,11 @@ export class OutboxPublisher implements OnApplicationBootstrap, OnApplicationShu
     // Deneme hakkı bitince kayıt FAILED olur ve **bir daha alınmaz** (claim sorgusu
     // yalnızca PENDING okur). FAILED kayıtlar operasyonel inceleme konusudur;
     // DLQ topolojisi ve alarmı Faz 9'da gelir.
-    const exhausted = attempts >= OUTBOX_MAX_ATTEMPTS;
+    // Kalıcı hatalar yeniden denenmez: topolojide karşılığı olmayan bir event tipi
+    // 10 tur sonra da eşleşmeyecektir. Doğrudan FAILED'a alınır ki operatör kaydı
+    // backoff penceresini beklemeden görsün.
+    const permanent = error instanceof UnmappedEventTypeError;
+    const exhausted = permanent || attempts >= OUTBOX_MAX_ATTEMPTS;
     // Yalnızca sınıflandırılmış kod saklanır: hata metni payload/PII sızdırabilir.
     const errorCode = error instanceof Error ? error.name : 'UnknownError';
     // Exponential backoff, üst sınırla.
@@ -232,8 +237,11 @@ export class OutboxPublisher implements OnApplicationBootstrap, OnApplicationShu
       [row.event_id, attempts, errorCode.slice(0, 80), exhausted, String(backoffSeconds)],
     );
 
-    this.logger.warn(
-      { eventId: row.event_id, eventType: row.event_type, attempts, exhausted },
+    const logFailure = permanent
+      ? this.logger.error.bind(this.logger)
+      : this.logger.warn.bind(this.logger);
+    logFailure(
+      { eventId: row.event_id, eventType: row.event_type, attempts, exhausted, permanent },
       'Outbox event yayınlanamadı',
     );
     this.metrics.publishFailure({

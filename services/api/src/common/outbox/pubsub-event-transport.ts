@@ -3,7 +3,7 @@ import { PubSub } from '@google-cloud/pubsub';
 import type { Logger } from 'pino';
 import { ROOT_LOGGER } from '../logging/logging.tokens';
 import type { EventTransport, OutboundEvent } from './event-transport';
-import { DEFAULT_TOPIC, EVENT_TOPIC_MAP } from '../events/event-topology';
+import { topicFor } from '../events/event-topology';
 
 const PUBLISH_TIMEOUT_MS = 10_000;
 
@@ -15,7 +15,8 @@ export class PubSubEventTransport implements EventTransport, OnModuleDestroy {
   ) {}
 
   async publish(event: OutboundEvent): Promise<void> {
-    const topicName = EVENT_TOPIC_MAP[event.eventType] ?? DEFAULT_TOPIC;
+    // Haritada olmayan event tipi burada durur: sessizce yanlış topic'e gitmez.
+    const topicName = topicFor(event.eventType);
     const topic = this.pubsub.topic(topicName);
 
     // ADR-0010: Canonical JSON envelope
