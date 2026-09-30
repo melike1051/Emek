@@ -513,7 +513,11 @@ describe('notifications (integration)', () => {
       });
       const smsJob = (await jobs(e.eventId)).find((r) => r.channel === 'SMS');
       expect(smsJob).toMatchObject({ status: 'SENT' });
-      expect(JSON.stringify(smsJob?.template_data)).not.toContain('555');
+      // Numaranın kendisi aranır: kısa bir parça ('555') işteki rastgele UUID'de tesadüfen
+      // geçebiliyordu (CI'da bir kez oldu). Bu dize +90'lı ve +90'sız biçimi birlikte yakalar.
+      const stored = JSON.stringify(smsJob?.template_data);
+      expect(stored).not.toContain('5551112233');
+      expect(stored).not.toMatch(/"phone"/);
     });
 
     it('e-posta alıcının adresine gider; adres yoksa FAILED/NO_CONTACT', async () => {
