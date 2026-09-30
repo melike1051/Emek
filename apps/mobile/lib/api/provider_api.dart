@@ -96,6 +96,29 @@ class AvailabilityWindow {
 }
 
 /// Kaynak: documents/dto (DocumentResponseDto). `sha256` storage'daki nesneden okunur.
+/// Rezervasyonun hizmet adresi (R-102) — kaynak: BookingAddressResponseDto.
+class BookingAddress {
+  const BookingAddress({
+    required this.city,
+    required this.district,
+    required this.line,
+    required this.latitude,
+    required this.longitude,
+  });
+  factory BookingAddress.fromJson(Json json) => BookingAddress(
+    city: json['city'] as String,
+    district: json['district'] as String,
+    line: json['line'] as String,
+    latitude: (json['latitude'] as num).toDouble(),
+    longitude: (json['longitude'] as num).toDouble(),
+  );
+  final String city;
+  final String district;
+  final String line;
+  final double latitude;
+  final double longitude;
+}
+
 class EvidenceDocument {
   const EvidenceDocument({
     required this.id,
@@ -251,6 +274,13 @@ class ProviderApi {
         ))!
         as Json,
   );
+
+  /// Hizmet adresi. Sağlayıcıya yalnız `SCHEDULED`…`CHECKED_OUT` arasında açıktır
+  /// (`BOOKING_ADDRESS_UNAVAILABLE`, 409) ve her okuması audit'lidir.
+  Future<BookingAddress> address(String bookingId) async =>
+      BookingAddress.fromJson(
+        (await _client.get('/bookings/${_seg(bookingId)}/address'))! as Json,
+      );
 
   // --- Kanıt ---
   Future<List<EvidenceDocument>> documents(String bookingId) async => _list(

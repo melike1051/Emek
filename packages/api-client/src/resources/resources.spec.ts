@@ -32,6 +32,14 @@ describe('bookingsApi', () => {
     ).rejects.toBeInstanceOf(ApiError);
   });
 
+  it('hizmet adresi rezervasyon kimliği kodlanarak GET ile istenir', async () => {
+    const { api, last } = client(200, { city: 'Ankara' });
+    await expect(bookingsApi(api).address('b/1')).resolves.toEqual({ city: 'Ankara' });
+    const { url, init } = last();
+    expect(url).toBe('/api/v1/bookings/b%2F1/address');
+    expect(init.method ?? 'GET').toBe('GET');
+  });
+
   it('ödeme yetkilendirmesi boş gövde + çağıranın Idempotency-Key’i ile gider', async () => {
     const { api, last } = client(201, {});
     await bookingsApi(api).authorizePayment('b/1', 'key-1');

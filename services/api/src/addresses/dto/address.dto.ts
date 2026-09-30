@@ -57,3 +57,12 @@ export class AddressResponseDto {
     };
   }
 }
+
+/** Rezervasyonun hizmet adresi (R-102): kimlik ve etiket taşımaz, yalnız hizmet için gereken. */
+export class BookingAddressResponseDto {
+  city!: string;
+  district!: string;
+  line!: string;
+  latitude!: number;
+  longitude!: number;
+}

@@ -4,6 +4,7 @@ import {
   clearRateLimits,
   closeDb,
   grantRole,
+  addressAccessAudits,
   matchingRunFor,
   outboxEventTypes,
   paymentStatus,
@@ -66,6 +67,12 @@ test('talep → eşleşme → ödeme → hizmet günü + telemetri → onay → 
   }
 
   const providerSide = await providerAccepts(browser, provider, bookingId);
+  // R-102: kabul edildi ama ödeme yok — sağlayıcı adresi henüz göremez.
+  await expect(
+    providerSide.page.getByText(
+      'Hizmet adresi, müşteri ödemeyi onaylayıp randevu planlandığında görünür.',
+    ),
+  ).toBeVisible();
   await customerAuthorizesPayment(page, bookingId);
   expect(await paymentStatus(bookingId)).toBe('HELD');
   expect(await safetyState(bookingId)).toEqual({ riskLevel: 'NORMAL', panicCount: 0 });
@@ -73,6 +80,9 @@ test('talep → eşleşme → ödeme → hizmet günü + telemetri → onay → 
   // --- 2. Hizmet günü: sağlayıcı adımları arayüzden, telemetri cihazdan ---
   const providerPage = providerSide.page;
   await providerPage.reload();
+  // Planlandı: açık adres görünür ve okuma audit'e yazılır.
+  await expect(providerPage.getByText('E2E Mahallesi 1. Sokak No 2')).toBeVisible();
+  expect(await addressAccessAudits(bookingId)).toBeGreaterThanOrEqual(1);
   const steps = [
     { label: 'Yola çıktım', confirm: 'Evet, yola çıkıyorum', status: 'PROVIDER_ARRIVING' },
     { label: 'Adrese vardım', confirm: 'Evet, adresteyim', status: 'CHECKED_IN' },

@@ -390,6 +390,43 @@ describe('Sağlayıcı randevuları', () => {
     expect(confirm?.headers.get('Idempotency-Key')).toBeTruthy();
   });
 
+  it('hizmet adresi planlanmış randevuda gösterilir, ödemeden önce istenmez (R-102)', async () => {
+    let status = 'CONFIRMED';
+    const { calls } = providerBackend({
+      'GET /bookings/b-1': () => json({ ...BOOKING, status }),
+      'GET /bookings/b-1/address': () =>
+        json({
+          city: 'Ankara',
+          district: 'Çankaya',
+          line: 'Atatürk Blv. No 1',
+          latitude: 39.92,
+          longitude: 32.85,
+        }),
+      '/bookings/b-1/history': () => json([]),
+      '/bookings/b-1/disputes': () => json([]),
+      '/bookings/b-1/documents': () => json([]),
+    });
+    navigation.pathname = '/panel/randevular/b-1';
+    const first = renderScreen(<ProviderBookingDetail bookingId="b-1" />);
+    expect(
+      await screen.findByText(
+        'Hizmet adresi, müşteri ödemeyi onaylayıp randevu planlandığında görünür.',
+      ),
+    ).toBeInTheDocument();
+    expect(calls.some((c) => c.path === '/bookings/b-1/address')).toBe(false);
+    first.unmount();
+
+    status = 'SCHEDULED';
+    renderScreen(<ProviderBookingDetail bookingId="b-1" />);
+    expect(await screen.findByText(/Atatürk Blv\. No 1/)).toBeInTheDocument();
+    expect(calls.filter((c) => c.path === '/bookings/b-1/address')).toHaveLength(1);
+    expect(screen.getByText(/Çankaya \/ Ankara/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Haritada aç' })).toHaveAttribute(
+      'href',
+      'https://www.google.com/maps/search/?api=1&query=39.92,32.85',
+    );
+  });
+
   it('ret gerekçeli iptaldir', async () => {
     const { calls } = providerBackend({
       'GET /bookings/b-1': () => json(BOOKING),

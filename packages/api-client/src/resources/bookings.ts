@@ -43,6 +43,15 @@ export interface BookingHistoryEntry {
   createdAt: string;
 }
 
+/** Kaynak: BookingAddressResponseDto — rezervasyonun hizmet adresi (R-102). */
+export interface BookingAddress {
+  city: string;
+  district: string;
+  line: string;
+  latitude: number;
+  longitude: number;
+}
+
 /** Kaynak: TransitionBookingDto — gövdeli geçişlerin kapalı kümesi. */
 export type BookingTransitionTarget =
   'PROVIDER_ARRIVING' | 'CHECKED_IN' | 'IN_PROGRESS' | 'CHECKED_OUT' | 'CUSTOMER_CONFIRMED';
@@ -130,6 +139,11 @@ export function bookingsApi(client: ApiClient) {
     list: () => client.get<Booking[]>('/bookings'),
     get: (id: string) => client.get<Booking>(base(id)),
     history: (id: string) => client.get<BookingHistoryEntry[]>(`${base(id)}/history`),
+    /**
+     * Hizmet adresi. Sağlayıcıya yalnız `SCHEDULED`…`CHECKED_OUT` arasında açıktır
+     * (`BOOKING_ADDRESS_UNAVAILABLE`, 409) ve her okuması audit'lidir.
+     */
+    address: (id: string) => client.get<BookingAddress>(`${base(id)}/address`),
     cancel: (id: string, reason: string | undefined, idempotencyKey: string) =>
       client.post<Booking>(`${base(id)}/cancel`, reason ? { reason } : {}, { idempotencyKey }),
     /** Sağlayıcı onayı: `PROVIDER_PENDING → CONFIRMED`. Ret, `cancel` ile yapılır. */

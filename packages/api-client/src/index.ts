@@ -29,6 +29,7 @@ export { addressesApi, type Address, type CreateAddressInput } from './resources
 export {
   bookingsApi,
   type Booking,
+  type BookingAddress,
   type BookingHistoryEntry,
   type BookingStatus,
   type BookingTransitionTarget,

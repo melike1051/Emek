@@ -86,7 +86,27 @@ export interface ProviderActions {
   /** Bu durumda eklenebilecek kanıt türleri (backend türü duruma bağlamaz; akış bağlar). */
   uploadable: DocumentType[];
   hasSafetySession: boolean;
+  /**
+   * Hizmet adresi görünürlüğü (R-102): backend'in `PROVIDER_ADDRESS_STATUSES` penceresinin
+   * aynası. `AFTER_PAYMENT`: henüz açılmadı; `CLOSED`: hizmet bitti veya randevu kapandı.
+   */
+  address: 'VISIBLE' | 'AFTER_PAYMENT' | 'CLOSED';
 }
+
+const ADDRESS_VISIBLE: ReadonlySet<string> = new Set([
+  'SCHEDULED',
+  'PROVIDER_ARRIVING',
+  'CHECKED_IN',
+  'IN_PROGRESS',
+  'CHECKED_OUT',
+]);
+const ADDRESS_PENDING: ReadonlySet<string> = new Set([
+  'REQUESTED',
+  'MATCHED',
+  'PROVIDER_PENDING',
+  'CONFIRMED',
+  'PAYMENT_AUTHORIZED',
+]);
 
 const CANCELLABLE_BY_PARTY: ReadonlySet<string> = new Set([
   'CONFIRMED',
@@ -114,6 +134,11 @@ export function providerActions(status: string): ProviderActions {
     next: NEXT_STEP[status] ?? null,
     uploadable,
     hasSafetySession: SAFETY_VISIBLE.has(status),
+    address: ADDRESS_VISIBLE.has(status)
+      ? 'VISIBLE'
+      : ADDRESS_PENDING.has(status)
+        ? 'AFTER_PAYMENT'
+        : 'CLOSED',
   };
 }
 

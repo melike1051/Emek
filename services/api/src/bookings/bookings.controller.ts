@@ -9,6 +9,8 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import { AddressesService } from '../addresses/addresses.service';
+import { BookingAddressResponseDto } from '../addresses/dto/address.dto';
 import { CurrentUser, Roles, type AuthenticatedUser } from '../auth/auth.decorators';
 import { BusinessException } from '../common/errors/business.exception';
 import { ErrorCode } from '../common/errors/error-codes';
@@ -28,7 +30,10 @@ import {
 
 @Controller('bookings')
 export class BookingsController {
-  constructor(private readonly bookings: BookingsService) {}
+  constructor(
+    private readonly bookings: BookingsService,
+    private readonly addresses: AddressesService,
+  ) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -99,6 +104,18 @@ export class BookingsController {
       throw new BusinessException(ErrorCode.NOT_FOUND);
     }
     return entries.map(BookingHistoryResponseDto.from);
+  }
+
+  /**
+   * Hizmet adresi (R-102). Sağlayıcıya yalnız planlanmış randevudan check-out'a kadar açılır,
+   * her okuması audit'lidir; müşteri kendi adresini her zaman görür. Taraf olmayana 404.
+   */
+  @Get(':id/address')
+  async address(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<BookingAddressResponseDto> {
+    return this.addresses.findForBooking(id, user.id);
   }
 
   /** Sağlayıcı onayı: `PROVIDER_PENDING → CONFIRMED`. */

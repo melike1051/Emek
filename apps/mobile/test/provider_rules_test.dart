@@ -31,6 +31,36 @@ void main() {
       expect(ProviderActions.of('CHECKED_OUT').uploadable, ['AFTER_PHOTO']);
     });
 
+    test('hizmet adresi planlanmıştan check-out’a kadar (R-102)', () {
+      for (final status in [
+        'SCHEDULED',
+        'PROVIDER_ARRIVING',
+        'CHECKED_IN',
+        'IN_PROGRESS',
+        'CHECKED_OUT',
+      ]) {
+        expect(ProviderActions.of(status).address, AddressVisibility.visible);
+      }
+      for (final status in [
+        'PROVIDER_PENDING',
+        'CONFIRMED',
+        'PAYMENT_AUTHORIZED',
+      ]) {
+        expect(
+          ProviderActions.of(status).address,
+          AddressVisibility.afterPayment,
+        );
+      }
+      for (final status in [
+        'COMPLETED',
+        'SETTLED',
+        'CANCELLED',
+        'SAFETY_HOLD',
+      ]) {
+        expect(ProviderActions.of(status).address, AddressVisibility.closed);
+      }
+    });
+
     test('iptal hizmet başlamadan; sonrasında yalnız destek', () {
       expect(ProviderActions.of('PROVIDER_ARRIVING').canCancel, isTrue);
       expect(ProviderActions.of('CHECKED_IN').canCancel, isFalse);

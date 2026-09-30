@@ -79,6 +79,24 @@ const _safetyVisible = {
   'SAFETY_HOLD',
 };
 
+/// Hizmet adresi görünürlüğü (R-102) — backend `PROVIDER_ADDRESS_STATUSES` aynası.
+enum AddressVisibility { visible, afterPayment, closed }
+
+const _addressVisible = {
+  'SCHEDULED',
+  'PROVIDER_ARRIVING',
+  'CHECKED_IN',
+  'IN_PROGRESS',
+  'CHECKED_OUT',
+};
+const _addressPending = {
+  'REQUESTED',
+  'MATCHED',
+  'PROVIDER_PENDING',
+  'CONFIRMED',
+  'PAYMENT_AUTHORIZED',
+};
+
 /// Kanıt türlerinin sağlayıcı ve müşteri için ortak adları.
 const documentTypeLabels = <String, String>{
   'BEFORE_PHOTO': 'Önce',
@@ -95,6 +113,7 @@ class ProviderActions {
     required this.next,
     required this.uploadable,
     required this.hasSafetySession,
+    required this.address,
   });
 
   factory ProviderActions.of(String status) => ProviderActions._(
@@ -107,6 +126,11 @@ class ProviderActions {
       if (status == 'IN_PROGRESS' || status == 'CHECKED_OUT') 'AFTER_PHOTO',
     ],
     hasSafetySession: _safetyVisible.contains(status),
+    address: _addressVisible.contains(status)
+        ? AddressVisibility.visible
+        : _addressPending.contains(status)
+        ? AddressVisibility.afterPayment
+        : AddressVisibility.closed,
   );
 
   final bool canRespond;
@@ -116,6 +140,7 @@ class ProviderActions {
   /// Bu durumda eklenebilecek kanıt türleri (backend türü duruma bağlamaz; akış bağlar).
   final List<String> uploadable;
   final bool hasSafetySession;
+  final AddressVisibility address;
 }
 
 class ReadinessItem {

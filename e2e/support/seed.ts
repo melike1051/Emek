@@ -391,6 +391,16 @@ export async function reviewsFor(
   return result.rows.map((row) => ({ rating: row.rating, authorId: row.author_user_id }));
 }
 
+/** Sağlayıcının hizmet adresi okumaları (R-102, `BOOKING_ADDRESS_ACCESSED`). */
+export async function addressAccessAudits(bookingId: string): Promise<number> {
+  const result = await db().query<{ count: string }>(
+    `SELECT count(*)::text FROM audit_logs
+      WHERE action = 'BOOKING_ADDRESS_ACCESSED' AND new_value->>'bookingId' = $1`,
+    [bookingId],
+  );
+  return Number(result.rows[0]?.count ?? '0');
+}
+
 /** Audit hash zincirini doğrular (`POST /ops/audit-chain/verify`, yalnız ADMIN). */
 export async function verifyAuditChain(admin: Pick<Actor, 'subject'>): Promise<{ status: string }> {
   return api<{ status: string }>('/ops/audit-chain/verify', bearerFor(admin), { body: {} });

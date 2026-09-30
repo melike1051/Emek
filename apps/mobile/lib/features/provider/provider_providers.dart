@@ -53,6 +53,13 @@ final providerBookingsProvider = FutureProvider.autoDispose<List<Booking>>((
   return all.where((b) => b.providerId == userId).toList();
 });
 
+/// Hizmet adresi (R-102). Her okuma backend'de audit kaydıdır: ekran açıkken tekrar istenmez,
+/// yalnız ekrandan çıkınca (autoDispose) bırakılır.
+final bookingAddressProvider = FutureProvider.autoDispose
+    .family<BookingAddress, String>(
+      (ref, bookingId) => ref.watch(providerApiProvider).address(bookingId),
+    );
+
 final documentsProvider = FutureProvider.autoDispose
     .family<List<EvidenceDocument>, String>(
       (ref, bookingId) => ref.watch(providerApiProvider).documents(bookingId),

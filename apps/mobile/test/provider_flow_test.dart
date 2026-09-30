@@ -164,6 +164,42 @@ void main() {
     },
   );
 
+  testWidgets(
+    'hizmet adresi: ödemeden önce istenmez, planlanınca gösterilir (R-102)',
+    (tester) async {
+      tallSurface(tester);
+      var status = 'CONFIRMED';
+      final backend = FakeBackend({
+        ...providerSession(),
+        'GET /bookings/b1': (_) => json(booking(status)),
+        'GET /bookings/b1/history': (_) => json(<Object>[]),
+        'GET /bookings/b1/documents': (_) => json(<Object>[]),
+        'GET /bookings/b1/address': (_) => json({
+          'city': 'Ankara',
+          'district': 'Çankaya',
+          'line': 'Atatürk Blv. No 1',
+          'latitude': 39.92,
+          'longitude': 32.85,
+        }),
+      });
+      await pumpSignedInApp(tester, backend, location: '/panel/randevular/b1');
+      expect(
+        find.text(
+          'Hizmet adresi, müşteri ödemeyi onaylayıp randevu planlandığında görünür.',
+        ),
+        findsOneWidget,
+      );
+      expect(backend.callsTo('GET', '/bookings/b1/address'), isEmpty);
+
+      status = 'SCHEDULED';
+      await pumpSignedInApp(tester, backend, location: '/panel/randevular/b1');
+      expect(find.text('Atatürk Blv. No 1'), findsOneWidget);
+      expect(find.text('Çankaya / Ankara'), findsOneWidget);
+      expect(find.text('Haritada aç'), findsOneWidget);
+      expect(backend.callsTo('GET', '/bookings/b1/address'), hasLength(1));
+    },
+  );
+
   testWidgets('ret: PROVIDER_PENDING’de gerekçeli cancel', (tester) async {
     tallSurface(tester);
     final backend = FakeBackend({
@@ -198,6 +234,13 @@ void main() {
         ...providerSession(),
         'GET /bookings/b1': (_) => json(booking('CHECKED_IN')),
         'GET /bookings/b1/history': (_) => json(<Object>[]),
+        'GET /bookings/b1/address': (_) => json({
+          'city': 'Ankara',
+          'district': 'Çankaya',
+          'line': 'Atatürk Blv. No 1',
+          'latitude': 39.92,
+          'longitude': 32.85,
+        }),
         'GET /bookings/b1/documents': (_) => json(
           confirmed
               ? [

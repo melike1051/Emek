@@ -569,6 +569,84 @@ describe('bookings (integration)', () => {
       expect(confirmations.rows[0]?.count).toBe('2');
     });
 
+    // R-102: sağlayıcı hizmet adresini yalnız hizmet penceresinde görür; her okuma audit'li.
+    describe('hizmet adresi', () => {
+      const addressOf = (bookingId: string, token: string) =>
+        http().get(`${PREFIX}/bookings/${bookingId}/address`).set('authorization', token);
+
+      async function addressAudits(bookingId: string): Promise<string[]> {
+        const rows = await pool.query<{ actor_user_id: string }>(
+          `SELECT actor_user_id FROM audit_logs
+            WHERE action = 'BOOKING_ADDRESS_ACCESSED' AND new_value->>'bookingId' = $1`,
+          [bookingId],
+        );
+        return rows.rows.map((row) => row.actor_user_id);
+      }
+
+      it('kabul ve ödemeden önce sağlayıcıya kapalı, müşteriye açık', async () => {
+        const fixture = await setupFixture('address-pending');
+        const bookingId = await bookingIn(fixture, 'CONFIRMED');
+
+        const denied = await addressOf(bookingId, fixture.providerToken).expect(409);
+        expect(denied.body.error.code).toBe('BOOKING_ADDRESS_UNAVAILABLE');
+
+        const own = await addressOf(bookingId, fixture.customerToken).expect(200);
+        expect(own.body).toEqual(
+          expect.objectContaining({ city: 'İstanbul', line: 'Test Mahallesi 1. Sokak No 2' }),
+        );
+        expect(await addressAudits(bookingId)).toEqual([]);
+      });
+
+      it('planlandıktan sonra sağlayıcı açık adresi okur; okuma audit edilir', async () => {
+        const fixture = await setupFixture('address-scheduled');
+        const bookingId = await bookingIn(fixture, 'SCHEDULED');
+        // Müşterinin adresi arşivlemesi randevunun adresini sağlayıcıdan saklamaz.
+        await http()
+          .delete(`${PREFIX}/addresses/${fixture.addressId}`)
+          .set('authorization', fixture.customerToken)
+          .expect(204);
+
+        const response = await addressOf(bookingId, fixture.providerToken).expect(200);
+        expect(response.body).toEqual({
+          city: 'İstanbul',
+          district: 'Kadıköy',
+          line: 'Test Mahallesi 1. Sokak No 2',
+          latitude: 40.9909,
+          longitude: 29.0303,
+        });
+        expect(await addressAudits(bookingId)).toEqual([fixture.providerId]);
+      });
+
+      it('hizmet bitince sağlayıcıya yeniden kapanır', async () => {
+        const fixture = await setupFixture('address-completed');
+        const bookingId = await bookingIn(fixture, 'SCHEDULED');
+        for (const to of ['PROVIDER_ARRIVING', 'CHECKED_IN', 'IN_PROGRESS', 'CHECKED_OUT']) {
+          await http()
+            .post(`${PREFIX}/bookings/${bookingId}/transitions`)
+            .set('authorization', fixture.providerToken)
+            .send({ to })
+            .expect(201);
+        }
+        await addressOf(bookingId, fixture.providerToken).expect(200);
+        await http()
+          .post(`${PREFIX}/bookings/${bookingId}/transitions`)
+          .set('authorization', fixture.customerToken)
+          .send({ to: 'CUSTOMER_CONFIRMED' })
+          .expect(201);
+
+        await addressOf(bookingId, fixture.providerToken).expect(409);
+      });
+
+      it('taraf olmayan kullanıcı adresin varlığını bile öğrenemez', async () => {
+        const fixture = await setupFixture('address-stranger');
+        const bookingId = await bookingIn(fixture, 'SCHEDULED');
+        await register('bk-address-stranger');
+
+        const response = await addressOf(bookingId, bearer('bk-address-stranger')).expect(404);
+        expect(response.body.error.code).toBe('NOT_FOUND');
+      });
+    });
+
     // T-07: aynı geçiş tekrar çağrıldığında yan etki üretmez.
     it('aynı geçiş tekrarı yan etki üretmez', async () => {
       const fixture = await setupFixture('idempotent-transition');

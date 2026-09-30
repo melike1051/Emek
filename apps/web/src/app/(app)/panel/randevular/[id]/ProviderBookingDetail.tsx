@@ -89,10 +89,7 @@ function Detail({ bookingId }: { bookingId: string }) {
           <dt>Tutar</dt>
           <dd>{formatMoney(data.priceMinor, data.currency)}</dd>
         </dl>
-        {/* TODO(faz-15): sağlayıcıya hizmet adresini gösteren uç yok (R-102). */}
-        <p className={flow.notice} style={{ marginTop: 'var(--space-sm)' }}>
-          Hizmet adresi bu ekranda henüz gösterilmiyor.
-        </p>
+        <ServiceAddress bookingId={bookingId} visibility={actions.address} />
         {actions.hasSafetySession ? (
           <div className={flow.row} style={{ marginTop: 'var(--space-md)' }}>
             <Link href={`/panel/randevular/${bookingId}/oturum`}>Güvenlik & oturum</Link>
@@ -166,6 +163,64 @@ function RespondCard({ bookingId }: { bookingId: string }) {
         </ConfirmStep>
       </div>
     </Card>
+  );
+}
+
+const ADDRESS_NOTICE = {
+  AFTER_PAYMENT: 'Hizmet adresi, müşteri ödemeyi onaylayıp randevu planlandığında görünür.',
+  CLOSED: 'Randevu kapandığı için hizmet adresi artık gösterilmiyor.',
+} as const;
+
+/**
+ * Hizmet adresi (R-102). Backend adresi yalnız planlanmış randevudan check-out'a kadar verir
+ * ve her okumayı audit'e yazar; bu yüzden pencere dışında istek atılmaz ve sonuç önbellekte
+ * tutulur (her odaklanmada yeni audit kaydı üretilmez). Harita bağlantısı yalnız tıklanınca
+ * koordinatı dış servise götürür.
+ */
+function ServiceAddress({
+  bookingId,
+  visibility,
+}: {
+  bookingId: string;
+  visibility: 'VISIBLE' | 'AFTER_PAYMENT' | 'CLOSED';
+}) {
+  const { api } = useSession();
+  const address = useQuery({
+    queryKey: ['bookings', bookingId, 'address'],
+    queryFn: () => bookingsApi(api).address(bookingId),
+    enabled: visibility === 'VISIBLE',
+    staleTime: 10 * 60_000,
+    refetchOnWindowFocus: false,
+  });
+
+  if (visibility !== 'VISIBLE') {
+    return (
+      <p className={flow.notice} style={{ marginTop: 'var(--space-sm)' }}>
+        {ADDRESS_NOTICE[visibility]}
+      </p>
+    );
+  }
+  if (address.isPending) return <Skeleton lines={2} label="Hizmet adresi yükleniyor" />;
+  if (address.error) return <ErrorState {...toDisplayError(address.error)} />;
+
+  const { line, district, city, latitude, longitude } = address.data;
+  return (
+    <dl className={styles.dl} style={{ marginTop: 'var(--space-sm)' }} aria-label="Hizmet adresi">
+      <dt>Adres</dt>
+      <dd>
+        {line}
+        <br />
+        {district} / {city}
+        <br />
+        <a
+          href={`https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Haritada aç
+        </a>
+      </dd>
+    </dl>
   );
 }
 

@@ -40,6 +40,28 @@ function toAddress(row: AddressRow): Address {
   };
 }
 
+/**
+ * Sağlayıcının hizmet adresini görebildiği randevu durumları (R-102): ödeme tutulup randevu
+ * planlandıktan check-out'a kadar. Kabulden önce ev adresi, işi almayabilecek herkese açılmış
+ * olurdu; ödeme alınmadan açılırsa hiç gerçekleşmeyecek randevular adres toplamaya yarardı.
+ * Hizmet bitince erişim kapanır — geçmiş müşterilerin adres defteri oluşmaz.
+ */
+const PROVIDER_ADDRESS_STATUSES: ReadonlySet<string> = new Set([
+  'SCHEDULED',
+  'PROVIDER_ARRIVING',
+  'CHECKED_IN',
+  'IN_PROGRESS',
+  'CHECKED_OUT',
+]);
+
+export interface BookingAddress {
+  city: string;
+  district: string;
+  line: string;
+  latitude: number;
+  longitude: number;
+}
+
 const SELECT_ADDRESS = `
   SELECT id, user_id, label, city, district, line, latitude, longitude
     FROM addresses
@@ -70,6 +92,56 @@ export class AddressesService {
    * `client` verilirse okuma o transaction'da yapılır. Transaction içinden havuzdan
    * ikinci bağlantı istemek havuzu kilitler (bkz. `UnitOfWork.queryOn`).
    */
+  /**
+   * Rezervasyonun hizmet adresi — yalnızca taraflara (R-102).
+   *
+   * Müşteri kendi adresini her zaman görür. Sağlayıcı yalnız `PROVIDER_ADDRESS_STATUSES`
+   * penceresinde görür ve her okuma audit'e yazılır: sağlayıcının müşteri ev adresine
+   * erişimi hassas veri erişimidir (K3). Adres arşivlenmiş olsa da döner — randevu ona bağlıdır.
+   * Taraf olmayana varlık bile bildirilmez (404).
+   */
+  async findForBooking(bookingId: string, userId: string): Promise<BookingAddress> {
+    return this.uow.withTransaction(async (client) => {
+      const result = await client.query<
+        BookingAddress & { address_id: string; status: string; is_provider: boolean }
+      >(
+        `SELECT a.id AS address_id, a.city, a.district, a.line, a.latitude, a.longitude,
+                b.status::text AS status, (b.provider_id = $2) AS is_provider
+           FROM bookings b
+           JOIN addresses a ON a.id = b.address_id
+          WHERE b.id = $1 AND (b.customer_id = $2 OR b.provider_id = $2)`,
+        [bookingId, userId],
+      );
+      const row = result.rows[0];
+      if (row === undefined) {
+        throw new BusinessException(ErrorCode.NOT_FOUND);
+      }
+
+      if (row.is_provider) {
+        if (!PROVIDER_ADDRESS_STATUSES.has(row.status)) {
+          throw new BusinessException(ErrorCode.BOOKING_ADDRESS_UNAVAILABLE, {
+            details: { status: row.status },
+          });
+        }
+        await this.audit.record(client, {
+          action: AuditAction.BOOKING_ADDRESS_ACCESSED,
+          entityType: 'address',
+          entityId: row.address_id,
+          actorUserId: userId,
+          newValue: { bookingId, status: row.status },
+        });
+      }
+
+      return {
+        city: row.city,
+        district: row.district,
+        line: row.line,
+        latitude: row.latitude,
+        longitude: row.longitude,
+      };
+    });
+  }
+
   async findOwned(userId: string, addressId: string, client?: PoolClient): Promise<Address | null> {
     const rows = await this.uow.queryOn<AddressRow>(
       client,

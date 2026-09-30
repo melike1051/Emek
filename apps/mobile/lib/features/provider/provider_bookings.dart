@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../api/customer_api.dart';
 import '../../api/idempotency_key.dart';
@@ -127,6 +128,11 @@ class ProviderBookingDetailScreen extends ConsumerWidget {
                     const SizedBox(height: 4),
                     Text(formatRange(data.scheduledStart, data.scheduledEnd)),
                     Text(formatMoney(data.priceMinor, data.currency)),
+                    const SizedBox(height: 8),
+                    _ServiceAddress(
+                      bookingId: bookingId,
+                      visibility: actions.address,
+                    ),
                     if (actions.hasSafetySession) ...[
                       const SizedBox(height: 12),
                       OutlinedButton.icon(
@@ -155,9 +161,60 @@ class ProviderBookingDetailScreen extends ConsumerWidget {
   }
 }
 
+/// Hizmet adresi (R-102). Pencere dışında istek atılmaz; harita yalnız dokununca açılır ve
+/// koordinat ancak o zaman dış uygulamaya gider.
+class _ServiceAddress extends ConsumerWidget {
+  const _ServiceAddress({required this.bookingId, required this.visibility});
+  final String bookingId;
+  final AddressVisibility visibility;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    switch (visibility) {
+      case AddressVisibility.afterPayment:
+        return const Text(
+          'Hizmet adresi, müşteri ödemeyi onaylayıp randevu planlandığında görünür.',
+        );
+      case AddressVisibility.closed:
+        return const Text(
+          'Randevu kapandığı için hizmet adresi artık gösterilmiyor.',
+        );
+      case AddressVisibility.visible:
+        break;
+    }
+    final address = ref.watch(bookingAddressProvider(bookingId));
+    return address.when(
+      loading: () => const LinearProgressIndicator(),
+      error: (error, _) => ErrorView(
+        error: error,
+        onRetry: () => ref.invalidate(bookingAddressProvider(bookingId)),
+      ),
+      data: (data) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(data.line),
+          Text('${data.district} / ${data.city}'),
+          TextButton.icon(
+            onPressed: () => launchUrl(
+              Uri.https('www.google.com', '/maps/search/', {
+                'api': '1',
+                'query': '${data.latitude},${data.longitude}',
+              }),
+              mode: LaunchMode.externalApplication,
+            ),
+            icon: const Icon(Icons.map_outlined),
+            label: const Text('Haritada aç'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 void _invalidate(WidgetRef ref, String bookingId) {
   invalidateBooking(ref, bookingId);
   ref.invalidate(documentsProvider(bookingId));
+  ref.invalidate(bookingAddressProvider(bookingId));
 }
 
 /// Randevu komutu: aynı gövdenin tekrarı aynı anahtar, gövde değişince yeni anahtar.

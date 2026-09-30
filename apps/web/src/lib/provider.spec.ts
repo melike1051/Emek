@@ -57,6 +57,24 @@ describe('sağlayıcı eylemleri (transition map aynası)', () => {
     expect(providerActions('CHECKED_OUT').next).toBeNull();
   });
 
+  it('hizmet adresi yalnız planlanmış randevudan check-out’a kadar istenir (R-102)', () => {
+    for (const status of [
+      'SCHEDULED',
+      'PROVIDER_ARRIVING',
+      'CHECKED_IN',
+      'IN_PROGRESS',
+      'CHECKED_OUT',
+    ]) {
+      expect(providerActions(status).address).toBe('VISIBLE');
+    }
+    for (const status of ['PROVIDER_PENDING', 'CONFIRMED', 'PAYMENT_AUTHORIZED']) {
+      expect(providerActions(status).address).toBe('AFTER_PAYMENT');
+    }
+    for (const status of ['COMPLETED', 'SETTLED', 'CANCELLED', 'DISPUTED', 'SAFETY_HOLD']) {
+      expect(providerActions(status).address).toBe('CLOSED');
+    }
+  });
+
   it("yanıt yalnızca PROVIDER_PENDING'de; hizmet başladıktan sonra taraf iptal edemez", () => {
     expect(providerActions('PROVIDER_PENDING').canRespond).toBe(true);
     expect(providerActions('CONFIRMED').canRespond).toBe(false);

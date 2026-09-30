@@ -5,11 +5,11 @@ Tarih: 2026-09-30. Kapsam: `main` + Faz 15-17 dalları. Kaynaklar: [technical-ri
 
 ## Karar
 
-| Hedef                                | Karar           | Gerekçe                                                                                                                                                        |
-| ------------------------------------ | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| TÜBİTAK demosu (yerel ortam)         | **HAZIR**       | Tam zincir E2E yeşil; AI açık/kapalı iki varyant CI'da ([demo-scenarios.md](../research/demo-scenarios.md))                                                    |
-| Kapalı pilot (staging, mock PSP/KYC) | **HAZIR DEĞİL** | Altyapı hiç uygulanmadı (R-93), admin dağıtımı yok (R-105), web IP modeli (R-107)                                                                              |
-| Üretim (gerçek kullanıcı + para)     | **HAZIR DEĞİL** | Yukarıdakiler + lisanslı PSP/KYC sözleşmesi (R-01, R-02), hukuki doğrulamalar (`TODO(legal)`), acil durum entegrasyonu (R-59), sağlayıcı adres erişimi (R-102) |
+| Hedef                                | Karar           | Gerekçe                                                                                                                       |
+| ------------------------------------ | --------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| TÜBİTAK demosu (yerel ortam)         | **HAZIR**       | Tam zincir E2E yeşil; AI açık/kapalı iki varyant CI'da ([demo-scenarios.md](../research/demo-scenarios.md))                   |
+| Kapalı pilot (staging, mock PSP/KYC) | **HAZIR DEĞİL** | Altyapı hiç uygulanmadı (R-93), admin dağıtımı yok (R-105), web IP modeli (R-107)                                             |
+| Üretim (gerçek kullanıcı + para)     | **HAZIR DEĞİL** | Yukarıdakiler + lisanslı PSP/KYC sözleşmesi (R-01, R-02), hukuki doğrulamalar (`TODO(legal)`), acil durum entegrasyonu (R-59) |
 
 Kod tarafında bilinen bir doğruluk hatası açık bırakılmadı; kalan engeller dış bağımlılık, bulut
 doğrulaması ve ürün kararlarıdır.
@@ -42,7 +42,7 @@ doğrulaması ve ürün kararlarıdır.
 | Performans            | ⚠️    | EXP-007 ölçümleri **yerel**; Cloud Run/Cloud SQL üzerinde tekrarlanmadı                                                                                              |
 | Mobil                 | ⚠️    | 4/4 simülatör + Android emülatör testi; mağaza imzalama, APNs (R-112), fiziksel cihaz yok                                                                            |
 | Test                  | ✅    | Birim + 460 entegrasyon + 11 E2E; E2E CI'da iki varyant (R-106 web kısmı kapandı)                                                                                    |
-| Ürün                  | ❌    | Sağlayıcı hizmet adresini göremiyor (R-102) — gerçek hizmet verilemez                                                                                                |
+| Ürün                  | ✅    | Sağlayıcı hizmet adresini planlanmış randevudan check-out'a kadar görür, her okuma audit'li (R-102, Faz 17)                                                          |
 
 ## Pilot öncesi zorunlu (go/no-go)
 
@@ -51,7 +51,7 @@ Her madde tamamlanmadan kapalı pilot başlamaz. Sahibi ve kanıtı doldurulunca
 - [ ] R-93: Terraform staging'de `apply`; `npm run smoke -- --environment staging` yeşil
 - [ ] R-105: admin için ayrı Cloud Run servisi + erişim kısıtı (IAP/IP allowlist); nonce tabanlı CSP
 - [ ] R-107: web proxy'si için güvenilir istemci IP modeli + iki yolun ayrı dağıtım testi
-- [ ] R-102: sağlayıcının kabul ettiği randevunun adresine erişimi (sahiplik + zaman penceresi)
+- [x] R-102: sağlayıcının planlanmış randevunun adresine erişimi (sahiplik + durum penceresi + audit)
 - [ ] R-92: her alarm politikası staging'de bilinçli olarak bir kez tetiklendi
 - [ ] Staging'de tam zincir E2E (`web.full-lifecycle.spec.ts`'in staging uyarlaması — seed yardımcısı
       bugün yerel olmayan hedefi **bilinçli olarak reddeder**; staging için API tabanlı ayrı bir seed gerekir)
