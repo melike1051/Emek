@@ -58,12 +58,12 @@ void main() {
     // Giriş + müşteri profili.
     await tester.enterText(find.byKey(const Key('login.subject')), subject);
     await tester.enterText(find.byKey(const Key('login.phone')), phone);
-    await tester.tap(find.text('Giriş yap'));
+    await _tap(tester, find.text('Giriş yap'));
     await _settleUntil(tester, find.text('Hizmet almak istiyorum'));
-    await tester.tap(find.text('Hizmet almak istiyorum'));
+    await _tap(tester, find.text('Hizmet almak istiyorum'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('role.name')), 'Mobil Müşteri');
-    await tester.tap(find.text('Devam et'));
+    await _tap(tester, find.text('Devam et'));
     await _settleUntil(tester, find.text('Adresi kaydet'));
 
     // Adres (sağlayıcının hizmet bölgesinde).
@@ -75,7 +75,7 @@ void main() {
     );
     await tester.enterText(find.byKey(const Key('address.latitude')), _lat);
     await tester.enterText(find.byKey(const Key('address.longitude')), _lon);
-    await tester.tap(find.text('Adresi kaydet'));
+    await _tap(tester, find.text('Adresi kaydet'));
     await _settleUntil(tester, find.byKey(const Key('explore.address')));
 
     // Doğal dil talebi → gerçek AI ayrıştırması.
@@ -84,18 +84,18 @@ void main() {
       'Yarın öğleden sonra 3 saatlik detaylı temizlik',
     );
     await tester.pump();
-    await tester.tap(find.text('Uygun sağlayıcıyı bul'));
+    await _tap(tester, find.text('Uygun sağlayıcıyı bul'));
     await _settleUntil(tester, find.text('Sağlayıcı bul'));
     expect(find.text('180 dakika'), findsOneWidget);
 
     // Eşleştirme → gerçek motor, gerekçeler.
-    await tester.tap(find.text('Sağlayıcı bul'));
+    await _tap(tester, find.text('Sağlayıcı bul'));
     await _settleUntil(tester, find.text('Randevuya git'));
     expect(find.text(_providerName), findsOneWidget);
     // AI servisi ayakta (önkoşul): gerçek motor gerekçeleri, istemci metniyle.
     expect(find.text('Neden bu sağlayıcı?'), findsOneWidget);
     expect(find.text('Gerekli tüm becerileri doğrulanmış'), findsOneWidget);
-    await tester.tap(find.text('Randevuya git'));
+    await _tap(tester, find.text('Randevuya git'));
     await _settleUntil(tester, find.text('Sağlayıcı onayı bekleniyor'));
 
     // Sağlayıcı başka cihazda onaylar (API).
@@ -116,7 +116,7 @@ void main() {
       1500,
     );
     await _settleUntil(tester, find.textContaining('ödemeyi onayla'));
-    await tester.tap(find.textContaining('ödemeyi onayla'));
+    await _tap(tester, find.textContaining('ödemeyi onayla'));
     await _settleUntil(tester, find.text('Güvende tutuluyor'));
     expect(find.text('Planlandı'), findsWidgets);
   });
@@ -147,4 +147,11 @@ Future<void> _settleUntil(WidgetTester tester, Finder target) async {
         .join(' | ');
     fail('Beklenen görünmedi: $target. Ekrandaki metinler: $texts');
   }
+}
+
+/// Önce görünür alana kaydırır: Android'de klavye ve daha kısa ekran butonu görünümden çıkarır.
+Future<void> _tap(WidgetTester tester, Finder target) async {
+  await tester.ensureVisible(target);
+  await tester.pumpAndSettle();
+  await tester.tap(target);
 }

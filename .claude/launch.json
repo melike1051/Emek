@@ -4,19 +4,31 @@
     {
       "name": "api",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--workspace=@emek/api"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--workspace=@emek/api"
+      ],
       "port": 3000
     },
     {
       "name": "web",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--workspace=@emek/web"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--workspace=@emek/web"
+      ],
       "port": 3001
     },
     {
       "name": "admin",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--workspace=@emek/admin"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--workspace=@emek/admin"
+      ],
       "port": 3004
     },
     {
@@ -90,6 +102,19 @@
         "--workspace=@emek/api"
       ],
       "port": 3006
+    },
+    {
+      "name": "api-android",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "PORT=3007",
+        "STORAGE_MOCK_PUBLIC_BASE_URL=/api/v1/_dev/storage",
+        "npm",
+        "run",
+        "dev",
+        "--workspace=@emek/api"
+      ],
+      "port": 3007
     }
   ]
 }

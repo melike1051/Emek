@@ -144,6 +144,13 @@ flutter test integration_test -d <simülatör> --dart-define=API_BASE_URL=http:/
 - Eski bir `.env` `STORAGE_MOCK_PUBLIC_BASE_URL` içermiyorsa mock storage yükleme adresi
   `https://storage.local` olur ve cihazdan/tarayıcıdan kanıt yüklemesi ağ hatası verir;
   `.env.example`'daki değeri ekleyin.
+- Android emülatörü (API 35, `system-images;android-35;google_apis;arm64-v8a`, ~6 GB disk):
+  `avdmanager create avd -n emek_api35 -k "system-images;android-35;google_apis;arm64-v8a" -d pixel_7`,
+  `emulator -avd emek_api35`. Testlerde `API_BASE_URL=http://10.0.2.2:<port>`. Telemetri testi için
+  izin ve konum test sürerken döngüde verilir (kurulum izni sıfırlar):
+  `while true; do adb shell pm grant tr.emek.emek_mobile android.permission.ACCESS_FINE_LOCATION; adb emu geo fix <lon> <lat>; sleep 2; done &`
+  Android'de klavye ve kısa ekran butonları görünümden çıkarır: testler dokunmadan önce
+  `ensureVisible` ile kaydırır.
 - Xcode 27 ile `flutter build ios --simulator` Flutter'ın `lipo -verify_arch` adımında kırılır
   (çoklu mimari sözdizimi değişti); `flutter run` ve `flutter test integration_test` çalışır.
 
