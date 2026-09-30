@@ -60,6 +60,7 @@ packages/config          Ortak lint/tsconfig/env şema
 infra/terraform  GCP altyapısı IaC
 infra/docker     Dockerfile'lar + local compose
 infra/github-actions  CI/CD workflow'ları
+e2e/             Playwright kritik akış testleri (web + admin + core API; ADR-0024)
 docs/            architecture, api, database, security, research, testing
 ```
 
@@ -197,8 +198,8 @@ Bu yapıyı değiştirmek gerekirse önce `docs/architecture/adr/` altında ADR 
 | 3   | Identity: adapter, identity_records, unique identity, recovery, verification levels                                                                             | ✅ tamamlandı                                    |
 | 4   | Provider & Booking: availability, PostGIS service areas, booking state machine                                                                                  | ✅ tamamlandı                                    |
 | 5   | Payment & Digital Proof: adapter, webhook idempotency, documents, disputes                                                                                      | ✅ tamamlandı                                    |
-| 6   | Python AI/NLP: structured extraction, versiyonlama, evaluation dataset                                                                                          |                                                  |
-| 7   | Matching & Optimization: retrieval, constraints, scoring, OR-Tools, explainability, benchmark                                                                   |                                                  |
+| 6   | Python AI/NLP: structured extraction, versiyonlama, evaluation dataset                                                                                          | ✅ tamamlandı                                    |
+| 7   | Matching & Optimization: retrieval, constraints, scoring, OR-Tools, explainability, benchmark                                                                   | ✅ tamamlandı                                    |
 | 8   | Safety: sessions, geofence, telemetry, rules + anomaly, panic flow                                                                                              | ✅ tamamlandı                                    |
 | 9   | Event-driven: Pub/Sub, contracts, retries, DLQ, idempotency                                                                                                     | ✅ tamamlandı                                    |
 | 10  | Admin/Operations API                                                                                                                                            | ✅ tamamlandı                                    |
@@ -206,8 +207,8 @@ Bu yapıyı değiştirmek gerekirse önce `docs/architecture/adr/` altında ADR 
 | 12  | Security hardening: proxy güveni (R-53), App Check, audit zincir doğrulama, retention, SAST/dependency gate                                                     | ✅ tamamlandı                                    |
 | 13  | DevOps: Terraform, Cloud Run, staging/production                                                                                                                | ⚠️ kod tamam, gerçek-bulut doğrulaması bekliyor  |
 | 14  | Performance & reliability                                                                                                                                       | ⚠️ ölçüm + düzeltmeler tamam, sonuçlar **yerel** |
-| 15  | **Web frontend** (bundan önce frontend geliştirilmez)                                                                                                           |                                                  |
-| 16  | Flutter mobile                                                                                                                                                  |                                                  |
+| 15  | **Web frontend** (bundan önce frontend geliştirilmez)                                                                                                           | ⚠️ kod tamam, yalnız yerel doğrulandı            |
+| 16  | Flutter mobile                                                                                                                                                  | ⚠️ kod tamam, yalnız yerel doğrulandı            |
 | 17  | Final E2E + production readiness + TÜBİTAK demo                                                                                                                 |                                                  |
 
 Ayrıntı: `docs/architecture/phase-plan.md`.
@@ -230,6 +231,7 @@ npm run audit:deps                                        # bağımlılık taram
 npm run sast                                              # SAST: semgrep (kayıt defteri + Emek kuralları)
 npm run smoke -- --api-url <url> --environment staging    # dağıtım sonrası smoke testleri (Faz 13)
 npm run test:integration                                  # gerçek Postgres+Redis gerektirir
+npm run test:e2e                                          # Playwright (Faz 15): API ayakta + yalnız yerel hedefler
 cd services/ai && uv run pytest                           # AI servisi testleri
 cd services/ai && uv run ruff check . && uv run mypy app  # AI lint + typecheck
 ```
@@ -245,7 +247,7 @@ ADR-0015), Python 3.12 + uv. Build `tsc` iledir; `@nestjs/cli` kullanılmaz.
 | Dosya                                         | İçerik                                                         |
 | --------------------------------------------- | -------------------------------------------------------------- |
 | `docs/architecture/initial-assessment.md`     | Mevcut durum, boşluk analizi, anti-hedefler                    |
-| `docs/architecture/adr/`                      | Architecture Decision Record'lar (0001-0023)                   |
+| `docs/architecture/adr/`                      | Architecture Decision Record'lar (0001-0025)                   |
 | `docs/api/error-codes.md`                     | Business error kodları                                         |
 | `docs/architecture/local-development.md`      | Kurulum, komutlar, sorun giderme                               |
 | `docs/architecture/deployment.md`             | Dağıtım topolojisi, yayın akışı, rollback, smoke testleri      |

@@ -463,25 +463,43 @@ Bunlar Faz 1'de **bilinçli olarak yok**; ilgili domain ile birlikte gelir:
 
 ### `notification_jobs` — Asenkron Bildirim İşleri
 
-| Kolon               | Tip                                                         | Not                                                                |
-| ------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------ |
-| `id`                | BIGSERIAL PK                                                |                                                                    |
-| `event_id`          | UUID                                                        | Kaynak olayın ID'si                                                |
-| `event_type`        | VARCHAR(80)                                                 | `BookingCreated` vb.                                               |
-| `channel`           | ENUM `notification_channel` (`PUSH`,`SMS`,`EMAIL`,`IN_APP`) | Varsayılan `IN_APP`; gerçek teslimat henüz bağlanmadı (R-76, R-77) |
-| `recipient_user_id` | UUID                                                        | Alıcı kullanıcı                                                    |
-| `template_key`      | VARCHAR(120)                                                | Şablon anahtarı (`booking.created` vb.)                            |
-| `template_data`     | JSONB                                                       | Şablon parametreleri — yalnızca id referansları, PII yok           |
-| `status`            | ENUM `notification_job_status` (`PENDING`,`SENT`,`FAILED`)  | Varsayılan `PENDING`                                               |
-| `attempts`          | INT                                                         | Teslim deneme sayısı (varsayılan 0)                                |
-| `last_error`        | VARCHAR(200)                                                | Son hata (nullable)                                                |
-| `created_at`        | TIMESTAMPTZ                                                 | Kayıt zamanı                                                       |
-| `sent_at`           | TIMESTAMPTZ                                                 | Teslim zamanı (nullable)                                           |
+| Kolon               | Tip                                                         | Not                                                                                   |
+| ------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `id`                | BIGSERIAL PK                                                |                                                                                       |
+| `event_id`          | UUID                                                        | Kaynak olayın ID'si                                                                   |
+| `event_type`        | VARCHAR(80)                                                 | `BookingCreated` vb.                                                                  |
+| `channel`           | ENUM `notification_channel` (`PUSH`,`SMS`,`EMAIL`,`IN_APP`) | Consumer `PUSH` + politikaya göre `SMS`/`EMAIL` yazar (R-77); `IN_APP` teslim edilmez |
+| `recipient_user_id` | UUID                                                        | Alıcı kullanıcı                                                                       |
+| `template_key`      | VARCHAR(120)                                                | Şablon anahtarı (`booking.created` vb.)                                               |
+| `template_data`     | JSONB                                                       | Şablon parametreleri — yalnızca id referansları, PII yok                              |
+| `status`            | ENUM `notification_job_status` (`PENDING`,`SENT`,`FAILED`)  | Varsayılan `PENDING`                                                                  |
+| `attempts`          | INT                                                         | Teslim deneme sayısı (varsayılan 0)                                                   |
+| `last_error`        | VARCHAR(200)                                                | Son hata (nullable)                                                                   |
+| `created_at`        | TIMESTAMPTZ                                                 | Kayıt zamanı                                                                          |
+| `sent_at`           | TIMESTAMPTZ                                                 | Teslim zamanı (nullable)                                                              |
+| `next_attempt_at`   | TIMESTAMPTZ                                                 | Faz 16: sahiplenme kirası + geri çekilme; sonuç yazımı kiraya bağlı                   |
 
 **Kısıtlar/İndeksler:**
 
 - `UNIQUE (event_id, channel, recipient_user_id)`: `NotificationJobConsumer`'ın idempotency kaynağı — aynı olay aynı alıcı+kanal için ikinci iş üretmez.
-- Kısmi indeks `(created_at) WHERE status = 'PENDING'` — teslim worker'ının bekleyen işleri hızlıca bulması için.
+- Kısmi indeks `idx_notification_due (next_attempt_at) WHERE status = 'PENDING' AND channel IN ('PUSH', 'SMS', 'EMAIL')` (Faz 16; SMS/e-posta 20260930120000) — `NotificationDeliveryWorker` zamanı gelmiş işleri `FOR UPDATE SKIP LOCKED` ile alır. Faz 16 migration'ı R-76 öncesi teslim edilemez `PENDING` işleri `FAILED/LEGACY_R76` yapar.
+- Operatör yeniden denemesi (`FAILED` → `PENDING`) `attempts`'i sıfırlar.
+- SMS/e-posta işleri telefon/adres **taşımaz**: worker gönderim anında `users`'tan okur; `DELETED` hesaba gönderilmez (`NO_CONTACT`). `last_error` değerleri: `NO_DEVICE`, `NO_CONTACT`, `STALE` (R-114), `UNRENDERABLE`, `INVALID_TOKENS`, `INVALID_RECIPIENT`, `PROVIDER_REJECTED`, `MAX_ATTEMPTS`.
+
+### `user_devices` — Push Token Kaydı (Faz 16)
+
+| Kolon          | Tip                                      | Not                                                                     |
+| -------------- | ---------------------------------------- | ----------------------------------------------------------------------- |
+| `id`           | UUID PK                                  |                                                                         |
+| `user_id`      | UUID FK → `users`                        | Token'ın şimdiki sahibi                                                 |
+| `token`        | TEXT **UNIQUE**                          | FCM token; cihaza aittir — başka hesapla kaydedilince taşınır           |
+| `platform`     | ENUM `device_platform` (`IOS`,`ANDROID`) |                                                                         |
+| `created_at`   | TIMESTAMPTZ                              |                                                                         |
+| `last_seen_at` | TIMESTAMPTZ                              | Her kayıtta tazelenir; retention 90 gün (`RETENTION_DEVICE_TOKEN_DAYS`) |
+
+- Kullanıcı başına en çok 10 kayıt (`MAX_DEVICES_PER_USER`); aşılınca en uzun süredir görülmeyen silinir.
+- Token API yanıtında dönmez. Hesap anonimleştirmesinde kullanıcının tüm kayıtları silinir.
+- İndeksler: `idx_user_devices_user (user_id)`, `idx_user_devices_last_seen (last_seen_at)`.
 
 ### `analytics_events` — Veri Ambarı Aktarımı İçin Olay Günlüğü
 

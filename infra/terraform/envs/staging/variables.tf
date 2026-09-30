@@ -33,3 +33,9 @@ variable "github_repository" {
   type        = string
   default     = ""
 }
+
+variable "web_origins" {
+  description = "Kanıt bucket'ı CORS'u için web origin'leri (bkz. modül değişkeni). Web dağıtılana kadar boş."
+  type        = list(string)
+  default     = []
+}

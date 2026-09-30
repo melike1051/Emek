@@ -157,3 +157,18 @@ variable "labels" {
   type    = map(string)
   default = {}
 }
+
+variable "web_origins" {
+  description = <<-EOT
+    Kanıt bucket'ına tarayıcıdan imzalı URL ile yükleme/okuma yapabilecek web origin'leri
+    (ör. `https://app.emek.example`). Yalnızca şema + host (+ port); yol ve joker yoktur.
+    Boş liste CORS kuralı yazmaz — web dağıtılana kadar tarayıcıdan yükleme kapalıdır.
+  EOT
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for origin in var.web_origins : can(regex("^https://[a-z0-9.-]+(:[0-9]+)?$", origin))])
+    error_message = "web_origins yalnızca https://host[:port] biçiminde olmalı (joker yok)."
+  }
+}

@@ -13,3 +13,17 @@ docs/research/experiments/*.json
 # packages/api-contracts/matching/README.md); elle düzenlenmez ve biçimleri
 # yakalandıkları hâldedir.
 packages/api-contracts/matching/*.json
+
+# Next.js her `next dev`/`next build`'de yeniden yazar ("This file should not be edited").
+apps/web/next-env.d.ts
+apps/web/.next
+apps/admin/next-env.d.ts
+apps/admin/.next
+e2e/test-results
+e2e/playwright-report
+
+# Flutter (apps/mobile): Dart kodu `dart format` ile; platform dosyaları ve pubspec Flutter araçlarınca üretilir.
+apps/mobile/ios
+apps/mobile/android
+apps/mobile/pubspec.yaml
+apps/mobile/pubspec.lock

@@ -1,6 +1,7 @@
 import { MiddlewareConsumer, Module, type NestModule } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { AddressesModule } from './addresses/addresses.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AuthGuard } from './auth/auth.guard';
 import { AuthModule } from './auth/auth.module';
@@ -58,6 +59,7 @@ import { UsersModule } from './users/users.module';
     IdentityModule,
     CatalogModule,
     AddressesModule,
+    NotificationsModule,
     BookingsModule,
     PaymentsModule,
     DisputesModule,

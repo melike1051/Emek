@@ -24,7 +24,8 @@ export interface NotificationJobRecord {
  * Gerçek teslimat (push/SMS/email) henüz bağlı değil (ADR: worker sonraki bir
  * fazda eklenecek) — bu repository yalnızca **görünürlük ve manuel yeniden
  * kuyruklama** sağlar; `retry` bir işi tekrar `PENDING`'e döndürür, bir teslim
- * denemesi tetiklemez.
+ * denemesi tetiklemez. Deneme sayacı sıfırlanır: aksi hâlde `MAX_ATTEMPTS` ile düşmüş iş
+ * tek geçici hatayla yeniden düşer ve geri çekilme eski sayaçtan hesaplanırdı.
  */
 @Injectable()
 export class NotificationJobsRepository {
@@ -82,7 +83,7 @@ export class NotificationJobsRepository {
   async retry(client: PoolClient, id: string): Promise<boolean> {
     const result = await client.query(
       `UPDATE notification_jobs
-          SET status = 'PENDING', last_error = NULL
+          SET status = 'PENDING', last_error = NULL, next_attempt_at = now(), attempts = 0
         WHERE id = $1::bigint AND status = 'FAILED'`,
       [id],
     );

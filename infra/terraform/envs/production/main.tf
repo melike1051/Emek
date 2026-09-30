@@ -40,5 +40,7 @@ module "emek" {
 
   # Staging ile çakışmayan aralık: iki ortamın ağları hiçbir koşulda peer edilmez,
   # ama çakışan CIDR ileride yanlışlıkla mümkün kılınan bir bağlantıyı da bozar.
+  web_origins = var.web_origins
+
   subnet_cidr = "10.20.0.0/24"
 }

@@ -77,6 +77,6 @@ npm run migrate:up    # şema
 ```
 
 Sonra: `npm run dev --workspace=@emek/api` (http://localhost:3000/api/v1) ve
-`cd services/ai && uv run fastapi dev app/main.py` (http://localhost:8000/api/v1).
+`cd services/ai && uv run uvicorn app.main:app --reload --port 8000` (http://localhost:8000/api/v1).
 
 Ayrıntı, komut listesi ve sorun giderme: [docs/architecture/local-development.md](docs/architecture/local-development.md).

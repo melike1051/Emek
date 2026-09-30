@@ -8,12 +8,17 @@
   },
   "workspaces": [
     "services/api",
-    "packages/api-contracts/*"
+    "packages/api-contracts/*",
+    "packages/ui",
+    "packages/api-client",
+    "apps/web",
+    "apps/admin",
+    "e2e"
   ],
   "scripts": {
     "lint": "eslint .",
-    "format:check": "prettier --check \"**/*.{ts,js,mjs,json,md,yml,yaml}\"",
-    "format": "prettier --write \"**/*.{ts,js,mjs,json,md,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,json,md,yml,yaml,css}\"",
+    "format": "prettier --write \"**/*.{ts,tsx,js,mjs,json,md,yml,yaml,css}\"",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
@@ -27,7 +32,8 @@
     "migrate:down": "npm run migrate:down --workspace=@emek/api",
     "audit:deps": "npm audit --audit-level=high",
     "sast": "semgrep --error --metrics=off --config p/typescript --config p/security-audit --config p/secrets --exclude node_modules --exclude dist . && semgrep --error --metrics=off --config .semgrep.yml .",
-    "smoke": "tsx services/api/scripts/smoke-test.ts"
+    "smoke": "tsx services/api/scripts/smoke-test.ts",
+    "test:e2e": "npm run e2e --workspace=@emek/e2e"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

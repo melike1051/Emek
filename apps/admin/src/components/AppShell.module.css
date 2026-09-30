@@ -1,0 +1,124 @@
+.shell {
+  min-height: 100dvh;
+}
+
+.skip {
+  position: absolute;
+  left: -9999px;
+}
+
+.skip:focus {
+  left: var(--space-md);
+  top: var(--space-md);
+  z-index: 20;
+  padding: var(--space-xs) var(--space-md);
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+}
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--page-margin);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  text-decoration: none;
+  color: inherit;
+}
+
+.product {
+  padding-left: var(--space-sm);
+  border-left: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.signOut {
+  padding: var(--space-2xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Mobil: menü yatay kaydırılan şerit. */
+.nav {
+  display: flex;
+  gap: var(--space-2xs);
+  overflow-x: auto;
+  padding: var(--space-xs) var(--page-margin);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-background);
+}
+
+.navItem {
+  flex: none;
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.navItem[aria-current='page'] {
+  background: var(--color-primary-tint);
+  color: var(--color-primary-text);
+  font-weight: 700;
+}
+
+.main {
+  min-width: 0;
+  width: 100%;
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: var(--space-lg) var(--page-margin) var(--space-2xl);
+}
+
+.title {
+  margin-bottom: var(--space-md);
+  font-family: var(--font-serif);
+  font-size: 1.5rem;
+}
+
+/* Masaüstü: sabit sol menü. */
+@media (min-width: 960px) {
+  .body {
+    display: grid;
+    grid-template-columns: 14rem 1fr;
+  }
+
+  .nav {
+    position: sticky;
+    top: 3.6rem;
+    align-self: start;
+    flex-direction: column;
+    height: calc(100dvh - 3.6rem);
+    padding: var(--space-md);
+    border-right: 1px solid var(--color-border);
+    border-bottom: 0;
+  }
+}

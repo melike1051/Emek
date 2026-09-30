@@ -780,6 +780,49 @@
         "tags": ["Addresses"]
       }
     },
+    "/api/v1/users/me/devices": {
+      "post": {
+        "operationId": "DevicesController_register",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterDeviceDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Devices"]
+      }
+    },
+    "/api/v1/users/me/devices/{id}": {
+      "delete": {
+        "operationId": "DevicesController_unregister",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": ["Devices"]
+      }
+    },
     "/api/v1/bookings": {
       "post": {
         "operationId": "BookingsController_create",
@@ -1965,6 +2008,10 @@
         "properties": {}
       },
       "CreateAddressDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "RegisterDeviceDto": {
         "type": "object",
         "properties": {}
       },

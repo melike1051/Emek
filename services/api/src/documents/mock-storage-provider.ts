@@ -114,9 +114,24 @@ export class MockStorageProvider implements StorageProvider {
     return object.body;
   }
 
+  /**
+   * Yerel HTTP yüzeyi için (`DevStorageController`): imzalı GET ile nesneyi ve içerik
+   * tipini döner. İmza/süre kontrolü `getWithSignedUrl` ile aynıdır.
+   */
+  readWithSignedUrl(url: string): { body: Buffer; contentType: string } {
+    const parsed = this.parseAndVerify(url, 'GET');
+    const object = this.objects.get(parsed.storageKey);
+    if (object === undefined) {
+      throw new StorageError('NOT_FOUND', 'object not found');
+    }
+    return { body: object.body, contentType: object.contentType };
+  }
+
   private parseAndVerify(rawUrl: string, method: 'GET' | 'PUT'): { storageKey: string } {
-    const url = new URL(rawUrl);
-    const storageKey = decodeURIComponent(url.pathname.replace(/^\/[^/]+\//, ''));
+    // Kök göreli olabilir (STORAGE_MOCK_PUBLIC_BASE_URL); yalnızca yol ve sorgu okunur.
+    const url = new URL(rawUrl, 'http://mock-storage.invalid');
+    // Anahtar tek bir kodlanmış yol parçasıdır (`/` → %2F): kök kaç parça olursa olsun sondadır.
+    const storageKey = decodeURIComponent(url.pathname.split('/').at(-1) ?? '');
     const expires = url.searchParams.get('expires');
     const signature = url.searchParams.get('signature');
     const urlMethod = url.searchParams.get('method');
@@ -156,7 +171,8 @@ export class MockStorageProvider implements StorageProvider {
       expires: String(expiresAt.getTime()),
       signature,
     });
-    return `https://storage.local/${this.config.env.STORAGE_BUCKET}/${encodeURIComponent(storageKey)}?${params.toString()}`;
+    const base = this.config.env.STORAGE_MOCK_PUBLIC_BASE_URL.replace(/\/+$/, '');
+    return `${base}/${this.config.env.STORAGE_BUCKET}/${encodeURIComponent(storageKey)}?${params.toString()}`;
   }
 
   private sign(method: string, storageKey: string, expiresAt: Date): string {

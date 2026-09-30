@@ -19,6 +19,8 @@ resource "google_project_service" "required" {
     "iamcredentials.googleapis.com",
     "sts.googleapis.com",
     "billingbudgets.googleapis.com",
+    # Push bildirimleri (Faz 16): FCM HTTP v1.
+    "fcm.googleapis.com",
   ])
 
   project            = var.project_id

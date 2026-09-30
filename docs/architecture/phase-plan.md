@@ -1026,6 +1026,12 @@ Next.js + TypeScript: customer web, provider web, admin web. Mevcut API contract
 Customer + provider deneyimi: onboarding, identity, booking, matching, payment, service session,
 safety, reviews, profile, notifications. Gerektiğinde native bridge.
 
+**Durum: ⚠️ kod tamam, yalnız yerel doğrulandı.** Plan, alt adım notları ve review bulguları:
+[`phase-16-plan.md`](phase-16-plan.md); karar: ADR-0025. Push teslimatı (R-77 push kısmı) ve
+R-76 bu fazda kapandı. SMS/e-posta kanalı (R-77 kalan kısmı) mock sağlayıcıyla eklendi; gerçek
+sağlayıcı seçilene dek dağıtılan ortamlarda `disabled`. R-113 ve R-114 kapandı. Gerçek Firebase (App Check, FCM), APNs (R-112), Android cihaz (R-110) ve
+mobilde kimlik doğrulama başlatma (R-111) açık.
+
 ---
 
 ## Faz 17 — Final E2E

@@ -166,7 +166,8 @@ export async function resetDomainTables(pool: Pool): Promise<void> {
                    availability, availability_exceptions, provider_service_areas, addresses,
                    account_recovery_requests, verification_attempts, identity_records,
                    provider_services, provider_skills, provider_profiles, customer_profiles,
-                   auth_subjects, user_roles, users, outbox, idempotency_keys, processed_events
+                   auth_subjects, user_roles, user_devices, users, outbox, idempotency_keys,
+                   processed_events
     RESTART IDENTITY CASCADE;
   `);
 }

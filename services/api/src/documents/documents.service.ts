@@ -20,7 +20,7 @@ export type DocumentType = (typeof DOCUMENT_TYPES)[number];
 export type DocumentStatus = 'PENDING_UPLOAD' | 'AVAILABLE' | 'DELETED';
 
 /** Kabul edilen içerik tipleri — beyaz liste. Serbest içerik tipi, storage'ı rastgele dosya deposu yapardı. */
-const ALLOWED_CONTENT_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+export const ALLOWED_CONTENT_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
 
 export interface DocumentRecord {
   id: string;

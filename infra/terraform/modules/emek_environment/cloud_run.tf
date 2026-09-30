@@ -93,6 +93,24 @@ resource "google_cloud_run_v2_service" "api" {
         name  = "STORAGE_PROVIDER"
         value = "gcs"
       }
+      # Push bildirimleri (Faz 16, R-77): FCM HTTP v1, servis hesabının ADC kimliğiyle.
+      env {
+        name  = "PUSH_PROVIDER"
+        value = "fcm"
+      }
+      # SMS / e-posta (R-77): sağlayıcı seçilene dek kapalı (mock dağıtımda reddedilir).
+      env {
+        name  = "SMS_PROVIDER"
+        value = "disabled"
+      }
+      env {
+        name  = "EMAIL_PROVIDER"
+        value = "disabled"
+      }
+      env {
+        name  = "NOTIFICATION_DELIVERY_ENABLED"
+        value = "true"
+      }
       env {
         name  = "STORAGE_BUCKET"
         value = google_storage_bucket.documents.name

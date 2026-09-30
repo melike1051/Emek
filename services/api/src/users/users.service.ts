@@ -18,6 +18,13 @@ function isUniqueViolation(error: unknown): boolean {
   );
 }
 
+const CONTACT_CONSTRAINTS = new Set(['uq_users_phone', 'uq_users_email']);
+
+function isContactConstraint(error: unknown): boolean {
+  const constraint = (error as { constraint?: unknown }).constraint;
+  return typeof constraint === 'string' && CONTACT_CONSTRAINTS.has(constraint);
+}
+
 export interface SessionResult {
   user: User;
   /** Bu çağrıda yeni kullanıcı oluşturulduysa true (istemci onboarding'e yönlendirir). */
@@ -79,6 +86,11 @@ export class UsersService {
         const existingAfterRace = await this.repository.findByProviderSubject(input.subject);
         if (existingAfterRace !== null) {
           return { user: existingAfterRace, registered: false };
+        }
+        // Subject yarışı değil: telefon/e-posta başka bir hesaba bağlı. Hesaplar sessizce
+        // birleştirilmez (1 insan = 1 users kaydı); bağlama kurtarma akışının işidir.
+        if (isContactConstraint(error)) {
+          throw new BusinessException(ErrorCode.AUTH_CONTACT_IN_USE);
         }
       }
       throw error;

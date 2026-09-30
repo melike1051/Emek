@@ -44,13 +44,15 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const requestId = getRequestContext()?.requestId;
 
     const { status, body } = this.toResponse(exception, requestId);
+    // Sorgu dizesi loglanmaz: imzalı URL imzası gibi sırlar taşıyabilir (signed URL'ler loglanmaz).
+    const path = request.url.split('?')[0];
 
     if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
       this.logger.error(
         {
           err: exception,
           method: request.method,
-          path: request.url,
+          path,
           statusCode: status,
           errorCode: body.error.code,
         },
@@ -60,7 +62,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       this.logger.warn(
         {
           method: request.method,
-          path: request.url,
+          path,
           statusCode: status,
           errorCode: body.error.code,
         },

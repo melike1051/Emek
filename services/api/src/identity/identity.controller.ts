@@ -13,7 +13,9 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { CurrentUser, Public, Roles, type AuthenticatedUser } from '../auth/auth.decorators';
+import { AppConfigService } from '../common/config/app-config.service';
 import { BusinessException } from '../common/errors/business.exception';
+import { resolveClientIp } from '../common/http/client-ip';
 import { ErrorCode } from '../common/errors/error-codes';
 import { clampLimit, decodeCursor, paginate } from '../common/pagination/cursor';
 import { SkipAppCheck } from '../common/appcheck/app-check.decorators';
@@ -36,7 +38,10 @@ import { IdentityService } from './identity.service';
 
 @Controller('verification')
 export class IdentityController {
-  constructor(private readonly identity: IdentityService) {}
+  constructor(
+    private readonly identity: IdentityService,
+    private readonly config: AppConfigService,
+  ) {}
 
   /**
    * Doğrulama oturumu başlatır.
@@ -57,7 +62,9 @@ export class IdentityController {
       userId: user.id,
       method: dto.method,
       purpose: dto.purpose ?? 'ACCOUNT_VERIFICATION',
-      ...(request.ip !== undefined ? { ipAddress: request.ip } : {}),
+      // Asla `request.ip` değil (R-53): Express `trust proxy` kapalıdır ve Cloud Run arkasında
+      // soket adresi Google ön ucudur — her kullanıcı aynı IP ile audit zincirine yazılırdı.
+      ipAddress: resolveClientIp(request, this.config.env.TRUSTED_PROXY_HOP_COUNT),
     });
 
     return {

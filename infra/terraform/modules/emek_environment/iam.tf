@@ -39,6 +39,15 @@ resource "google_project_iam_member" "api_sql_client" {
   member  = "serviceAccount:${google_service_account.api.email}"
 }
 
+# Push bildirimi gönderme (Faz 16, R-77). FCM'de gönderimden dar bir rol yok: proje düzeyi
+# "Firebase Cloud Messaging API Admin" gönderim içindir; token/konu yönetimine uygulama
+# kullanmaz. Anahtar dosyası yok — Cloud Run ADC.
+resource "google_project_iam_member" "api_fcm_sender" {
+  project = var.project_id
+  role    = "roles/firebasecloudmessaging.admin"
+  member  = "serviceAccount:${google_service_account.api.email}"
+}
+
 resource "google_project_iam_member" "api_metrics" {
   for_each = toset([
     "roles/logging.logWriter",

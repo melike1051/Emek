@@ -11,6 +11,7 @@ export interface RetentionSweepResult {
   deadLetterEvents: number;
   verificationAttempts: number;
   analyticsEvents: number;
+  deviceTokens: number;
 }
 
 /**
@@ -56,6 +57,12 @@ export class RetentionService {
         this.config.env.RETENTION_VERIFICATION_ATTEMPT_DAYS,
       ),
       analyticsEvents: await this.purgeExportedAnalytics(),
+      // Uygulamayı bu süredir açmamış cihazın push token'ı (Faz 16).
+      deviceTokens: await this.purgeByAge(
+        'user_devices',
+        'last_seen_at',
+        this.config.env.RETENTION_DEVICE_TOKEN_DAYS,
+      ),
     };
 
     this.logger.info({ retention: result }, 'Retention taraması tamamlandı');
@@ -120,6 +127,10 @@ export class RetentionService {
           WHERE user_id = ANY($1::uuid[])`,
         [ids],
       );
+
+      // Push token'ları kişiye bağlı cihaz tanımlayıcısıdır ve kapatılmış hesaba bildirim
+      // gitmemelidir: mali referansı yoktur, satır olarak silinir.
+      await client.query(`DELETE FROM user_devices WHERE user_id = ANY($1::uuid[])`, [ids]);
 
       await client.query(`UPDATE users SET anonymized_at = now() WHERE id = ANY($1::uuid[])`, [
         ids,
@@ -190,8 +201,8 @@ export class RetentionService {
    * dosyadadır); kullanıcı girdisi hiçbir biçimde tanımlayıcıya dönüşmez.
    */
   private async purgeByAge(
-    table: 'processed_events' | 'verification_attempts',
-    column: 'processed_at' | 'created_at',
+    table: 'processed_events' | 'verification_attempts' | 'user_devices',
+    column: 'processed_at' | 'created_at' | 'last_seen_at',
     days: number,
   ): Promise<number> {
     const batch = this.config.env.RETENTION_BATCH_SIZE;

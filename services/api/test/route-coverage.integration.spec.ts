@@ -42,6 +42,10 @@ const INTENTIONALLY_PUBLIC = new Set([
   // Ödeme sağlayıcısı çağırır; Emek oturumu yoktur. Kimlik doğrulama yerine **imza**
   // geçerlidir ve imza adapter içinde doğrulanır (ADR-0009 §7). İmzasız çağrı 401 alır.
   'POST /api/v1/payments/webhook',
+  // Mock storage'ın yerel taklidi (GCS imzalı URL modeli): kimlik doğrulama **imzadır**.
+  // `STORAGE_PROVIDER=mock` dışında 404 döner; config mock'u dağıtılan ortamlarda reddeder.
+  'PUT /api/v1/_dev/storage/:bucket/:key',
+  'GET /api/v1/_dev/storage/:bucket/:key',
 ]);
 
 const METHOD_NAMES: Record<number, string> = {

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AppConfigService } from '../common/config/app-config.service';
+import { DevStorageController } from './dev-storage.controller';
 import { DocumentsController } from './documents.controller';
 import { DocumentsService } from './documents.service';
 import { GcsStorageProvider } from './gcs-storage-provider';
@@ -7,7 +8,7 @@ import { MockStorageProvider } from './mock-storage-provider';
 import { STORAGE_PROVIDER, type StorageProvider } from './storage.port';
 
 @Module({
-  controllers: [DocumentsController],
+  controllers: [DocumentsController, DevStorageController],
   providers: [
     DocumentsService,
     MockStorageProvider,

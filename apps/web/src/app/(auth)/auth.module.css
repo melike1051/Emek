@@ -1,0 +1,64 @@
+.page {
+  min-height: 100dvh;
+  padding: var(--space-lg) var(--page-margin) var(--space-2xl);
+}
+
+.brand {
+  display: flex;
+  justify-content: center;
+  margin-bottom: var(--space-lg);
+}
+
+.main {
+  width: 100%;
+  max-width: 34rem;
+  margin: 0 auto;
+}
+
+.intro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
+  text-align: center;
+}
+
+.lead {
+  color: var(--color-text-muted);
+  font-size: 1rem;
+  line-height: 1.625rem;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.devNote {
+  padding: var(--space-sm) var(--space-md);
+  border: 1px dashed var(--color-primary-tint-border);
+  border-radius: var(--radius-md);
+  background: var(--color-primary-tint);
+  color: var(--color-primary-text);
+  font-size: 0.75rem;
+}
+
+.footnote {
+  margin-top: var(--space-md);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.linkButton {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-primary-strong);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}

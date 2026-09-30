@@ -127,6 +127,20 @@ export const envSchema = z
       .min(1024)
       .max(64 * 1024 * 1024)
       .default(10 * 1024 * 1024),
+    /**
+     * Mock storage'ın imzalı URL'lerinin kökü (yalnızca `STORAGE_PROVIDER=mock`).
+     *
+     * Varsayılan hiçbir yere çözülmez (testler URL'i bellekte işler). Tarayıcıdan yerel
+     * yükleme için `/api/v1/_dev/storage` verilir: göreli yol web'in aynı-origin proxy'sinden
+     * `DevStorageController`'a ulaşır (ADR-0024 §5) — CSP ve CORS gerekmez.
+     */
+    STORAGE_MOCK_PUBLIC_BASE_URL: z
+      .string()
+      .regex(
+        /^(https?:\/\/[^\s]+|\/(?![/\\])[^\s]*)$/,
+        'mutlak http(s) URL ya da / ile başlayan yol',
+      )
+      .default('https://storage.local'),
 
     AI_SERVICE_URL: z.string().url().default('http://localhost:8000'),
     /**
@@ -258,6 +272,26 @@ export const envSchema = z
 
     EVENT_TRANSPORT_TYPE: z.enum(['logging', 'pubsub']).default('logging'),
     PUBSUB_PROJECT_ID: z.string().optional(),
+    /**
+     * Push bildirim teslimatı (Faz 16, R-77). `mock` teslimatı yalnız loglar (yerel/test);
+     * dağıtılan ortamlarda `fcm` zorunludur. FCM HTTP v1, Cloud Run'ın varsayılan kimliğiyle
+     * (ADC) çağrılır — anahtar dosyası yoktur. Proje `FIREBASE_PROJECT_ID`'dir.
+     */
+    PUSH_PROVIDER: z.enum(['mock', 'fcm']).default('mock'),
+    /**
+     * SMS / e-posta teslimatı (R-77). Gerçek sağlayıcı henüz seçilmedi: `mock` yalnız loglar,
+     * `disabled` o kanala hiç iş üretmez. Dağıtılan ortamlarda `mock` reddedilir.
+     */
+    SMS_PROVIDER: z.enum(['disabled', 'mock']).default('mock'),
+    EMAIL_PROVIDER: z.enum(['disabled', 'mock']).default('mock'),
+    NOTIFICATION_DELIVERY_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((val) => val === 'true'),
+    NOTIFICATION_DELIVERY_INTERVAL_MS: z.coerce.number().int().min(1000).default(10000),
+    /** Geçici hatada en çok deneme; sonra iş `FAILED` olur (ops ekranından yeniden kuyruklanır). */
+    NOTIFICATION_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5),
+
     SCHEDULED_RELEASE_ENABLED: z
       .enum(['true', 'false'])
       .default('false')
@@ -359,6 +393,8 @@ export const envSchema = z
     RETENTION_DEAD_LETTER_DAYS: z.coerce.number().int().min(1).max(365).default(90),
     /** Doğrulama denemesi kayıtları (brute-force analizi için gereken süre kadar). */
     RETENTION_VERIFICATION_ATTEMPT_DAYS: z.coerce.number().int().min(1).max(3650).default(180),
+    /** Bu süredir görülmeyen push token'ı (cihaz uygulamayı açmadı) silinir. */
+    RETENTION_DEVICE_TOKEN_DAYS: z.coerce.number().int().min(7).max(365).default(90),
     /** Dışa aktarılmış analytics event'leri; BigQuery kanonik kopyadır. */
     RETENTION_ANALYTICS_EVENT_DAYS: z.coerce.number().int().min(1).max(3650).default(90),
   })
@@ -476,6 +512,22 @@ export const envSchema = z
 
     // Mock storage bellekte tutar ve süreç yeniden başladığında kanıtları kaybeder;
     // "dijital ispat" iddiası bununla taşınamaz.
+    if (env.PUSH_PROVIDER !== 'fcm') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['PUSH_PROVIDER'],
+        message: 'PUSH_PROVIDER dağıtılan ortamlarda (staging/production) fcm olmalı',
+      });
+    }
+    for (const key of ['SMS_PROVIDER', 'EMAIL_PROVIDER'] as const) {
+      if (env[key] === 'mock') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [key],
+          message: `${key} dağıtılan ortamlarda (staging/production) mock olamaz`,
+        });
+      }
+    }
     if (env.STORAGE_PROVIDER !== 'gcs') {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

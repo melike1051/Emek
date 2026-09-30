@@ -52,40 +52,36 @@ describe('events infrastructure (integration)', () => {
 
   // --- Consumer Runner ---
 
-  it('geçerli BookingCreated olayı → notification_jobs ve analytics_events yazılır', async () => {
-    const customerId = randomUUID();
+  it('geçerli BookingCreated olayı → analytics_events yazılır; bildirim üretmez (Faz 16)', async () => {
     const event = createEvent('BookingCreated', {
       bookingId: randomUUID(),
       serviceId: randomUUID(),
-      customerId,
+      customerId: randomUUID(),
     });
 
     const result = await runner.processEvent(event);
     expect(result.action).toBe('ACK');
 
-    // Notification job
+    // Müşterinin kendi eylemi bildirilmez (notification-job.consumer.ts); alıcı çözümü ve
+    // teslimat notifications.integration.spec.ts'te.
     const jobs = await pool.query(`SELECT * FROM notification_jobs WHERE event_id = $1`, [
       event.eventId,
     ]);
-    expect(jobs.rowCount).toBe(1);
-    expect(jobs.rows[0].template_key).toBe('booking.created');
-    expect(jobs.rows[0].recipient_user_id).toBe(customerId);
+    expect(jobs.rowCount).toBe(0);
 
-    // Analytics event
     const analytics = await pool.query(`SELECT * FROM analytics_events WHERE event_id = $1`, [
       event.eventId,
     ]);
     expect(analytics.rowCount).toBe(1);
     expect(analytics.rows[0].event_type).toBe('BookingCreated');
 
-    // Processed events (her iki consumer için)
     const processed = await pool.query(`SELECT * FROM processed_events WHERE event_id = $1`, [
       event.eventId,
     ]);
-    expect(processed.rowCount).toBe(2);
+    expect(processed.rowCount).toBe(1);
   });
 
-  it('SafetyAlertRaised → analytics_events ve notification_jobs yazılır', async () => {
+  it('SafetyAlertRaised → analytics_events yazılır', async () => {
     const event = createEvent('SafetyAlertRaised', {
       safetySessionId: randomUUID(),
       bookingId: randomUUID(),
@@ -281,20 +277,19 @@ describe('events infrastructure (integration)', () => {
 
   // --- NotificationJobConsumer ---
 
-  it('PaymentReleased → bildirim işi oluşturulur', async () => {
+  it('PaymentReleased: rezervasyonu olmayan event için bildirim uydurulmaz', async () => {
     const event = createEvent('PaymentReleased', {
       paymentId: randomUUID(),
       bookingId: randomUUID(),
       amountMinor: '15000',
     });
 
-    await runner.processEvent(event);
+    expect((await runner.processEvent(event)).action).toBe('ACK');
 
     const jobs = await pool.query(`SELECT * FROM notification_jobs WHERE event_id = $1`, [
       event.eventId,
     ]);
-    expect(jobs.rowCount).toBe(1);
-    expect(jobs.rows[0].template_key).toBe('payment.released');
+    expect(jobs.rowCount).toBe(0);
   });
 
   // --- Bilinmeyen event tipi ---

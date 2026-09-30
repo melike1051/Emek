@@ -135,6 +135,24 @@ describe('auth & RBAC (integration)', () => {
       expect(response.body.registered).toBe(true);
     });
 
+    // Başka bir hesaba bağlı telefonla yeni kimlik: veritabanı hatası 500'e dönüşmez,
+    // hesap da sessizce birleştirilmez (1 insan = 1 users kaydı; bağlama kurtarma akışının işi).
+    it('başka hesaptaki telefonla yeni kimlik 409 AUTH_CONTACT_IN_USE alır', async () => {
+      await http()
+        .post(`${PREFIX}/auth/session`)
+        .set('authorization', bearer('sub-phone-owner', { phone: '+905551110001' }))
+        .expect(201);
+
+      const response = await http()
+        .post(`${PREFIX}/auth/session`)
+        .set('authorization', bearer('sub-phone-other', { phone: '+905551110001' }))
+        .expect(409);
+
+      expect(response.body.error.code).toBe('AUTH_CONTACT_IN_USE');
+      const users = await pool.query<{ count: string }>(`SELECT count(*)::text FROM users`);
+      expect(users.rows[0]?.count).toBe('1');
+    });
+
     // Aynı subject için iki eşzamanlı istek: biri kullanıcıyı oluşturur, diğeri
     // unique ihlaliyle 500 vermek yerine mevcut kullanıcıyı okur.
     it('eşzamanlı ilk oturum tek kullanıcı üretir', async () => {

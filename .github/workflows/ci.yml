@@ -137,8 +137,36 @@ jobs:
       - name: Tests
         run: uv run pytest
 
-  containers:
-    name: Container images build
+  mobile:
+    name: Mobile (Flutter)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Yerel geliştirmeyle aynı sürüm (ADR-0025); sürüm kayması analiz/format farkı üretir.
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.7'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get --enforce-lockfile
+
+      - name: Format check
+        run: dart format --output=none --set-exit-if-changed lib test integration_test
+
+      - name: Analyze
+        run: flutter analyze
+
+      # Simülatör/gerçek API gerektiren integration_test burada koşmaz (bkz. R-106).
+      - name: Tests
+        run: flutter test
+
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

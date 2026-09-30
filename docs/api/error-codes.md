@@ -39,6 +39,7 @@ işaretli olanlar); domain kodları kendi fazında, ilgili modülle birlikte ekl
 | `APP_INTEGRITY_FAILED`              | 403  | App Check doğrulaması başarısız                                     | 12    |
 | `VERIFICATION_REQUIRED`             | 403  | İşlem için gereken doğrulama seviyesi yok                           | 3     |
 | `IDENTITY_ALREADY_REGISTERED`       | 409  | Bu kimlik referansı başka bir hesaba bağlı → recovery akışı         | 3     |
+| `AUTH_CONTACT_IN_USE`               | 409  | Telefon/e-posta başka hesapta; hesaplar birleştirilmez → recovery   | 16 ✅ |
 | `VERIFICATION_SESSION_EXPIRED`      | 409  | Doğrulama oturumu süresi doldu                                      | 3     |
 | `VERIFICATION_FAILED`               | 422  | Sağlayıcı doğrulamayı reddetti                                      | 3     |
 | `RECOVERY_NOT_ALLOWED`              | 403  | Recovery ön koşulları sağlanmadı                                    | 3     |

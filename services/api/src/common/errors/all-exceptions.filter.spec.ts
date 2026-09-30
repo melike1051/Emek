@@ -11,7 +11,10 @@ interface CapturedResponse {
   body: ErrorResponseBody;
 }
 
-function createHost(type: 'http' | 'rpc' = 'http'): {
+function createHost(
+  type: 'http' | 'rpc' = 'http',
+  url = '/api/v1/bookings',
+): {
   host: ArgumentsHost;
   captured: CapturedResponse;
 } {
@@ -32,7 +35,7 @@ function createHost(type: 'http' | 'rpc' = 'http'): {
     getType: () => type,
     switchToHttp: () => ({
       getResponse: () => response,
-      getRequest: () => ({ method: 'POST', url: '/api/v1/bookings' }),
+      getRequest: () => ({ method: 'POST', url }),
     }),
   } as unknown as ArgumentsHost;
 
@@ -49,6 +52,19 @@ function createLogger(): Logger {
 }
 
 describe('AllExceptionsFilter', () => {
+  it('sorgu dizesini loglamaz (imzalı URL imzası sızmaz)', () => {
+    const { host } = createHost('http', '/api/v1/_dev/storage/b/k?method=PUT&signature=secret');
+    const logger = createLogger();
+
+    new AllExceptionsFilter(logger).catch(new BusinessException(ErrorCode.FORBIDDEN), host);
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ path: '/api/v1/_dev/storage/b/k' }),
+      'Request failed',
+    );
+    expect(JSON.stringify((logger.warn as jest.Mock).mock.calls)).not.toContain('secret');
+  });
+
   it('BusinessException kodunu ve koda bağlı varsayılan mesajı döner', () => {
     const { host, captured } = createHost();
 

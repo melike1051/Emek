@@ -1,0 +1,121 @@
+export {
+  API_PREFIX,
+  buildUrl,
+  createApiClient,
+  pathSegment,
+  type ApiClient,
+  type ApiClientOptions,
+  type HttpMethod,
+  type QueryValue,
+  type RequestOptions,
+} from './client';
+export { ApiError, CLIENT_ERROR_CODES, isApiErrorBody, type ApiErrorBody } from './errors';
+export {
+  authApi,
+  type AppRole,
+  type AuthSession,
+  type CurrentUser,
+  type UserStatus,
+} from './resources/auth';
+export {
+  profilesApi,
+  type CreateCustomerProfileInput,
+  type CreateProviderProfileInput,
+  type CustomerProfile,
+  type ProviderProfile,
+  type ProviderState,
+} from './resources/profiles';
+export { addressesApi, type Address, type CreateAddressInput } from './resources/addresses';
+export {
+  bookingsApi,
+  type Booking,
+  type BookingHistoryEntry,
+  type BookingStatus,
+  type BookingTransitionTarget,
+  type CreateReviewInput,
+  type Dispute,
+  type DisputeReason,
+  type DisputeStatus,
+  type OpenDisputeInput,
+  type Payment,
+  type PaymentIntent,
+  type PaymentStatus,
+  type Review,
+} from './resources/bookings';
+export {
+  catalogApi,
+  type ServiceCategory,
+  type ServiceDefinition,
+  type Skill,
+} from './resources/catalog';
+export {
+  EVIDENCE_CONTENT_TYPES,
+  EVIDENCE_MAX_BYTES,
+  documentsApi,
+  putToSignedUrl,
+  sha256Hex,
+  type DocumentDownload,
+  type DocumentRegistration,
+  type DocumentType,
+  type EvidenceDocument,
+} from './resources/documents';
+export {
+  requestsApi,
+  type BookingRequest,
+  type Clarification,
+  type CreateFromFormInput,
+  type CreateFromTextInput,
+  type CreateFromTextResult,
+  type ExplanationCode,
+  type MatchResult,
+} from './resources/requests';
+export {
+  safetyApi,
+  type PanicCategory,
+  type PanicResult,
+  type SafetySession,
+} from './resources/safety';
+export {
+  providersApi,
+  type AddServiceAreaInput,
+  type AvailabilityWindow,
+  type ProviderService,
+  type ProviderSkill,
+  type ServiceArea,
+  type SkillLevel,
+  type UpdateProviderProfileInput,
+} from './resources/providers';
+export { identityApi, type IdentityStatus } from './resources/identity';
+export {
+  adminApi,
+  type AdminApi,
+  type AnalyticsExportStatus,
+  type AuditChainStatus,
+  type DeadLetter,
+  type DiscrepancyType,
+  type DisputeResolutionStatus,
+  type EvaluationResult,
+  type LocationAccessInput,
+  type MatchingStats,
+  type NotificationJob,
+  type NotificationJobStatus,
+  type OperatorEvent,
+  type OperatorLocations,
+  type OperatorSession,
+  type OperatorSessionDetail,
+  type OpsHealth,
+  type OverrideRiskInput,
+  type Page,
+  type PageQuery,
+  type ReconciliationDiscrepancy,
+  type ReconciliationRun,
+  type RecoveryRequest,
+  type RecoveryStatus,
+  type RefundInput,
+  type ResolveDisputeInput,
+  type RetentionSweepResult,
+  type RiskLevel,
+  type SafetyAssessment,
+  type SafetyEvent,
+  type SafetyEventType,
+} from './resources/admin';

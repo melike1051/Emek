@@ -24,10 +24,14 @@ rules:
     severity: ERROR
     message: >-
       `request.ip` doğrudan kullanılmamalıdır: Express yapılandırmasına bağlı olarak
-      sahte bir başlıktan gelebilir. `resolveClientIp()` kullanın (R-53).
+      sahte bir başlıktan gelebilir ya da (trust proxy kapalıyken) proxy'nin adresidir.
+      `resolveClientIp()` kullanın (R-53). Kapsam tüm core API'dir: yalnız oran sınırına
+      bakan ilk sürüm, audit'e IP yazan kimlik doğrulama ucunu kaçırdı (Faz 16).
     paths:
       include:
-        - '**/common/ratelimit/**'
+        - 'services/api/src/**'
+      exclude:
+        - '**/*.spec.ts'
     pattern: $REQ.ip
 
   - id: emek-no-string-interpolated-sql

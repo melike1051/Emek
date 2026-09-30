@@ -45,6 +45,20 @@ resource "google_storage_bucket" "documents" {
     }
   }
 
+  # Tarayıcı kanıt dosyasını imzalı URL ile **doğrudan** yükler/okur (dosya API'den geçmez).
+  # CORS yalnızca web origin'lerine, yalnızca PUT/GET için açılır; imza erişim denetimi
+  # olarak kalır — CORS yetki vermez, yalnızca tarayıcının isteği göndermesine izin verir.
+  # Liste boşsa kural hiç yazılmaz (web henüz dağıtılmadı).
+  dynamic "cors" {
+    for_each = length(var.web_origins) > 0 ? [1] : []
+    content {
+      origin          = var.web_origins
+      method          = ["PUT", "GET"]
+      response_header = ["Content-Type"]
+      max_age_seconds = 300
+    }
+  }
+
   force_destroy = false
 
   depends_on = [google_kms_crypto_key_iam_member.storage_kms]

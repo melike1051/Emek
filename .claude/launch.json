@@ -1,0 +1,95 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--workspace=@emek/api"],
+      "port": 3000
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--workspace=@emek/web"],
+      "port": 3001
+    },
+    {
+      "name": "admin",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--workspace=@emek/admin"],
+      "port": 3004
+    },
+    {
+      "name": "api-e2e",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "PORT=3002",
+        "STORAGE_MOCK_PUBLIC_BASE_URL=/api/v1/_dev/storage",
+        "npm",
+        "run",
+        "dev",
+        "--workspace=@emek/api"
+      ],
+      "port": 3002
+    },
+    {
+      "name": "web-e2e",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "API_ORIGIN=http://localhost:3002",
+        "npm",
+        "exec",
+        "--workspace=@emek/web",
+        "--",
+        "next",
+        "dev",
+        "--port",
+        "3003"
+      ],
+      "port": 3003
+    },
+    {
+      "name": "ai",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": [
+        "run",
+        "--directory",
+        "services/ai",
+        "uvicorn",
+        "app.main:app",
+        "--port",
+        "8000"
+      ],
+      "port": 8000
+    },
+    {
+      "name": "admin-e2e",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "API_ORIGIN=http://localhost:3002",
+        "npm",
+        "exec",
+        "--workspace=@emek/admin",
+        "--",
+        "next",
+        "dev",
+        "--port",
+        "3005"
+      ],
+      "port": 3005
+    },
+    {
+      "name": "api-verify",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "PORT=3006",
+        "STORAGE_MOCK_PUBLIC_BASE_URL=/api/v1/_dev/storage",
+        "npm",
+        "run",
+        "dev",
+        "--workspace=@emek/api"
+      ],
+      "port": 3006
+    }
+  ]
+}

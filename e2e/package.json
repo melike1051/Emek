@@ -1,0 +1,17 @@
+{
+  "name": "@emek/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Faz 15 kritik akış E2E testleri (Playwright; web + admin + gerçek core API)",
+  "scripts": {
+    "e2e": "playwright test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^26.6.3",
+    "@types/pg": "^8.11.10",
+    "ioredis": "^5.4.2",
+    "pg": "^8.13.1"
+  }
+}

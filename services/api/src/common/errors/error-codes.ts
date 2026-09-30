@@ -21,6 +21,7 @@ export const ErrorCode = {
   IDEMPOTENCY_IN_PROGRESS: 'IDEMPOTENCY_IN_PROGRESS',
   VERIFICATION_REQUIRED: 'VERIFICATION_REQUIRED',
   AUTH_CONTACT_REQUIRED: 'AUTH_CONTACT_REQUIRED',
+  AUTH_CONTACT_IN_USE: 'AUTH_CONTACT_IN_USE',
   IDENTITY_ALREADY_REGISTERED: 'IDENTITY_ALREADY_REGISTERED',
   VERIFICATION_FAILED: 'VERIFICATION_FAILED',
   VERIFICATION_SESSION_EXPIRED: 'VERIFICATION_SESSION_EXPIRED',
@@ -82,6 +83,7 @@ export const ERROR_STATUS: Record<ErrorCodeValue, HttpStatus> = {
   [ErrorCode.IDEMPOTENCY_IN_PROGRESS]: HttpStatus.CONFLICT,
   [ErrorCode.VERIFICATION_REQUIRED]: HttpStatus.FORBIDDEN,
   [ErrorCode.AUTH_CONTACT_REQUIRED]: HttpStatus.BAD_REQUEST,
+  [ErrorCode.AUTH_CONTACT_IN_USE]: HttpStatus.CONFLICT,
   [ErrorCode.IDENTITY_ALREADY_REGISTERED]: HttpStatus.CONFLICT,
   [ErrorCode.VERIFICATION_FAILED]: HttpStatus.UNPROCESSABLE_ENTITY,
   [ErrorCode.VERIFICATION_SESSION_EXPIRED]: HttpStatus.CONFLICT,
@@ -148,6 +150,8 @@ export const CLIENT_MESSAGES: Record<ErrorCodeValue, string> = {
   [ErrorCode.VERIFICATION_REQUIRED]: 'Bu işlem için hesabınızın doğrulanması gerekiyor.',
   [ErrorCode.AUTH_CONTACT_REQUIRED]:
     'Hesap oluşturmak için e-posta veya telefon bilgisi gerekiyor.',
+  [ErrorCode.AUTH_CONTACT_IN_USE]:
+    'Bu telefon veya e-posta başka bir hesaba bağlı. Hesabınıza erişmek için kurtarma akışını kullanın.',
   [ErrorCode.IDENTITY_ALREADY_REGISTERED]:
     'Bu kimlik başka bir hesapta doğrulanmış. Hesabınıza erişmek için kurtarma akışını kullanın.',
   [ErrorCode.VERIFICATION_FAILED]: 'Kimlik doğrulama tamamlanamadı.',

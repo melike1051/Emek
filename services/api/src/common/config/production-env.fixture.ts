@@ -18,6 +18,9 @@ export const productionEnvFixture = {
   IDENTITY_CALLBACK_SECRET: 'production-grade-callback-secret',
   PAYMENT_WEBHOOK_SECRET: 'production-grade-payment-webhook-secret',
   STORAGE_PROVIDER: 'gcs',
+  PUSH_PROVIDER: 'fcm',
+  SMS_PROVIDER: 'disabled',
+  EMAIL_PROVIDER: 'disabled',
   STORAGE_SIGNING_SECRET: 'production-grade-storage-signing-secret',
   AI_SERVICE_API_KEY: 'production-grade-ai-service-key',
   // Faz 12 (ADR-0022): proxy güveni, App Check, audit doğrulama ve retention

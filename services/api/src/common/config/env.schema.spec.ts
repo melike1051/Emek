@@ -23,6 +23,18 @@ describe('validateEnv', () => {
     expect(env.DATABASE_POOL_MAX).toBe(25);
   });
 
+  it('STORAGE_MOCK_PUBLIC_BASE_URL: aynı-origin yol kabul, protokol-göreli (//host) ret', () => {
+    expect(
+      validateEnv({ ...baseEnv, STORAGE_MOCK_PUBLIC_BASE_URL: '/api/v1/_dev/storage' })
+        .STORAGE_MOCK_PUBLIC_BASE_URL,
+    ).toBe('/api/v1/_dev/storage');
+    for (const value of ['//evil.example/x', '/\\evil.example/x']) {
+      expect(() => validateEnv({ ...baseEnv, STORAGE_MOCK_PUBLIC_BASE_URL: value })).toThrow(
+        /STORAGE_MOCK_PUBLIC_BASE_URL/,
+      );
+    }
+  });
+
   it('DATABASE_URL yoksa başlatmayı reddeder', () => {
     expect(() => validateEnv({ REDIS_URL: baseEnv.REDIS_URL })).toThrow(EnvValidationError);
   });
@@ -73,6 +85,16 @@ describe('validateEnv', () => {
     expect(() => validateEnv({ ...baseEnv, ...productionEnv, STORAGE_PROVIDER: 'mock' })).toThrow(
       /STORAGE_PROVIDER/,
     );
+  });
+
+  it('production ortamında mock SMS / e-posta reddedilir; disabled kabul (R-77)', () => {
+    expect(() => validateEnv({ ...baseEnv, ...productionEnv, SMS_PROVIDER: 'mock' })).toThrow(
+      /SMS_PROVIDER/,
+    );
+    expect(() => validateEnv({ ...baseEnv, ...productionEnv, EMAIL_PROVIDER: 'mock' })).toThrow(
+      /EMAIL_PROVIDER/,
+    );
+    expect(validateEnv({ ...baseEnv, ...productionEnv }).SMS_PROVIDER).toBe('disabled');
   });
 
   it('production ortamında yerel storage imza sırrı reddedilir', () => {

@@ -1,0 +1,19 @@
+{
+  "name": "@emek/api-client",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Emek core API için tipli istemci — istek tipleri OpenAPI'den üretilir (ADR-0024)",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.2"
+  }
+}

@@ -438,4 +438,118 @@ describe('documents (integration)', () => {
       expect(document.id).toBeDefined();
     });
   });
+  /**
+   * Yerel HTTP yüzeyi (`DevStorageController`): web istemcisi mock storage'a gerçek bir
+   * PUT/GET ile ulaşır. İmza modeli bellekteki yolla aynıdır — HTTP katmanı onu gevşetmez.
+   */
+  describe('yerel storage HTTP yüzeyi', () => {
+    /** `<kök>/<bucket>/<key>?…` → API'deki dev yolu (kök mutlak ya da göreli olabilir). */
+    const devPath = (signedUrl: string): string => {
+      const url = new URL(signedUrl, 'http://localhost');
+      const [bucket, key] = url.pathname.split('/').slice(-2);
+      return `${PREFIX}/_dev/storage/${bucket}/${key}${url.search}`;
+    };
+
+    it('imzalı PUT ile yüklenen dosya onaylanır ve imzalı GET ile okunur', async () => {
+      const fixture = await setupBooking('dev-http');
+      const document = await registerDocument(fixture);
+
+      await http()
+        .put(devPath(document.uploadUrl))
+        .set('content-type', 'image/jpeg')
+        .send(PHOTO)
+        .expect(200);
+
+      const confirmed = await http()
+        .post(`${PREFIX}/documents/${document.id}/confirm`)
+        .set('authorization', fixture.providerToken)
+        .send({ sha256: PHOTO_SHA })
+        .expect(201);
+      expect(confirmed.body.sha256).toBe(PHOTO_SHA);
+
+      const download = await http()
+        .get(`${PREFIX}/documents/${document.id}/download-url`)
+        .set('authorization', fixture.customerToken)
+        .expect(200);
+      const file = await http()
+        .get(devPath(download.body.url as string))
+        .buffer(true)
+        .parse((res, done) => {
+          const chunks: Buffer[] = [];
+          res.on('data', (chunk: Buffer) => chunks.push(chunk));
+          res.on('end', () => done(null, Buffer.concat(chunks)));
+        })
+        .expect(200);
+      expect(file.headers['cache-control']).toBe('no-store');
+      expect(Buffer.compare(file.body as Buffer, PHOTO)).toBe(0);
+    });
+
+    it('kurcalanmış imza ve yanlış yöntem reddedilir', async () => {
+      const fixture = await setupBooking('dev-tamper');
+      const document = await registerDocument(fixture);
+      const tampered = new URL(document.uploadUrl);
+      tampered.searchParams.set('signature', '0'.repeat(64));
+
+      await http()
+        .put(devPath(tampered.toString()))
+        .set('content-type', 'image/jpeg')
+        .send(PHOTO)
+        .expect(403);
+      // Yükleme URL'i okuma için kullanılamaz (imza yönteme bağlıdır).
+      await http().get(devPath(document.uploadUrl)).expect(403);
+    });
+
+    it('beyaz liste dışı içerik tipi yazılmaz; okuma yanıtı sandbox CSP taşır', async () => {
+      // Uç web ile aynı origin'den sunulur: `text/html` saklanabilseydi saklı XSS olurdu.
+      const fixture = await setupBooking('dev-type');
+      const document = await registerDocument(fixture);
+      await http()
+        .put(devPath(document.uploadUrl))
+        .set('content-type', 'text/html')
+        .send('<script>alert(1)</script>')
+        .expect(400);
+      await http()
+        .post(`${PREFIX}/documents/${document.id}/confirm`)
+        .set('authorization', fixture.providerToken)
+        .send({})
+        .expect(404);
+
+      await http()
+        .put(devPath(document.uploadUrl))
+        .set('content-type', 'image/jpeg')
+        .send(PHOTO)
+        .expect(200);
+      await http()
+        .post(`${PREFIX}/documents/${document.id}/confirm`)
+        .set('authorization', fixture.providerToken)
+        .send({})
+        .expect(201);
+      const download = await http()
+        .get(`${PREFIX}/documents/${document.id}/download-url`)
+        .set('authorization', fixture.customerToken)
+        .expect(200);
+      const file = await http()
+        .get(devPath(download.body.url as string))
+        .expect(200);
+      expect(file.headers['content-security-policy']).toContain('sandbox');
+      expect(file.headers['x-content-type-options']).toBe('nosniff');
+    });
+
+    it('boyut sınırını aşan gövde storage.a yazılmadan reddedilir', async () => {
+      const fixture = await setupBooking('dev-large');
+      const document = await registerDocument(fixture);
+      const tooLarge = Buffer.alloc(Number(process.env.STORAGE_MAX_UPLOAD_BYTES ?? 10485760) + 1);
+
+      await http()
+        .put(devPath(document.uploadUrl))
+        .set('content-type', 'image/jpeg')
+        .send(tooLarge)
+        .expect(400);
+      await http()
+        .post(`${PREFIX}/documents/${document.id}/confirm`)
+        .set('authorization', fixture.providerToken)
+        .send({})
+        .expect(404);
+    });
+  });
 });

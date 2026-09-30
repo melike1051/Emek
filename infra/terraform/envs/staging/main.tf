@@ -42,5 +42,7 @@ module "emek" {
 
   monthly_budget_amount = 150
 
+  web_origins = var.web_origins
+
   subnet_cidr = "10.10.0.0/24"
 }
