@@ -206,6 +206,7 @@ resource "google_cloud_run_v2_service" "api" {
           PAYMENT_WEBHOOK_SECRET   = "payment-webhook-secret"
           STORAGE_SIGNING_SECRET   = "storage-signing-secret"
           AI_SERVICE_API_KEY       = "ai-service-api-key"
+          WEB_PROXY_SECRET         = "web-proxy-secret"
         }
         content {
           name = env.key

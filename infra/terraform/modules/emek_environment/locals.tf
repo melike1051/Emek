@@ -30,6 +30,9 @@ locals {
     "database-url",
     "redis-url",
     "redis-ca-cert",
+    # Web/admin proxy'si ile API arasındaki paylaşılan sır (R-107, ADR-0026). Sürüm dışarıdan
+    # yazılır: `openssl rand -base64 48 | gcloud secrets versions add ... --data-file=-`.
+    "web-proxy-secret",
   ]
 
   # Değeri Terraform'un ürettiği sırlar — geri kalanının sürümü dışarıdan yazılır.

@@ -1,3 +1,4 @@
+import path from 'node:path';
 import type { NextConfig } from 'next';
 
 /**
@@ -18,38 +19,38 @@ const hsts = isDev
   ? []
   : [{ key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains' }];
 
-/**
- * Web'den daha dar: kanıt dosyası yükleme/indirme yoktur (storage.googleapis.com yok), konum
- * izni istenmez. Firebase telefon OTP reCAPTCHA'sı ve kimlik uçları gerekir.
- * TODO(faz-15/güvenlik-review): 'unsafe-inline' script yerine nonce tabanlı CSP (web ile aynı).
- */
-const csp = [
-  "default-src 'self'",
-  `script-src 'self' 'unsafe-inline' ${isDev ? "'unsafe-eval' " : ''}https://www.google.com https://www.gstatic.com https://apis.google.com`,
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data:",
-  "font-src 'self'",
-  "connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firebaseappcheck.googleapis.com https://content-firebaseappcheck.googleapis.com https://www.google.com",
-  'frame-src https://www.google.com https://*.firebaseapp.com',
-  "frame-ancestors 'none'",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-].join('; ');
+// Content-Security-Policy istek başına nonce'la `src/proxy.ts`'te üretilir (R-105, `src/lib/csp.ts`).
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Container imajı (infra/docker/Dockerfile.frontend): yalnız çalışma zamanı dosyaları. Monorepo
+  // kökü izleme kökü olmazsa workspace paketleri (`@emek/ui`, `@emek/api-client`) eksik kalır.
+  output: 'standalone',
+  outputFileTracingRoot: path.join(__dirname, '../..'),
   poweredByHeader: false,
   transpilePackages: ['@emek/ui', '@emek/api-client'],
+  // API yönlendirmesi çalışma zamanında `src/proxy.ts`'tedir (ADR-0026 ek). Buradaki rewrite
+  // yalnız geliştirmede, proxy eşleşmesi dışındaki yerel mock depolama (`/api/v1/_dev/*`) içindir.
+  // Production'da yoktur: derleme anında çözülen hedef imajın kendisine (`localhost:3000`) döner
+  // ve kimliksiz bir istek kendini sonsuz yönlendirirdi (Faz 17 review).
   async rewrites() {
-    return [{ source: '/api/v1/:path*', destination: `${apiOrigin}/api/v1/:path*` }];
+    return isDev
+      ? [{ source: '/api/v1/_dev/:path*', destination: `${apiOrigin}/api/v1/_dev/:path*` }]
+      : [];
   },
   async headers() {
     return [
       {
+        // Proxy'nin sayfa eşleşmesi dışında kalan yollar (ör. `/api/...` 404'leri) nonce'lu CSP
+        // almaz; bunlar için script çalıştırmayan katı bir yedek (derinlemesine savunma).
+        source: '/api/:path*',
+        headers: [
+          { key: 'Content-Security-Policy', value: "default-src 'none'; frame-ancestors 'none'" },
+        ],
+      },
+      {
         source: '/:path*',
         headers: [
-          { key: 'Content-Security-Policy', value: csp },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           // frame-ancestors'u tanımayan eski tarayıcılar için.
           { key: 'X-Frame-Options', value: 'DENY' },

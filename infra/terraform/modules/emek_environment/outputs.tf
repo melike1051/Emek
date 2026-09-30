@@ -8,6 +8,15 @@ output "ai_url" {
   value       = google_cloud_run_v2_service.ai.uri
 }
 
+output "web_url" {
+  value = google_cloud_run_v2_service.frontend["web"].uri
+}
+
+output "admin_url" {
+  description = "IAP arkasında; yalnız admin_access_members erişir."
+  value       = google_cloud_run_v2_service.frontend["admin"].uri
+}
+
 output "api_service_name" {
   value = google_cloud_run_v2_service.api.name
 }

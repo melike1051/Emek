@@ -291,6 +291,19 @@ jobs:
       - name: Build AI service image
         run: docker build -f infra/docker/Dockerfile.ai -t emek-ai:ci .
 
+      # Ön uç imajları (R-105): yalnız derlenebilirlik. Gerçek NEXT_PUBLIC_* değerleri ortama
+      # özeldir ve dağıtım hattında verilir; burada gizli olmayan yer tutucular yeter.
+      - name: Build web + admin images
+        run: |
+          for app in web admin; do
+            docker build -f infra/docker/Dockerfile.frontend --build-arg APP="$app" \
+              --build-arg NEXT_PUBLIC_FIREBASE_API_KEY=ci \
+              --build-arg NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=ci.firebaseapp.com \
+              --build-arg NEXT_PUBLIC_FIREBASE_PROJECT_ID=ci \
+              --build-arg NEXT_PUBLIC_FIREBASE_APP_ID=1:1:web:ci \
+              -t "emek-$app:ci" .
+          done
+
   security:
     name: Güvenlik taraması (dependency + SAST)
     runs-on: ubuntu-latest

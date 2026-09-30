@@ -60,3 +60,14 @@ paketi (`DESIGN.md` "Artisanal Trust & Local Labor") görsel dili tanımlıyor a
   kilitlenmesiyle çözülür (para hareketi — düzeltilmiş gövde ikinci iade olmamalı).
 - Firebase SDK'sı dinamik import ile yalnız firebase modunda yüklenir; mock build'e girmez.
   `NEXT_PUBLIC_AUTH_MODE=mock` ile production build `next.config.ts`'te derleme anında durur.
+
+## Ek — Faz 17 (R-105)
+
+- **CSP nonce'ludur.** `script-src 'self' 'nonce-…' 'strict-dynamic'`; `'unsafe-inline'` yoktur
+  (`src/lib/csp.ts`, `src/proxy.ts`). Nonce istek başına üretilir; bu yüzden tüm sayfalar dinamik
+  render edilir (kök layout `connection()` bekler) — statik önbellekleme bilinçli olarak bırakıldı.
+  `style-src 'unsafe-inline'` kalır (satır içi `style` öznitelikleri). E2E (`*.csp.spec.ts`):
+  her SSR script'i aynı nonce'u taşır, CSP ihlali olmaz, nonce her istekte değişir.
+- **Dağıtım:** `infra/docker/Dockerfile.frontend` (Next `standalone`), Terraform `frontend.tf`:
+  web herkese açık; admin **Cloud Run doğrudan IAP** arkasında (`allUsers` yok, yalnız IAP servis
+  ajanı invoker, `admin_access_members` erişir). İmajlar ortama özeldir (`NEXT_PUBLIC_*`).

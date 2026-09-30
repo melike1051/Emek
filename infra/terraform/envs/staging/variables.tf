@@ -18,6 +18,22 @@ variable "ai_image" {
   type        = string
 }
 
+variable "web_image" {
+  description = "Web imajı — bu ortam için derlenmiş, digest ile pinlenmiş."
+  type        = string
+}
+
+variable "admin_image" {
+  description = "Operasyon paneli imajı — bu ortam için derlenmiş, digest ile pinlenmiş."
+  type        = string
+}
+
+variable "admin_access_members" {
+  description = "IAP ile panele erişebilecek kimlikler (ör. group:ops@...). Boşsa kimse erişemez."
+  type        = list(string)
+  default     = []
+}
+
 variable "alert_email" {
   type    = string
   default = ""

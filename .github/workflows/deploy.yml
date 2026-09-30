@@ -284,6 +284,20 @@ jobs:
             --region "${{ env.REGION }}" \
             --to-latest --quiet
 
+      # Ön uçlar (R-105): API trafiği taşındıktan **sonra** — yeni sayfalar yeni API'ye
+      # konuşsun. Ortama özel derlenir (NEXT_PUBLIC_*), aday revizyon + smoke + trafik.
+      - name: Web + operasyon paneli (derle → aday → smoke → trafik)
+        env:
+          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ vars.STAGING_FIREBASE_API_KEY }}
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ vars.STAGING_FIREBASE_AUTH_DOMAIN }}
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ vars.STAGING_FIREBASE_PROJECT_ID }}
+          NEXT_PUBLIC_FIREBASE_APP_ID: ${{ vars.STAGING_FIREBASE_APP_ID }}
+          NEXT_PUBLIC_APP_CHECK_SITE_KEY: ${{ vars.STAGING_APP_CHECK_SITE_KEY }}
+        run: |
+          gcloud auth configure-docker "${{ env.REGION }}-docker.pkg.dev" --quiet
+          infra/github-actions/deploy-frontends.sh staging \
+            "${{ vars.STAGING_PROJECT_ID }}" "${{ env.REGION }}" "$GITHUB_SHA"
+
       - name: Başarısızlıkta aday revizyonu bırak
         if: failure()
         run: |
@@ -410,6 +424,20 @@ jobs:
             --project "${{ vars.PRODUCTION_PROJECT_ID }}" \
             --region "${{ env.REGION }}" \
             --to-latest --quiet
+
+      # Ön uçlar (R-105): API trafiği taşındıktan **sonra** — yeni sayfalar yeni API'ye
+      # konuşsun. Ortama özel derlenir (NEXT_PUBLIC_*), aday revizyon + smoke + trafik.
+      - name: Web + operasyon paneli (derle → aday → smoke → trafik)
+        env:
+          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ vars.PRODUCTION_FIREBASE_API_KEY }}
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ vars.PRODUCTION_FIREBASE_AUTH_DOMAIN }}
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ vars.PRODUCTION_FIREBASE_PROJECT_ID }}
+          NEXT_PUBLIC_FIREBASE_APP_ID: ${{ vars.PRODUCTION_FIREBASE_APP_ID }}
+          NEXT_PUBLIC_APP_CHECK_SITE_KEY: ${{ vars.PRODUCTION_APP_CHECK_SITE_KEY }}
+        run: |
+          gcloud auth configure-docker "${{ env.REGION }}-docker.pkg.dev" --quiet
+          infra/github-actions/deploy-frontends.sh production \
+            "${{ vars.PRODUCTION_PROJECT_ID }}" "${{ env.REGION }}" "$GITHUB_SHA"
 
       - name: Başarısızlıkta aday revizyonu bırak
         if: failure()

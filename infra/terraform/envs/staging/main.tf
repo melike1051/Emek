@@ -15,6 +15,11 @@ module "emek" {
   api_image = var.api_image
   ai_image  = var.ai_image
 
+  # Ön uçlar (R-105): imajlar ortama özel derlenir; panel IAP arkasında.
+  web_image            = var.web_image
+  admin_image          = var.admin_image
+  admin_access_members = var.admin_access_members
+
   # Küçük ve ucuz: staging yük testi ortamı değildir (Faz 14).
   database_tier              = "db-custom-1-3840"
   database_availability_type = "ZONAL"

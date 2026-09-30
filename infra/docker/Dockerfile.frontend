@@ -1,0 +1,57 @@
+# Emek web / admin (Next.js) — Cloud Run için stateless container (R-105).
+# Build context: repository kökü.
+#   docker build -f infra/docker/Dockerfile.frontend --build-arg APP=admin \
+#     --build-arg NEXT_PUBLIC_FIREBASE_API_KEY=... -t emek-admin .
+#
+# `NEXT_PUBLIC_*` derleme anında istemci paketine gömülür: imaj **ortama özeldir** (staging ve
+# production ayrı derlenir; API imajındaki "aynı digest" modeli burada yoktur — ADR-0026 ek).
+# Bu değerler gizli değildir (Firebase web yapılandırması); sırlar (`WEB_PROXY_SECRET`) yalnız
+# çalışma zamanında Secret Manager'dan gelir ve imaja girmez.
+
+FROM node:22-bookworm-slim AS deps
+ARG APP
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY apps/${APP}/package.json apps/${APP}/
+COPY packages/ui/package.json packages/ui/
+COPY packages/api-client/package.json packages/api-client/
+RUN npm ci --ignore-scripts --no-audit --no-fund --workspace=@emek/${APP} --include-workspace-root=false
+
+FROM node:22-bookworm-slim AS build
+ARG APP
+ARG NEXT_PUBLIC_AUTH_MODE=firebase
+ARG NEXT_PUBLIC_FIREBASE_API_KEY
+ARG NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+ARG NEXT_PUBLIC_FIREBASE_PROJECT_ID
+ARG NEXT_PUBLIC_FIREBASE_APP_ID
+ARG NEXT_PUBLIC_APP_CHECK_SITE_KEY
+ENV NEXT_TELEMETRY_DISABLED=1 \
+    NEXT_PUBLIC_AUTH_MODE=${NEXT_PUBLIC_AUTH_MODE} \
+    NEXT_PUBLIC_FIREBASE_API_KEY=${NEXT_PUBLIC_FIREBASE_API_KEY} \
+    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN} \
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID=${NEXT_PUBLIC_FIREBASE_PROJECT_ID} \
+    NEXT_PUBLIC_FIREBASE_APP_ID=${NEXT_PUBLIC_FIREBASE_APP_ID} \
+    NEXT_PUBLIC_APP_CHECK_SITE_KEY=${NEXT_PUBLIC_APP_CHECK_SITE_KEY}
+WORKDIR /app
+COPY --from=deps /app /app
+COPY . .
+RUN npm run build --workspace=@emek/${APP}
+
+FROM node:22-bookworm-slim AS runtime
+ARG APP
+ARG GIT_SHA=unknown
+LABEL org.opencontainers.image.title="emek-${APP}" \
+      org.opencontainers.image.revision="${GIT_SHA}"
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=3000 \
+    HOSTNAME=0.0.0.0
+WORKDIR /app
+# Standalone çıktısı: izlenen bağımlılıklar + sunucu. Statik paketler ayrıca kopyalanır.
+COPY --from=build --chown=node:node /app/apps/${APP}/.next/standalone ./
+COPY --from=build --chown=node:node /app/apps/${APP}/.next/static ./apps/${APP}/.next/static
+# `server.js` yolu uygulamaya göre değişir; CMD shell'siz kalsın diye sabit bir bağlantı.
+RUN ln -s /app/apps/${APP}/server.js /app/server.js
+USER node
+EXPOSE 3000
+CMD ["node", "server.js"]

@@ -24,3 +24,6 @@ coverage
 docs
 apps/mobile/build
 apps/mobile/.dart_tool
+
+# Next.js yerel derleme/geliştirme çıktısı (imaj içinde yeniden derlenir)
+**/.next

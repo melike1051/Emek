@@ -116,6 +116,8 @@ resource "google_service_account_iam_member" "deployer_act_as" {
     api      = google_service_account.api.name
     ai       = google_service_account.ai.name
     migrator = google_service_account.migrator.name
+    web      = google_service_account.web.name
+    admin    = google_service_account.admin.name
   }
 
   service_account_id = each.value

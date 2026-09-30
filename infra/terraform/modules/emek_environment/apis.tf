@@ -3,6 +3,8 @@
 resource "google_project_service" "required" {
   for_each = toset([
     "run.googleapis.com",
+    # Admin paneli IAP arkasında (R-105).
+    "iap.googleapis.com",
     "sqladmin.googleapis.com",
     "redis.googleapis.com",
     "pubsub.googleapis.com",

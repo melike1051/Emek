@@ -12,6 +12,9 @@ Yerel geliştirme: [local-development.md](local-development.md).
 
 ```
                     ┌──────────────── GCP projesi (ortam başına bir tane) ───────────────┐
+  tarayıcı ───────► │ Cloud Run: emek-<env>-web   (ingress: all, invoker: allUsers) ─┐   │
+  operatör ──IAP──► │ Cloud Run: emek-<env>-admin (IAP; yalnız admin_access_members) ─┤   │
+                    │        ▼ (API_ORIGIN, X-Emek-Client-Ip + WEB_PROXY_SECRET) ◄──┘   │
   mobil istemci ──► │ Cloud Run: emek-<env>-api   (ingress: all, invoker: allUsers)      │
                     │      │                                                              │
                     │      ├─ Direct VPC egress ─► Cloud SQL (özel IP, public IP yok)     │
@@ -55,12 +58,13 @@ verilip ardından pipeline gerçek imajı dağıtabilir.
 Terraform Secret Manager'da yalnızca **kabı** oluşturur. Şu sırların sürümleri
 dışarıdan yazılır ve onlar yazılmadan servis ayağa kalkmaz:
 
-| Sır                        | Kaynak                                           |
-| -------------------------- | ------------------------------------------------ |
-| `identity-callback-secret` | Kimlik doğrulama sağlayıcısı sözleşmesi          |
-| `payment-webhook-secret`   | Lisanslı ödeme kuruluşu                          |
-| `storage-signing-secret`   | Operatör üretir (mock imzalama yolu için)        |
-| `ai-service-api-key`       | Operatör üretir (servisler arası paylaşılan sır) |
+| Sır                        | Kaynak                                                 |
+| -------------------------- | ------------------------------------------------------ |
+| `identity-callback-secret` | Kimlik doğrulama sağlayıcısı sözleşmesi                |
+| `payment-webhook-secret`   | Lisanslı ödeme kuruluşu                                |
+| `storage-signing-secret`   | Operatör üretir (mock imzalama yolu için)              |
+| `ai-service-api-key`       | Operatör üretir (servisler arası paylaşılan sır)       |
+| `web-proxy-secret`         | Operatör üretir (≥32 karakter; web/admin ↔ API, R-107) |
 
 ```bash
 printf '%s' "$SECRET" | gcloud secrets versions add emek-staging-payment-webhook-secret --data-file=-
@@ -94,6 +98,21 @@ Production dağıtımının **iki** kapısı vardır ve ikisi de gereklidir:
 2. **GitHub environment'ında, elle:** `production` environment'ına **required
    reviewers** tanımlanır. Bu repo dışında yapılandırılır, bu yüzden tek başına bir
    garanti sayılmaz — birinci kapı ona güvenmez.
+
+### Ön uçlar (web + operasyon paneli, R-105)
+
+- **Sır:** `openssl rand -base64 48 | gcloud secrets versions add emek-<env>-web-proxy-secret --data-file=-`
+  — API, web ve admin aynı sürümü okur. Sürüm yokken revizyon başlamaz (diğer sırlarla aynı).
+- **Panel erişimi:** `admin_access_members` (ör. `group:ops@…`) — IAP yalnız bunları geçirir;
+  boş liste panele kimseyi geçirmez. Uygulama içi ADMIN/SUPPORT rolü ayrıca gerekir.
+- **GitHub vars (ortam başına):** `<ENV>_FIREBASE_API_KEY`, `_AUTH_DOMAIN`, `_PROJECT_ID`,
+  `_APP_ID`, `<ENV>_APP_CHECK_SITE_KEY`. Gizli değildir ama ortama özeldir: imaj bunlarla
+  derlenir (`NEXT_PUBLIC_*`). Eksikse hat ön uçları derlemeden durur.
+- **Kanıt yükleme CORS'u:** `web_origins`'e web'in adresi (`terraform output web_url` ya da özel
+  alan adı) yazılmalıdır. Otomatik eklenmez: bucket → web → API → bucket bağımlılık döngüsü olur.
+- **Bilinçli fark:** ön uç imajları ortama özeldir; production, staging'de doğrulanan digest'i
+  değil aynı commit'ten kendi derlediği imajı dağıtır. Smoke: web nonce'lu CSP, panel kimliksiz
+  istekte 200 **dönmez** (IAP).
 
 ## 3. Yayın akışı
 

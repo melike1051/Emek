@@ -8,7 +8,7 @@ Tarih: 2026-09-30. Kapsam: `main` + Faz 15-17 dalları. Kaynaklar: [technical-ri
 | Hedef                                | Karar           | Gerekçe                                                                                                                       |
 | ------------------------------------ | --------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | TÜBİTAK demosu (yerel ortam)         | **HAZIR**       | Tam zincir E2E yeşil; AI açık/kapalı iki varyant CI'da ([demo-scenarios.md](../research/demo-scenarios.md))                   |
-| Kapalı pilot (staging, mock PSP/KYC) | **HAZIR DEĞİL** | Altyapı hiç uygulanmadı (R-93), admin dağıtımı yok (R-105), web IP modeli dağıtımda doğrulanmadı (R-107)                      |
+| Kapalı pilot (staging, mock PSP/KYC) | **HAZIR DEĞİL** | Altyapı hiç uygulanmadı (R-93), ön uçlar ve IAP bulutta denenmedi (R-105), web IP modeli dağıtımda doğrulanmadı (R-107)       |
 | Üretim (gerçek kullanıcı + para)     | **HAZIR DEĞİL** | Yukarıdakiler + lisanslı PSP/KYC sözleşmesi (R-01, R-02), hukuki doğrulamalar (`TODO(legal)`), acil durum entegrasyonu (R-59) |
 
 Kod tarafında bilinen bir doğruluk hatası açık bırakılmadı; kalan engeller dış bağımlılık, bulut
@@ -30,28 +30,33 @@ doğrulaması ve ürün kararlarıdır.
 
 ## Alan bazında durum
 
-| Alan                  | Durum | Kanıt / açık nokta                                                                                                                                                        |
-| --------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Booking state machine | ✅    | Merkezî transition map, `EXCLUDE USING GIST`, geçmiş + audit aynı transaction'da; tam zincir E2E                                                                          |
-| Ödeme orkestrasyonu   | ⚠️    | Mock adapter'la uçtan uca; webhook/komut idempotency'si entegrasyon testli. Gerçek PSP yok (R-02), barındırılan ödeme/3DS sayfası yok (R-100)                             |
-| Kimlik                | ⚠️    | Adapter + `identity_hash` UNIQUE. Gerçek KYC/EKDS erişimi yok (R-01), mobilde doğrulama başlatılamıyor (R-111)                                                            |
-| AI / eşleştirme       | ✅    | Sürümlü karar kaydı, yedek yol; CI'da AI açık/kapalı. Metrikler **sentetik** (R-45, R-63)                                                                                 |
-| Safety                | ⚠️    | Panik deterministik, telemetri oturum bazlı. Dış acil durum entegrasyonu yok (R-59), saklama süreleri hukuken doğrulanmadı (R-58), fiziksel cihaz ölçümü yok (R-110)      |
-| Güvenlik              | ⚠️    | Guard sırası, App Check, audit zinciri doğrulayıcısı, SAST/dependency kapısı. Web proxy IP modeli kodda (ADR-0026), dağıtımda doğrulanmadı (R-107), CSP nonce yok (R-105) |
-| Altyapı / dağıtım     | ❌    | Terraform + deploy hattı yazıldı, **hiç uygulanmadı** (R-93); alarmlar hiç tetiklenmedi (R-92); admin için servis yok (R-105)                                             |
-| Performans            | ⚠️    | EXP-007 ölçümleri **yerel**; Cloud Run/Cloud SQL üzerinde tekrarlanmadı                                                                                                   |
-| Mobil                 | ⚠️    | 4/4 simülatör + Android emülatör testi; mağaza imzalama, APNs (R-112), fiziksel cihaz yok                                                                                 |
-| Test                  | ✅    | Birim + 460 entegrasyon + 11 E2E; E2E CI'da iki varyant (R-106 web kısmı kapandı)                                                                                         |
-| Ürün                  | ✅    | Sağlayıcı hizmet adresini planlanmış randevudan check-out'a kadar görür, her okuma audit'li (R-102, Faz 17)                                                               |
+| Alan                  | Durum | Kanıt / açık nokta                                                                                                                                                               |
+| --------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Booking state machine | ✅    | Merkezî transition map, `EXCLUDE USING GIST`, geçmiş + audit aynı transaction'da; tam zincir E2E                                                                                 |
+| Ödeme orkestrasyonu   | ⚠️    | Mock adapter'la uçtan uca; webhook/komut idempotency'si entegrasyon testli. Gerçek PSP yok (R-02), barındırılan ödeme/3DS sayfası yok (R-100)                                    |
+| Kimlik                | ⚠️    | Adapter + `identity_hash` UNIQUE. Gerçek KYC/EKDS erişimi yok (R-01), mobilde doğrulama başlatılamıyor (R-111)                                                                   |
+| AI / eşleştirme       | ✅    | Sürümlü karar kaydı, yedek yol; CI'da AI açık/kapalı. Metrikler **sentetik** (R-45, R-63)                                                                                        |
+| Safety                | ⚠️    | Panik deterministik, telemetri oturum bazlı. Dış acil durum entegrasyonu yok (R-59), saklama süreleri hukuken doğrulanmadı (R-58), fiziksel cihaz ölçümü yok (R-110)             |
+| Güvenlik              | ⚠️    | Guard sırası, App Check, audit zinciri doğrulayıcısı, SAST/dependency kapısı. Web proxy IP modeli kodda (ADR-0026), dağıtımda doğrulanmadı (R-107), CSP nonce'lu (R-105, Faz 17) |
+| Altyapı / dağıtım     | ❌    | Terraform + deploy hattı yazıldı, **hiç uygulanmadı** (R-93); alarmlar hiç tetiklenmedi (R-92); web + admin (IAP) Terraform'da, bulutta denenmedi (R-105)                        |
+| Performans            | ⚠️    | EXP-007 ölçümleri **yerel**; Cloud Run/Cloud SQL üzerinde tekrarlanmadı                                                                                                          |
+| Mobil                 | ⚠️    | 4/4 simülatör + Android emülatör testi; mağaza imzalama, APNs (R-112), fiziksel cihaz yok                                                                                        |
+| Test                  | ✅    | Birim + 460 entegrasyon + 11 E2E; E2E CI'da iki varyant (R-106 web kısmı kapandı)                                                                                                |
+| Ürün                  | ✅    | Sağlayıcı hizmet adresini planlanmış randevudan check-out'a kadar görür, her okuma audit'li (R-102, Faz 17)                                                                      |
 
 ## Pilot öncesi zorunlu (go/no-go)
 
 Her madde tamamlanmadan kapalı pilot başlamaz. Sahibi ve kanıtı dolduruluncaya kadar açık sayılır.
 
 - [ ] R-93: Terraform staging'de `apply`; `npm run smoke -- --environment staging` yeşil
-- [ ] R-105: admin için ayrı Cloud Run servisi + erişim kısıtı (IAP/IP allowlist); nonce tabanlı CSP
+- [ ] R-105: ~~admin Cloud Run + IAP, nonce CSP~~ (Faz 17 kodda ✅) — `terraform apply` sonrası IAP'ın kimliksiz erişimi reddettiğinin ve web CSP'sinin staging'de doğrulanması
 - [ ] R-107: ~~güven modeli~~ (ADR-0026, Faz 17 ✅) + iki yolun hop sayısının staging'de ölçülmesi ve `WEB_PROXY_SECRET`'ın Secret Manager'a bağlanması
 - [x] R-102: sağlayıcının planlanmış randevunun adresine erişimi (sahiplik + durum penceresi + audit)
+- [ ] Ön uç staging kontrolleri (R-105 review): Firebase telefon OTP gerçek projede nonce'lu CSP
+      altında ihlalsiz çalışıyor (reCAPTCHA `www.recaptcha.net` / App Check reCAPTCHA Enterprise alan
+      adları gerekebilir); proje düzeyinde `roles/run.invoker` taşıyan hiçbir hesap yok (admin'e
+      IAP'sız ID token'la ulaşılamaz); IAP için OAuth izin ekranı gerekiyorsa yapılandırıldı.
+      Not: web ve admin sırayla dağıtılır — admin smoke'u düşerse web yeni sürümde kalır.
 - [ ] R-92: her alarm politikası staging'de bilinçli olarak bir kez tetiklendi
 - [ ] Staging'de tam zincir E2E (`web.full-lifecycle.spec.ts`'in staging uyarlaması — seed yardımcısı
       bugün yerel olmayan hedefi **bilinçli olarak reddeder**; staging için API tabanlı ayrı bir seed gerekir)

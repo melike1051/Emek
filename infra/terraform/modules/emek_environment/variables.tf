@@ -52,6 +52,41 @@ variable "ai_image" {
   type        = string
 }
 
+variable "web_image" {
+  description = "Web (müşteri/sağlayıcı) imajı — ortama özel derlenir, digest ile pinlenmiş olmalı."
+  type        = string
+}
+
+variable "admin_image" {
+  description = "Operasyon paneli imajı — ortama özel derlenir, digest ile pinlenmiş olmalı."
+  type        = string
+}
+
+variable "web_max_instances" {
+  type    = number
+  default = 5
+}
+
+variable "admin_max_instances" {
+  type    = number
+  default = 2
+}
+
+variable "admin_access_members" {
+  description = <<-EOT
+    IAP arkasındaki operasyon paneline erişebilecek kimlikler (ör. `group:ops@emek.example`).
+    Bireysel kullanıcı yerine grup tercih edilir; boş liste panele kimseyi geçirmez. Uygulama
+    içi ADMIN/SUPPORT rolü ayrıca gerekir (iki katman).
+  EOT
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for m in var.admin_access_members : can(regex("^(user|group|domain):", m))])
+    error_message = "admin_access_members yalnız user:, group: veya domain: önekli olmalı (allUsers/allAuthenticatedUsers yasak)."
+  }
+}
+
 variable "database_tier" {
   description = "Cloud SQL makine tipi."
   type        = string

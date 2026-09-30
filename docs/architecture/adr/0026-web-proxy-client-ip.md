@@ -67,3 +67,8 @@ Değerlendirilen seçenekler:
   yazar; istek zaten terk edilmiştir ve süreç çalışmaya devam eder. Günlük gürültüsüdür, alarm
   eşiklerine (R-92) dahil edilmemelidir. Yerel mock depolama yolu (`/api/v1/_dev/*`) eşleşmeden
   çıkarılmıştır; üretimde kanıt dosyaları zaten doğrudan imzalı GCS URL'ine gider.
+- **Ek (R-105):** API hedefi `next.config` `rewrites()` yerine `proxy.ts`'te `NextResponse.rewrite`
+  ile **çalışma zamanında** `API_ORIGIN`'den okunur. `rewrites()` derleme anında çözülür; container
+  imajında hedef derlemedeki varsayılana (`localhost:3000` — imajın kendisi) kilitleniyordu ve
+  API proxy'si 500 dönüyordu (yerel imaj testinde yakalandı). `next.config` rewrite'ı yalnız
+  eşleşme dışı yerel `_dev` yolu için kalır.

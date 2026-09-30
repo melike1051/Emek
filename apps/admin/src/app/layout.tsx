@@ -1,6 +1,7 @@
 import '@emek/ui/tokens.css';
 import type { Metadata, Viewport } from 'next';
 import { IBM_Plex_Sans, Libre_Caslon_Text } from 'next/font/google';
+import { connection } from 'next/server';
 import type { ReactNode } from 'react';
 import { AppProviders } from '@/providers/AppProviders';
 
@@ -30,7 +31,12 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+/**
+ * Dinamik render zorunlu: CSP nonce'u (proxy.ts) yalnız istek anında script'lere basılabilir;
+ * derleme anında üretilen statik sayfada nonce olmaz ve script'ler engellenirdi (R-105).
+ */
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  await connection();
   return (
     <html lang="tr" className={`${serif.variable} ${sans.variable}`}>
       <body>
