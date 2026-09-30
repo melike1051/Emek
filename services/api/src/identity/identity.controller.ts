@@ -64,7 +64,11 @@ export class IdentityController {
       purpose: dto.purpose ?? 'ACCOUNT_VERIFICATION',
       // Asla `request.ip` değil (R-53): Express `trust proxy` kapalıdır ve Cloud Run arkasında
       // soket adresi Google ön ucudur — her kullanıcı aynı IP ile audit zincirine yazılırdı.
-      ipAddress: resolveClientIp(request, this.config.env.TRUSTED_PROXY_HOP_COUNT),
+      ipAddress: resolveClientIp(
+        request,
+        this.config.env.TRUSTED_PROXY_HOP_COUNT,
+        this.config.env.WEB_PROXY_SECRET,
+      ),
     });
 
     return {

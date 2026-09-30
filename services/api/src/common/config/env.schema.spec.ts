@@ -35,6 +35,14 @@ describe('validateEnv', () => {
     }
   });
 
+  // R-107: `.env`'deki boş `WEB_PROXY_SECRET=` satırı "tanımsız" demektir; açılışı düşürmez.
+  it('WEB_PROXY_SECRET: boş değer tanımsızdır, kısa sır reddedilir', () => {
+    expect(validateEnv({ ...baseEnv, WEB_PROXY_SECRET: '' }).WEB_PROXY_SECRET).toBeUndefined();
+    expect(() => validateEnv({ ...baseEnv, WEB_PROXY_SECRET: 'kisa' })).toThrow(EnvValidationError);
+    const secret = 's'.repeat(32);
+    expect(validateEnv({ ...baseEnv, WEB_PROXY_SECRET: secret }).WEB_PROXY_SECRET).toBe(secret);
+  });
+
   it('DATABASE_URL yoksa başlatmayı reddeder', () => {
     expect(() => validateEnv({ REDIS_URL: baseEnv.REDIS_URL })).toThrow(EnvValidationError);
   });

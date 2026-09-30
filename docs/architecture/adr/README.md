@@ -31,3 +31,4 @@ Bir ADR'yi değiştirmek için ADR silinmez: `Superseded by ADR-XXXX` olarak iş
 | [0023](0023-deployment-topology.md)               | Dağıtım topolojisi, keyless CI/CD, migration/rollback sırası            | Accepted | 13    |
 | [0024](0024-web-frontend-architecture.md)         | Web frontend: iki Next.js uygulaması, ui/api-client paketleri           | Accepted | 15    |
 | [0025](0025-mobile-architecture.md)               | Mobil: tek Flutter uygulaması, Riverpod/go_router, App Check, telemetri | Accepted | 16    |
+| [0026](0026-web-proxy-client-ip.md)               | Web proxy'si üzerinden istemci adresi (R-107)                           | Accepted | 17    |

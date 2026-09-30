@@ -59,6 +59,12 @@ doğrulanmalıdır**. Doğrulama gerektiren noktalar `TODO(legal)` ile işaretli
 - Silme hakkı: olay/değerlendirme tablolarında kullanıcıya FK yoktur (`actor_user_id` FK'siz);
   tabloların kanıt saklama süresi ve silme politikası R-38 ile birlikte Faz 12'de. `TODO(legal)`
 
+**Hizmet adresi (R-102, Faz 17).** Müşterinin açık adresi (K3) sağlayıcıya yalnız ödeme
+tutulup randevu planlandıktan check-out'a kadar gösterilir; her okuma `BOOKING_ADDRESS_ACCESSED`
+ile audit'lidir, hizmet bitince erişim kapanır. Sağlayıcı ekranındaki "Haritada aç" bağlantısı
+koordinatı yalnız dokunulduğunda Google Haritalar'a (üçüncü taraf) iletir. `TODO(legal)`: bu
+aktarımın aydınlatma metnine eklenmesi.
+
 ## 3b. Dijital ispat dokümanları (Faz 5)
 
 Before/after fotoğrafı S1'dir ve müşterinin evinin içini gösterir; bu yüzden en dar erişim

@@ -49,7 +49,11 @@ export class RateLimitGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest<Request>();
-    const identity = `ip:${resolveClientIp(request, this.config.env.TRUSTED_PROXY_HOP_COUNT)}`;
+    const identity = `ip:${resolveClientIp(
+      request,
+      this.config.env.TRUSTED_PROXY_HOP_COUNT,
+      this.config.env.WEB_PROXY_SECRET,
+    )}`;
     const bucket = Math.floor(Date.now() / (options.windowSeconds * 1000));
     const redisKey = `ratelimit:${options.name}:${identity}:${bucket}`;
 

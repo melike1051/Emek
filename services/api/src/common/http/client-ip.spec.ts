@@ -61,3 +61,47 @@ describe('resolveClientIp (R-53)', () => {
     expect(resolveClientIp(request, 0)).toBe('unknown');
   });
 });
+
+// R-107: web/admin tarayıcı trafiği Next.js proxy'sinden gelir. Proxy tarayıcı adresini kendi
+// çözer ve paylaşılan sırla doğrulanan `X-Emek-Client-Ip` başlığıyla iletir.
+describe('resolveClientIp — web proxy başlığı (R-107)', () => {
+  const SECRET = 'w'.repeat(40);
+  const proxied = (headers: Record<string, string>): Request =>
+    ({
+      socket: { remoteAddress: '169.254.1.1' },
+      headers: { 'x-forwarded-for': '198.51.100.9, 35.191.0.1', ...headers },
+    }) as unknown as Request;
+
+  it('sır eşleşirse proxy’nin çözdüğü tarayıcı adresi kullanılır', () => {
+    const request = proxied({ 'x-emek-proxy-auth': SECRET, 'x-emek-client-ip': '203.0.113.7' });
+    expect(resolveClientIp(request, 1, SECRET)).toBe('203.0.113.7');
+  });
+
+  it('sır yanlışsa veya yoksa başlık yok sayılır, hop sayısı yolu kullanılır', () => {
+    const wrong = proxied({ 'x-emek-proxy-auth': 'x'.repeat(40), 'x-emek-client-ip': '1.2.3.4' });
+    expect(resolveClientIp(wrong, 1, SECRET)).toBe('35.191.0.1');
+    const missing = proxied({ 'x-emek-client-ip': '1.2.3.4' });
+    expect(resolveClientIp(missing, 1, SECRET)).toBe('35.191.0.1');
+  });
+
+  it('API’de sır tanımlı değilse başlığa hiç güvenilmez', () => {
+    const request = proxied({ 'x-emek-proxy-auth': '', 'x-emek-client-ip': '1.2.3.4' });
+    expect(resolveClientIp(request, 1, undefined)).toBe('35.191.0.1');
+    expect(resolveClientIp(request, 1, '')).toBe('35.191.0.1');
+  });
+
+  it('sır doğru ama adres geçersizse hop sayısı yoluna düşer (fail-closed)', () => {
+    for (const value of ['evil', '1.2.3.4, 5.6.7.8', '']) {
+      const request = proxied({ 'x-emek-proxy-auth': SECRET, 'x-emek-client-ip': value });
+      expect(resolveClientIp(request, 1, SECRET)).toBe('35.191.0.1');
+    }
+  });
+
+  it('IPv4-mapped IPv6 proxy adresi de normalleştirilir', () => {
+    const request = proxied({
+      'x-emek-proxy-auth': SECRET,
+      'x-emek-client-ip': '::ffff:203.0.113.7',
+    });
+    expect(resolveClientIp(request, 1, SECRET)).toBe('203.0.113.7');
+  });
+});

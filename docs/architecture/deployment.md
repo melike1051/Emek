@@ -204,6 +204,14 @@ Bu adım gerçek bir dağıtım gerektirir ve Faz 13'te yapılamamıştır. Terr
 zincirini kendisi uzatıp oran sınırını atlatır), eksik bir hop sayısı ise fail-closed
 (sınır daralır). Ölçülene kadar güvenli taraf budur (A-10, R-53).
 
+**Web/admin yolu (R-107, ADR-0026).** Tarayıcı trafiği Next proxy'sinden geçer; adresi proxy
+çözer (`CLIENT_IP_HOP_COUNT`) ve `WEB_PROXY_SECRET` ile doğrulanan `X-Emek-Client-Ip` başlığıyla
+iletir. `TRUSTED_PROXY_HOP_COUNT` yalnız doğrudan (mobil) trafiğe göre ayarlanır. Web dağıtımından
+sonra aynı yöntem tarayıcı yolu için de uygulanır: web origin'ine `X-Forwarded-For: 1.2.3.4` ile
+istek at; oran sınırı kovası gerçek adresi göstermeli, `1.2.3.4`'ü ya da Next'in çıkış adresini
+değil. Web, önünde adres ekleyen bir ön uç olmadan açılmaz: Next istemcinin yazdığı
+`X-Forwarded-For`'a soket adresini eklemez.
+
 ## 7. Bilinen tuzaklar
 
 - **`NODE_ENV=development` ile production imajı başlamaz.** Geliştirme logger'ı

@@ -32,6 +32,17 @@ describe('log redaction', () => {
     expect(line).toContain('[REDACTED]');
   });
 
+  // R-107: web proxy'sinin paylaşılan sırrı bir başlık dökümüyle loglara sızmamalı.
+  it('web proxy sır başlığını maskeler', () => {
+    const { lines, logger } = captureLogs();
+
+    logger.warn({ headers: { 'x-emek-proxy-auth': 'paylasilan-sir-degeri-0123456789ab' } }, 'dump');
+
+    const line = JSON.stringify(lines[0]);
+    expect(line).not.toContain('paylasilan-sir-degeri');
+    expect(line).toContain('[REDACTED]');
+  });
+
   // Faz 8: konum S1 kişisel veridir. Güvenlik kodu koordinat loglamaz; bu test
   // ileride eklenecek bir log satırının kazara sızdırmasına karşı ikinci katmanı korur.
   it('koordinatları maskeler (konum sızıntısı)', () => {

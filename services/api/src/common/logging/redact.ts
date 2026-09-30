@@ -21,6 +21,8 @@ export const SENSITIVE_KEYS: ReadonlySet<string> = new Set(
     'authorization',
     'cookie',
     'secret',
+    // Web proxy'sinin paylaşılan sırrı (R-107, ADR-0026).
+    'x-emek-proxy-auth',
     'apikey',
     'privatekey',
     'otp',

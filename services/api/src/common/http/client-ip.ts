@@ -1,4 +1,11 @@
+import { createHash, timingSafeEqual } from 'node:crypto';
+import { isIP } from 'node:net';
 import type { Request } from 'express';
+
+/** Web/admin Next.js proxy'sinin çözdüğü tarayıcı adresi (R-107, ADR-0026). */
+export const PROXY_CLIENT_IP_HEADER = 'x-emek-client-ip';
+/** Başlığın gerçekten bizim proxy'mizden geldiğini kanıtlayan paylaşılan sır. */
+export const PROXY_AUTH_HEADER = 'x-emek-proxy-auth';
 
 /**
  * İstemci adresinin **güvenilmez başlıklara güvenmeden** çözümlenmesi (R-53).
@@ -24,7 +31,16 @@ import type { Request } from 'express';
  * soket adresine düşülür. Yanlış yapılandırma en kötü ihtimalle sınırı daraltır,
  * saldırgan kontrolündeki bir değere genişletmez.
  */
-export function resolveClientIp(request: Request, hopCount: number): string {
+export function resolveClientIp(
+  request: Request,
+  hopCount: number,
+  webProxySecret?: string,
+): string {
+  const proxied = proxiedClientIp(request, webProxySecret);
+  if (proxied !== null) {
+    return proxied;
+  }
+
   const socketIp = request.socket?.remoteAddress ?? 'unknown';
 
   if (hopCount <= 0) {
@@ -49,6 +65,33 @@ export function resolveClientIp(request: Request, hopCount: number): string {
   }
 
   return normalize(candidate);
+}
+
+/**
+ * Web/admin tarayıcı trafiği (R-107, ADR-0026). Bu istekler Next.js aynı-origin proxy'sinden
+ * geçer; `X-Forwarded-For` zinciri bir hop uzar ve tek `TRUSTED_PROXY_HOP_COUNT` hem bu yola
+ * hem doğrudan gelen mobil istemciye uyamaz. Proxy tarayıcı adresini kendi hop sayısıyla çözer
+ * ve ayrı bir başlıkla iletir; başlığa **yalnızca** paylaşılan sır eşleşirse güvenilir.
+ * Sır tanımsız/yanlışsa ya da adres geçerli tek bir IP değilse `null` → hop sayısı yolu
+ * (fail-closed: en kötü ihtimal Next'in çıkış adresi kovası, saldırganın seçtiği bir kova değil).
+ */
+function proxiedClientIp(request: Request, secret: string | undefined): string | null {
+  if (secret === undefined || secret.length === 0) {
+    return null;
+  }
+  const auth = request.headers[PROXY_AUTH_HEADER];
+  const value = request.headers[PROXY_CLIENT_IP_HEADER];
+  if (typeof auth !== 'string' || typeof value !== 'string') {
+    return null;
+  }
+  // Özetler sabit uzunluktadır: karşılaştırma sırrın uzunluğunu da sızdırmaz.
+  const expected = createHash('sha256').update(secret).digest();
+  const actual = createHash('sha256').update(auth).digest();
+  if (!timingSafeEqual(expected, actual)) {
+    return null;
+  }
+  const address = normalize(value);
+  return isIP(address) === 0 ? null : address;
 }
 
 /** IPv4-mapped IPv6 (`::ffff:1.2.3.4`) sayaç anahtarında IPv4 ile aynı kovaya düşmeli. */

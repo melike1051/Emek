@@ -62,6 +62,17 @@ export const envSchema = z
     TRUSTED_PROXY_HOP_COUNT: z.coerce.number().int().min(0).max(10).default(0),
 
     /**
+     * Web/admin Next.js proxy'si ile paylaşılan sır (R-107, ADR-0026). Tanımlıysa proxy'nin
+     * `X-Emek-Client-Ip` başlığıyla ilettiği tarayıcı adresine güvenilir; tanımsızsa bu başlık
+     * yok sayılır ve tüm trafik `TRUSTED_PROXY_HOP_COUNT` ile çözülür. Secret Manager'dan gelir.
+     */
+    // `.env`'deki boş satır (`WEB_PROXY_SECRET=`) tanımsız sayılır; açılışı düşürmez.
+    WEB_PROXY_SECRET: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      z.string().min(32).optional(),
+    ),
+
+    /**
      * Firebase App Check zorunluluğu (ADR-0022).
      *
      * Açıkken `@SkipAppCheck()` ile işaretlenmemiş her HTTP rotası geçerli bir

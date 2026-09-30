@@ -137,7 +137,8 @@ Bu yapıyı değiştirmek gerekirse önce `docs/architecture/adr/` altında ADR 
   (ADR-0022). App Check yetkilendirme değildir; `@SkipAppCheck()` yalnızca istemci
   uygulamasından gelmeyen uçlara (webhook, callback, health) uygulanır.
 - İstemci adresi **asla** `request.ip` veya ham `X-Forwarded-For` değildir:
-  `resolveClientIp(request, TRUSTED_PROXY_HOP_COUNT)` kullanılır. Express `trust proxy`
+  `resolveClientIp(request, TRUSTED_PROXY_HOP_COUNT, WEB_PROXY_SECRET)` kullanılır; web/admin tarayıcı
+  trafiğinin adresi Next `proxy.ts`'ten sırla doğrulanan başlıkla gelir (ADR-0026). Express `trust proxy`
   açılmaz (R-53). Oran sınırının iki katmanı da **fail-closed**'dır; panik ucu hiç
   sınırlanmaz (ADR-0008 §3).
 - Saklama süresi belgelemekle uygulanmış olmaz: her hassas veri sınıfının **silen bir
@@ -248,7 +249,7 @@ ADR-0015), Python 3.12 + uv. Build `tsc` iledir; `@nestjs/cli` kullanılmaz.
 | Dosya                                         | İçerik                                                         |
 | --------------------------------------------- | -------------------------------------------------------------- |
 | `docs/architecture/initial-assessment.md`     | Mevcut durum, boşluk analizi, anti-hedefler                    |
-| `docs/architecture/adr/`                      | Architecture Decision Record'lar (0001-0025)                   |
+| `docs/architecture/adr/`                      | Architecture Decision Record'lar (0001-0026)                   |
 | `docs/api/error-codes.md`                     | Business error kodları                                         |
 | `docs/architecture/local-development.md`      | Kurulum, komutlar, sorun giderme                               |
 | `docs/architecture/deployment.md`             | Dağıtım topolojisi, yayın akışı, rollback, smoke testleri      |
